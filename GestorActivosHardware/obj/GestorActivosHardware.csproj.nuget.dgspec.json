@@ -55,6 +55,10 @@
               "target": "Package",
               "version": "[6.1.4, )"
             },
+            "System.DirectoryServices.AccountManagement": {
+              "target": "Package",
+              "version": "[10.0.3, )"
+            },
             "System.Management": {
               "target": "Package",
               "version": "[10.0.3, )"

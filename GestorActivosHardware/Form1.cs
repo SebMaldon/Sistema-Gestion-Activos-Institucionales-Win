@@ -1,10 +1,12 @@
+using Microsoft.Data.SqlClient;
+using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Management;
 using System.Windows.Forms;
-using Microsoft.Data.SqlClient;
+using System.DirectoryServices.AccountManagement;
 
 namespace GestorActivosHardware
 {
@@ -210,16 +212,82 @@ namespace GestorActivosHardware
                 camposSql["monitor"].Text = monitoresDetectados.Length > 70 ? monitoresDetectados.Substring(0, 70) : monitoresDetectados;
 
                 // 4. Obtener Sistema Operativo Detallado
-                ManagementObjectSearcher os = new ManagementObjectSearcher("SELECT Caption FROM Win32_OperatingSystem");
+                /*ManagementObjectSearcher os = new ManagementObjectSearcher("SELECT Caption FROM Win32_OperatingSystem");
                 foreach (ManagementObject obj in os.Get())
                 {
                     string fullOS = obj["Caption"]?.ToString() ?? "";
                     camposSql["clave_so"].Text = fullOS.Replace("Microsoft ", "").Trim();
+                }*/
+
+                // 4. Obtener clave de producto de Windows
+                ManagementObjectSearcher searcherKey = new ManagementObjectSearcher("SELECT OA3xOriginalProductKey FROM SoftwareLicensingService");
+                foreach (ManagementObject obj in searcherKey.Get())
+                {
+                    string productKey = obj["OA3xOriginalProductKey"]?.ToString();
+                    if (!string.IsNullOrEmpty(productKey))
+                    {
+                        // Asignamos al campo clave_so
+                        camposSql["clave_so"].Text = productKey;
+                    }
                 }
 
                 // 5. Nombre de PC y Usuario Actual
                 camposSql["nom_pc"].Text = Environment.MachineName;
                 camposSql["N_user"].Text = Environment.UserName;
+
+                //6. Obtener el Modelo del dispostitivo
+                ManagementObjectSearcher modelSearcher = new ManagementObjectSearcher("SELECT Name FROM Win32_ComputerSystemProduct");
+                foreach (ManagementObject obj in modelSearcher.Get())
+                {
+                    // Asigna el nombre comercial (ej. "HP ProBook 440 G8") al campo clave_modelo
+                    camposSql["clave_modelo"].Text = obj["Name"]?.ToString();
+                }
+
+                // 6. Obtener Correo Electrónico (Versión Mejorada)
+                try
+                {
+                    string email = null;
+
+                    // Intento 1: Cuenta de Dominio / Institucional (Active Directory)
+                    try
+                    {
+                        UserPrincipal user = UserPrincipal.Current;
+                        email = user.EmailAddress;
+                    }
+                    catch { /* Omitir si no hay contexto de dominio */ }
+
+                    // Intento 2: Si falla, buscamos en el Registro (Cuentas Microsoft Modernas)
+                    if (string.IsNullOrEmpty(email))
+                    {
+                        // Ruta 1: Identidades de inicio de sesión
+                        using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\IdentityCRL\LogonIdentities"))
+                        {
+                            if (key != null && key.GetSubKeyNames().Length > 0)
+                            {
+                                email = key.GetSubKeyNames()[0];
+                            }
+                        }
+                    }
+
+                    if (string.IsNullOrEmpty(email))
+                    {
+                        // Ruta 2: Propiedades extendidas de usuario (Suele contener el email en el nombre de la subllave)
+                        using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\IdentityCRL\UserExtendedProperties"))
+                        {
+                            if (key != null && key.GetSubKeyNames().Length > 0)
+                            {
+                                email = key.GetSubKeyNames()[0];
+                            }
+                        }
+                    }
+
+                    // Resultado final
+                    camposSql["correo"].Text = !string.IsNullOrEmpty(email) ? email : "Cuenta Local / No vinculado";
+                }
+                catch
+                {
+                    camposSql["correo"].Text = "Error al detectar";
+                }
 
                 MessageBox.Show("Datos de hardware, monitor y usuario cargados correctamente.");
             }

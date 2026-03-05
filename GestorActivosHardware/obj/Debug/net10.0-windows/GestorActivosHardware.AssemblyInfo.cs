@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("GestorActivosHardware")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+d807bc515877858a64067c92a144109240872a2e")]
 [assembly: System.Reflection.AssemblyProductAttribute("GestorActivosHardware")]
 [assembly: System.Reflection.AssemblyTitleAttribute("GestorActivosHardware")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

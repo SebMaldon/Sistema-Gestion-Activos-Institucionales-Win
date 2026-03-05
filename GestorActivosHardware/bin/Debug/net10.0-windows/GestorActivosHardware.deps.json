@@ -9,6 +9,7 @@
       "GestorActivosHardware/1.0.0": {
         "dependencies": {
           "Microsoft.Data.SqlClient": "6.1.4",
+          "System.DirectoryServices.AccountManagement": "10.0.3",
           "System.Management": "10.0.3"
         },
         "runtime": {
@@ -313,6 +314,53 @@
           }
         }
       },
+      "System.DirectoryServices.AccountManagement/10.0.3": {
+        "dependencies": {
+          "System.DirectoryServices.Protocols": "10.0.3"
+        },
+        "runtime": {
+          "lib/net10.0/System.DirectoryServices.AccountManagement.dll": {
+            "assemblyVersion": "10.0.0.3",
+            "fileVersion": "10.0.326.7603"
+          }
+        },
+        "runtimeTargets": {
+          "runtimes/win/lib/net10.0/System.DirectoryServices.AccountManagement.dll": {
+            "rid": "win",
+            "assetType": "runtime",
+            "assemblyVersion": "10.0.0.3",
+            "fileVersion": "10.0.326.7603"
+          }
+        }
+      },
+      "System.DirectoryServices.Protocols/10.0.3": {
+        "runtime": {
+          "lib/net10.0/System.DirectoryServices.Protocols.dll": {
+            "assemblyVersion": "10.0.0.3",
+            "fileVersion": "10.0.326.7603"
+          }
+        },
+        "runtimeTargets": {
+          "runtimes/linux/lib/net10.0/System.DirectoryServices.Protocols.dll": {
+            "rid": "linux",
+            "assetType": "runtime",
+            "assemblyVersion": "10.0.0.3",
+            "fileVersion": "10.0.326.7603"
+          },
+          "runtimes/osx/lib/net10.0/System.DirectoryServices.Protocols.dll": {
+            "rid": "osx",
+            "assetType": "runtime",
+            "assemblyVersion": "10.0.0.3",
+            "fileVersion": "10.0.326.7603"
+          },
+          "runtimes/win/lib/net10.0/System.DirectoryServices.Protocols.dll": {
+            "rid": "win",
+            "assetType": "runtime",
+            "assemblyVersion": "10.0.0.3",
+            "fileVersion": "10.0.326.7603"
+          }
+        }
+      },
       "System.IdentityModel.Tokens.Jwt/7.7.1": {
         "dependencies": {
           "Microsoft.IdentityModel.JsonWebTokens": "7.7.1",
@@ -503,6 +551,20 @@
       "sha512": "sha512-AqRzhn0v29GGGLj/Z6gKq4lGNtvPHT4nHdG5PDJh9IfVjv/nYUVmX11hwwws1vDFeIAzrvmn0dPu8IjLtu6fAw==",
       "path": "system.clientmodel/1.8.0",
       "hashPath": "system.clientmodel.1.8.0.nupkg.sha512"
+    },
+    "System.DirectoryServices.AccountManagement/10.0.3": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-mllqB05qE2q9AHpyy5yKMSdz66AKCYQPP1I7Ny4+YjaMy7ttI91Ga/NWjOf7iPCXv1PHvgKHVtDrltm7yGKJPw==",
+      "path": "system.directoryservices.accountmanagement/10.0.3",
+      "hashPath": "system.directoryservices.accountmanagement.10.0.3.nupkg.sha512"
+    },
+    "System.DirectoryServices.Protocols/10.0.3": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-LsmWlhBLelsI0+oHjgZd+WeeX/60TazKv/7xE+z88zONMerx2JWklfmpmOO6VHr1sys5bIJWHtjxhjRruVa4jg==",
+      "path": "system.directoryservices.protocols/10.0.3",
+      "hashPath": "system.directoryservices.protocols.10.0.3.nupkg.sha512"
     },
     "System.IdentityModel.Tokens.Jwt/7.7.1": {
       "type": "package",
