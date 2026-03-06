@@ -14,16 +14,21 @@ namespace GestorActivosHardware
     {
         // Diccionario para acceder fácilmente a los campos por su nombre en la base de datos
         private Dictionary<string, TextBox> camposSql = new Dictionary<string, TextBox>();
-
-        // Cadena de conexión (Ajusta con tus credenciales)
-        private string connectionString = "Server=TU_SERVIDOR;Database=inventario;Integrated Security=True;TrustServerCertificate=True";
+        // Guarda los valores exactos que vienen de la base de datos
+        private Dictionary<string, string> valoresOriginales = new Dictionary<string, string>();
+        // Color para resaltar cambios (puedes usar Gold, LightYellow o PeachPuff)
+        private Color colorCambio = Color.LemonChiffon;
+        // Cadena de conexión
+        private string connectionString = @"Server=localhost;Database=inventario;User ID=sa;Password=Basedatos1!;TrustServerCertificate=True";
 
         public FormPrincipal()
         {
             InitializeComponent();
-            this.Load += (s, e) => {
+            this.Load += (s, e) =>
+            {
                 ConfigurarInterfaz();
                 GenerarTarjetas();
+                CargarDatosDesdeBD();
             };
         }
 
@@ -31,7 +36,7 @@ namespace GestorActivosHardware
 
         private void ConfigurarInterfaz()
         {
-            flowLayoutPanel1.Padding = new Padding(20, 80, 20, 20);
+            flowLayoutPanel1.Padding = new Padding(20, 80, 20, 20);
         }
 
         private void GenerarTarjetas()
@@ -137,13 +142,27 @@ namespace GestorActivosHardware
                     ReadOnly = true,
                     BackColor = Color.FromArgb(248, 249, 250),
                     Font = new Font("Segoe UI", 10),
-                    Height = 30
+                    Height = 32
                 };
 
-                cuerpo.Controls.Add(txt);
+                // CREAR MENÚ CONTEXTUAL PARA EL TEXTBOX
+                ContextMenuStrip menu = new ContextMenuStrip();
+                ToolStripMenuItem itemCancelar = new ToolStripMenuItem("Cancelar Cambio");
+                itemCancelar.Click += (s, e) => {
+                    if (valoresOriginales.ContainsKey(txt.Name))
+                    {
+                        txt.Text = valoresOriginales[txt.Name];
+                        ResaltarSiCambio(txt); // Quitará el resaltado al ser iguales
+                    }
+                };
+                menu.Items.Add(itemCancelar);
+                txt.ContextMenuStrip = menu;
 
-                if (!camposSql.ContainsKey(campo.sqlField))
-                    camposSql.Add(campo.sqlField, txt);
+                // Evento para resaltar si el usuario escribe manualmente (si habilitas edición)
+                txt.TextChanged += (s, e) => ResaltarSiCambio(txt);
+
+                cuerpo.Controls.Add(txt);
+                if (!camposSql.ContainsKey(campo.sqlField)) camposSql.Add(campo.sqlField, txt);
             }
 
             // ENSAMBLAJE: El orden importa mucho
@@ -152,6 +171,28 @@ namespace GestorActivosHardware
             card.Controls.Add(lblTitulo);        // Se agrega el título al final para que quede arriba
 
             flowLayoutPanel1.Controls.Add(card);
+        }
+
+        private void ResaltarSiCambio(TextBox txt)
+        {
+            if (valoresOriginales.ContainsKey(txt.Name))
+            {
+                string valorBD = valoresOriginales[txt.Name];
+
+                if (txt.Text != valorBD)
+                {
+                    // Si hay cambio, el color de resaltado manda siempre
+                    txt.BackColor = colorCambio;
+                    txt.Font = new Font(txt.Font, FontStyle.Bold);
+                }
+                else
+                {
+                    // Si NO hay cambio, el color depende de si es editable o no
+                    // Blanco si es editable, Gris claro si está bloqueado
+                    txt.BackColor = txt.ReadOnly ? Color.FromArgb(248, 249, 250) : Color.White;
+                    txt.Font = new Font(txt.Font, FontStyle.Regular);
+                }
+            }
         }
         private void OnCardPaint(object sender, PaintEventArgs e)
         {
@@ -177,9 +218,116 @@ namespace GestorActivosHardware
             }
         }
 
+        // Método para sincronizar el diccionario de respaldo después de guardar
+        private void ActualizarRespaldosLocales()
+        {
+            foreach (var item in camposSql)
+            {
+                if (valoresOriginales.ContainsKey(item.Key))
+                    valoresOriginales[item.Key] = item.Value.Text;
+                else
+                    valoresOriginales.Add(item.Key, item.Value.Text);
+
+                // Quitamos el resaltado amarillo ya que ahora los datos son iguales a la BD
+                item.Value.BackColor = Color.FromArgb(248, 249, 250);
+                item.Value.Font = new Font(item.Value.Font, FontStyle.Regular);
+            }
+        }
+
+        // Función auxiliar para que el resumen no use nombres de columnas SQL
+        private string ObtenerNombreAmigable(string campoSql)
+        {
+            switch (campoSql)
+            {
+                case "num_serie": return "Número de Serie";
+                case "clave_modelo": return "Modelo del Dispositivo";
+                case "nom_pc": return "Nombre de la PC";
+                case "monitor": return "Monitor";
+                case "dir_ip": return "Dirección IP";
+                case "N_user": return "Nombre del Usuario";
+                case "correo": return "Correo Electrónico";
+                default: return campoSql; // Si no está en la lista, devuelve el original
+            }
+        }
+
         #endregion
 
         #region Lógica de Negocio (WMI y SQL)
+
+        private void CargarDatosDesdeBD()
+        {
+            string serialPC = "";
+
+            // 1. Obtenemos el Serial de la PC actual mediante WMI
+            try
+            {
+                ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT SerialNumber FROM Win32_BIOS");
+                foreach (ManagementObject obj in searcher.Get())
+                {
+                    serialPC = obj["SerialNumber"]?.ToString();
+                }
+            }
+            catch { return; }
+
+            if (string.IsNullOrEmpty(serialPC)) return;
+
+            // 2. Buscamos en la Base de Datos
+            string query = "SELECT * FROM inventario1 WHERE num_serie = @serial";
+
+            using (SqlConnection conn = new SqlConnection(connectionString))
+            {
+                try
+                {
+                    conn.Open();
+                    SqlCommand cmd = new SqlCommand(query, conn);
+                    cmd.Parameters.AddWithValue("@serial", serialPC);
+
+                    using (SqlDataReader reader = cmd.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            valoresOriginales.Clear(); // Limpiamos respaldos anteriores
+
+                            for (int i = 0; i < reader.FieldCount; i++)
+                            {
+                                string columna = reader.GetName(i);
+                                string valor = reader[i]?.ToString() ?? "";
+
+                                if (camposSql.ContainsKey(columna))
+                                {
+                                    camposSql[columna].Text = valor;
+                                    // GUARDAMOS EL RESPALDO
+                                    if (!valoresOriginales.ContainsKey(columna))
+                                        valoresOriginales.Add(columna, valor);
+                                    else
+                                        valoresOriginales[columna] = valor;
+
+                                    // Quitamos cualquier resaltado previo
+                                    camposSql[columna].BackColor = Color.FromArgb(248, 249, 250);
+                                    camposSql[columna].Font = new Font(camposSql[columna].Font, FontStyle.Regular);
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex) { Console.WriteLine(ex.Message); }
+            }
+        }
+
+        // Método auxiliar para refrescar datos que cambian (IP, Usuario) sin borrar lo de la BD
+        private void ActualizarDatosLocalesSoloLectura()
+        {
+            camposSql["nom_pc"].Text = Environment.MachineName;
+            camposSql["N_user"].Text = Environment.UserName;
+
+            // Red
+            var net = new ManagementObjectSearcher("SELECT IPAddress FROM Win32_NetworkAdapterConfiguration WHERE IPEnabled = 'TRUE'");
+            foreach (ManagementObject obj in net.Get())
+            {
+                string[] ips = (string[])obj["IPAddress"];
+                if (ips != null) camposSql["dir_ip"].Text = ips[0];
+            }
+        }
 
         private void btnObtenerDatos_Click_1(object sender, EventArgs e)
         {
@@ -289,6 +437,11 @@ namespace GestorActivosHardware
                     camposSql["correo"].Text = "Error al detectar";
                 }
 
+                foreach (var txt in camposSql.Values)
+                {
+                    ResaltarSiCambio(txt);
+                }
+
                 MessageBox.Show("Datos de hardware, monitor y usuario cargados correctamente.");
             }
             catch (Exception ex)
@@ -304,16 +457,54 @@ namespace GestorActivosHardware
                 return;
             }
 
+            // 1. Generar resumen de cambios para confirmación
+            List<string> listaCambios = new List<string>();
+            foreach (var item in camposSql)
+            {
+                string valorActual = item.Value.Text.Trim();
+                string valorOriginal = valoresOriginales.ContainsKey(item.Key) ? valoresOriginales[item.Key].Trim() : "";
+
+                if (valorActual != valorOriginal)
+                {
+                    string mostrarOriginal = string.IsNullOrEmpty(valorOriginal) ? "[Vacío]" : $"'{valorOriginal}'";
+                    string mostrarActual = string.IsNullOrEmpty(valorActual) ? "[Vacío]" : $"'{valorActual}'";
+                    listaCambios.Add($"• {item.Key}: de {mostrarOriginal} a {mostrarActual}");
+                }
+            }
+
+            if (listaCambios.Count == 0)
+            {
+                MessageBox.Show("No hay cambios nuevos que guardar.");
+                return;
+            }
+
+            if (MessageBox.Show("¿Confirmar cambios?\n\n" + string.Join("\n", listaCambios), "Auditoría",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.No) return;
+
+            // 2. QUERY EXPANDIDA: Ahora incluye TODOS los campos de las tarjetas
             string query = @"
-                IF EXISTS (SELECT 1 FROM inventario1 WHERE num_serie = @num_serie)
-                BEGIN
-                    UPDATE inventario1 SET nom_pc = @nom_pc, dir_ip = @dir_ip, Actualizacion = GETDATE(), observaciones = @obs WHERE num_serie = @num_serie
-                END
-                ELSE
-                BEGIN
-                    INSERT INTO inventario1 (num_serie, nom_pc, dir_ip, mac_address, status, Actualizacion) 
-                    VALUES (@num_serie, @nom_pc, @dir_ip, @mac, 'Alta', GETDATE())
-                END";
+        IF EXISTS (SELECT 1 FROM inventario1 WHERE num_serie = @num_serie)
+        BEGIN
+            UPDATE inventario1 SET 
+                nom_pc = @nom_pc, IDBienes = @IDBienes, num_inv = @num_inv,
+                clave_modelo = @clave_modelo, monitor = @monitor, puerto = @puerto, switch = @switch,
+                dir_ip = @dir_ip, mac_address = @mac_address, clave_so = @clave_so, Antivirus = @Antivirus,
+                ubicacion = @ubicacion, N_user = @N_user, m_User = @m_User, correo = @correo, extension = @extension,
+                status = @status, clave = @clave, clave_proy = @clave_proy, fecha_adq = @fecha_adq,
+                observaciones = @observaciones, Actualizacion = GETDATE()
+            WHERE num_serie = @num_serie
+        END
+        ELSE
+        BEGIN
+            INSERT INTO inventario1 (
+                num_serie, nom_pc, IDBienes, num_inv, clave_modelo, monitor, puerto, switch,
+                dir_ip, mac_address, clave_so, Antivirus, ubicacion, N_user, m_User, correo, extension,
+                status, clave, clave_proy, fecha_adq, observaciones, Actualizacion)
+            VALUES (
+                @num_serie, @nom_pc, @IDBienes, @num_inv, @clave_modelo, @monitor, @puerto, @switch,
+                @dir_ip, @mac_address, @clave_so, @Antivirus, @ubicacion, @N_user, @m_User, @correo, @extension,
+                @status, @clave, @clave_proy, @fecha_adq, @observaciones, GETDATE())
+        END";
 
             using (SqlConnection conn = new SqlConnection(connectionString))
             {
@@ -321,30 +512,48 @@ namespace GestorActivosHardware
                 {
                     conn.Open();
                     SqlCommand cmd = new SqlCommand(query, conn);
-                    cmd.Parameters.AddWithValue("@num_serie", camposSql["num_serie"].Text);
-                    cmd.Parameters.AddWithValue("@nom_pc", camposSql["nom_pc"].Text);
-                    cmd.Parameters.AddWithValue("@dir_ip", camposSql["dir_ip"].Text);
-                    cmd.Parameters.AddWithValue("@mac", camposSql["mac_address"].Text);
-                    cmd.Parameters.AddWithValue("@obs", camposSql["observaciones"].Text);
+
+                    // Mapeo automático de parámetros desde el diccionario
+                    foreach (var campo in camposSql)
+                    {
+                        // Agregamos @ al nombre del campo para que coincida con la query
+                        cmd.Parameters.AddWithValue("@" + campo.Key, campo.Value.Text.Trim());
+                    }
 
                     cmd.ExecuteNonQuery();
-                    MessageBox.Show("¡Sincronización con SQL Server exitosa!");
+
+                    // Sincronizar UI: poner fondos grises y actualizar respaldos
+                    ActualizarRespaldosLocales();
+
+                    MessageBox.Show("Base de Datos actualizada con éxito.");
                 }
                 catch (Exception ex) { MessageBox.Show("Error SQL: " + ex.Message); }
             }
         }
-
         private void btnEditar_Click(object sender, EventArgs e)
         {
-            bool modoEdicion = camposSql["num_serie"].ReadOnly;
+            // 1. Detectamos el modo actual basado en el primer campo
+            bool estabaBloqueado = camposSql["num_serie"].ReadOnly;
+
+            // 2. Cambiamos el texto del botón
+            btnEditar.Text = estabaBloqueado ? "Bloquear Edición" : "Permitir Edición";
+
+            // 3. Aplicamos el cambio de estado y refrescamos colores
             foreach (var txt in camposSql.Values)
             {
-                txt.ReadOnly = !modoEdicion;
-                txt.BackColor = modoEdicion ? Color.White : Color.FromArgb(249, 249, 249);
+                // Si estaba bloqueado, ahora permitimos edición (!ReadOnly)
+                txt.ReadOnly = !estabaBloqueado;
+
+                // Llamamos a nuestra función inteligente para que decida el color correcto
+                ResaltarSiCambio(txt);
             }
-            btnEditar.Text = modoEdicion ? "Bloquear Edición" : "Permitir Edición";
         }
 
-        #endregion
-    }
+        private void btnObtenerDatosBD_Click(object sender, EventArgs e)
+        {
+            CargarDatosDesdeBD();
+        }
+
+        #endregion
+    }
 }

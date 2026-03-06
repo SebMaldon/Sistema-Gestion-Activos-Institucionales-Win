@@ -33,6 +33,7 @@
             btnEnviar = new Button();
             btnEditar = new Button();
             panelAcciones = new Panel();
+            btnObtenerDatosBD = new Button();
             panelAcciones.SuspendLayout();
             SuspendLayout();
             // 
@@ -50,16 +51,16 @@
             btnObtenerDatos.Font = new Font("Segoe UI", 10F);
             btnObtenerDatos.Location = new Point(7, 12);
             btnObtenerDatos.Name = "btnObtenerDatos";
-            btnObtenerDatos.Size = new Size(181, 47);
+            btnObtenerDatos.Size = new Size(222, 47);
             btnObtenerDatos.TabIndex = 6;
-            btnObtenerDatos.Text = "Obtener Datos";
+            btnObtenerDatos.Text = "Obtener Datos Locales";
             btnObtenerDatos.UseVisualStyleBackColor = true;
             btnObtenerDatos.Click += btnObtenerDatos_Click_1;
             // 
             // btnEnviar
             // 
             btnEnviar.Font = new Font("Segoe UI", 10F);
-            btnEnviar.Location = new Point(194, 12);
+            btnEnviar.Location = new Point(463, 12);
             btnEnviar.Name = "btnEnviar";
             btnEnviar.Size = new Size(181, 47);
             btnEnviar.TabIndex = 7;
@@ -70,7 +71,7 @@
             // btnEditar
             // 
             btnEditar.Font = new Font("Segoe UI", 10F);
-            btnEditar.Location = new Point(381, 12);
+            btnEditar.Location = new Point(650, 12);
             btnEditar.Name = "btnEditar";
             btnEditar.Size = new Size(181, 47);
             btnEditar.TabIndex = 8;
@@ -80,6 +81,7 @@
             // 
             // panelAcciones
             // 
+            panelAcciones.Controls.Add(btnObtenerDatosBD);
             panelAcciones.Controls.Add(btnEditar);
             panelAcciones.Controls.Add(btnEnviar);
             panelAcciones.Controls.Add(btnObtenerDatos);
@@ -88,6 +90,17 @@
             panelAcciones.Name = "panelAcciones";
             panelAcciones.Size = new Size(1220, 70);
             panelAcciones.TabIndex = 9;
+            // 
+            // btnObtenerDatosBD
+            // 
+            btnObtenerDatosBD.Font = new Font("Segoe UI", 10F);
+            btnObtenerDatosBD.Location = new Point(235, 12);
+            btnObtenerDatosBD.Name = "btnObtenerDatosBD";
+            btnObtenerDatosBD.Size = new Size(222, 47);
+            btnObtenerDatosBD.TabIndex = 9;
+            btnObtenerDatosBD.Text = "Obtener Datos Nube";
+            btnObtenerDatosBD.UseVisualStyleBackColor = true;
+            btnObtenerDatosBD.Click += btnObtenerDatosBD_Click;
             // 
             // FormPrincipal
             // 
@@ -109,5 +122,6 @@
         private Button btnEnviar;
         private Button btnEditar;
         private Panel panelAcciones;
+        private Button btnObtenerDatosBD;
     }
 }
