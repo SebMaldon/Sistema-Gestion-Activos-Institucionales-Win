@@ -360,23 +360,11 @@ namespace GestorActivosHardware
                 camposSql["monitor"].Text = monitoresDetectados.Length > 70 ? monitoresDetectados.Substring(0, 70) : monitoresDetectados;
 
                 // 4. Obtener Sistema Operativo Detallado
-                /*ManagementObjectSearcher os = new ManagementObjectSearcher("SELECT Caption FROM Win32_OperatingSystem");
+                ManagementObjectSearcher os = new ManagementObjectSearcher("SELECT Caption FROM Win32_OperatingSystem");
                 foreach (ManagementObject obj in os.Get())
                 {
                     string fullOS = obj["Caption"]?.ToString() ?? "";
                     camposSql["clave_so"].Text = fullOS.Replace("Microsoft ", "").Trim();
-                }*/
-
-                // 4. Obtener clave de producto de Windows
-                ManagementObjectSearcher searcherKey = new ManagementObjectSearcher("SELECT OA3xOriginalProductKey FROM SoftwareLicensingService");
-                foreach (ManagementObject obj in searcherKey.Get())
-                {
-                    string productKey = obj["OA3xOriginalProductKey"]?.ToString();
-                    if (!string.IsNullOrEmpty(productKey))
-                    {
-                        // Asignamos al campo clave_so
-                        camposSql["clave_so"].Text = productKey;
-                    }
                 }
 
                 // 5. Nombre de PC y Usuario Actual
