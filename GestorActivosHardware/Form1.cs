@@ -1,547 +1,729 @@
-using Microsoft.Data.SqlClient;
-using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Management;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.DirectoryServices.AccountManagement;
+using Guna.UI2.WinForms;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace GestorActivosHardware
 {
     public partial class FormPrincipal : Form
     {
-        // Diccionario para acceder fácilmente a los campos por su nombre en la base de datos
-        private Dictionary<string, TextBox> camposSql = new Dictionary<string, TextBox>();
-        // Guarda los valores exactos que vienen de la base de datos
-        private Dictionary<string, string> valoresOriginales = new Dictionary<string, string>();
-        // Color para resaltar cambios (puedes usar Gold, LightYellow o PeachPuff)
-        private Color colorCambio = Color.LemonChiffon;
-        // Cadena de conexión
-        private string connectionString = @"Server=localhost;Database=inventario;User ID=sa;Password=Basedatos1!;TrustServerCertificate=True";
+        // ─── API & State ────────────────────────────────────────────────────────
+        private readonly HttpClient http = LoginView.Http;
+        private string idBienActual = "";
+        
+        // Data Dictionaries
+        private readonly Dictionary<string, Control> campos = new();
+        private readonly Dictionary<string, string> dbState = new();
+        private readonly Dictionary<string, string> wmiState = new();
+        
+        // Catalogs
+        private readonly Dictionary<string, string> catUsuarios = new();
+        private readonly Dictionary<string, string> catModelos = new();
+        private readonly Dictionary<string, string> catMarcas = new();
+        private readonly Dictionary<string, string> catInmuebles = new();
+        private readonly Dictionary<string, string> catUnidades = new();
+        private readonly Dictionary<string, string> catUbicaciones = new();
+        private int unidadSeleccionadaId = 0;
+
+        // UI Controls
+        private FlowLayoutPanel pnlLeds = null!;
+        private Guna2Button btnWmi = null!;
+        private Guna2Button btnSync = null!;
+        private Guna2Button btnSave = null!;
 
         public FormPrincipal()
         {
             InitializeComponent();
-            this.Load += (s, e) =>
-            {
-                ConfigurarInterfaz();
-                GenerarTarjetas();
-                CargarDatosDesdeBD();
+            SetupForm();
+            BuildUI();
+            Load += async (s, e) => {
+                _ = Task.Run(LoadWMI);
+                await LoadCatalogs();
             };
         }
 
-        #region Diseño y UI Responsiva
-
-        private void ConfigurarInterfaz()
+        private void SetupForm()
         {
-            flowLayoutPanel1.Padding = new Padding(20, 80, 20, 20);
+            Text = "Gestor Activos - IMSS";
+            Size = new Size(1400, 950);
+            StartPosition = FormStartPosition.CenterScreen;
+            BackColor = T.BgSurface;
+            FormBorderStyle = FormBorderStyle.None;
+            
+            // ResizeForm = true allows the window to be dragged from edges to resize
+            var borderless = new Guna2BorderlessForm { ContainerControl = this, BorderRadius = 15, ResizeForm = true };
         }
 
-        private void GenerarTarjetas()
+        // ═══════════════════════════════════════════════════════════════════════
+        // UI BUILDER
+        // ═══════════════════════════════════════════════════════════════════════
+        private void BuildUI()
         {
-            camposSql.Clear();
-            flowLayoutPanel1.Controls.Clear();
+            Controls.Clear();
+            
+            // Titlebar
+            var titleBar = new Guna2Panel { Dock = DockStyle.Top, Height = 40, FillColor = T.BgDeep };
+            var lblTitle = new Label { Text = "Gestor de Activos de Hardware", ForeColor = T.TxtPrimary, Font = T.H3, Location = new Point(20, 10), AutoSize = true };
+            
+            var btnClose = new Guna2ControlBox { Anchor = AnchorStyles.Top | AnchorStyles.Right, Location = new Point(this.Width - 45, 0), Size = new Size(45, 40), FillColor = Color.Transparent, IconColor = T.TxtSecondary, HoverState = { FillColor = T.LedRed, IconColor = Color.White } };
+            var btnMax = new Guna2ControlBox { Anchor = AnchorStyles.Top | AnchorStyles.Right, Location = new Point(this.Width - 90, 0), Size = new Size(45, 40), ControlBoxType = Guna.UI2.WinForms.Enums.ControlBoxType.MaximizeBox, FillColor = Color.Transparent, IconColor = T.TxtSecondary };
+            var btnMin = new Guna2ControlBox { Anchor = AnchorStyles.Top | AnchorStyles.Right, Location = new Point(this.Width - 135, 0), Size = new Size(45, 40), ControlBoxType = Guna.UI2.WinForms.Enums.ControlBoxType.MinimizeBox, FillColor = Color.Transparent, IconColor = T.TxtSecondary };
+            
+            titleBar.Controls.AddRange(new Control[] { lblTitle, btnClose, btnMax, btnMin });
+            
+            // Sidebar
+            var sidebar = new Guna2Panel { Dock = DockStyle.Left, Width = 220, FillColor = T.BgDeep };
+            var pnlMenu = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(10, 40, 10, 10) };
+            
+            btnWmi = CreateMenuButton("Cargar HW (WMI)", T.Accent);
+            btnWmi.Click += (_, __) => _ = Task.Run(LoadWMI);
+            
+            btnSync = CreateMenuButton("Buscar en BD", T.Accent);
+            btnSync.Click += async (_, __) => await SyncFromDB();
+            
+            btnSave = CreateMenuButton("Guardar Cambios", T.Accent);
+            btnSave.Click += async (_, __) => await SaveChanges();
+            
+            var btnTheme = CreateMenuButton("Cambiar Tema 🌗", T.BgOverlay);
+            btnTheme.ForeColor = T.TxtPrimary;
+            btnTheme.Click += (_, __) => { T.Toggle(); ApplyTheme(this); };
+            
+            pnlMenu.Controls.AddRange(new Control[] { btnWmi, btnSync, btnSave, btnTheme });
+            sidebar.Controls.Add(pnlMenu);
 
-            // Card 1: IDENTIDAD DEL ACTIVO
-            CrearCard("IDENTIDAD DEL ACTIVO", new[] {
-        ("Número de Serie (PK)", "num_serie"), ("Nombre de la PC", "nom_pc"),
-        ("ID de Bienes", "IDBienes"), ("Número de Inventario", "num_inv")
-      });
+            // Main Content Area
+            var pnlMain = new Panel { Dock = DockStyle.Fill, Padding = new Padding(20) };
+            
+            // Leds (Top)
+            pnlLeds = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 90, WrapContents = false, AutoScroll = true };
+            
+            // Cards (Grid)
+            var grid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+            
+            var card1 = BuildGeneralCard();
+            var card2 = BuildTechCard();
+            
+            grid.Controls.Add(card1, 0, 0);
+            grid.Controls.Add(card2, 1, 0);
+            
+            pnlMain.Controls.Add(grid);
+            pnlMain.Controls.Add(pnlLeds);
 
-            // Card 2: DETALLES DE HARDWARE
-            CrearCard("DETALLES DE HARDWARE", new[] {
-        ("Modelo del Dispositivo", "clave_modelo"), ("Monitor", "monitor"),
-        ("Puerto", "puerto"), ("Switch", "switch")
-      });
-
-            // Card 3: CONECTIVIDAD DE RED
-            CrearCard("CONECTIVIDAD DE RED", new[] {
-        ("Dirección IP", "dir_ip"), ("Dirección MAC", "mac_address")
-      });
-
-            // Card 4: SISTEMA OPERATIVO
-            CrearCard("SISTEMA OPERATIVO", new[] {
-        ("Sistema Operativo", "clave_so"), ("Antivirus", "Antivirus")
-      });
-
-            // Card 5: ASIGNACIÓN Y UBICACIÓN
-            CrearCard("ASIGNACIÓN Y UBICACIÓN", new[] {
-        ("Ubicación Física", "ubicacion"), ("Nombre del Usuario", "N_user"),
-        ("Matrícula/ID Usuario", "m_User"), ("Correo Electrónico", "correo"),
-        ("Extensión Telefónica", "extension")
-      });
-
-            // Card 6: ESTATUS Y CONTROL
-            CrearCard("ESTATUS Y CONTROL", new[] {
-        ("Estatus del Activo", "status"), ("Clave de Inmueble", "clave"),
-        ("Clave de Proyecto", "clave_proy"), ("Fecha Adquisición", "fecha_adq"),
-        ("Observaciones", "observaciones")
-      });
+            Controls.Add(pnlMain);
+            Controls.Add(sidebar);
+            Controls.Add(titleBar);
+            
+            // Make draggable
+            new Guna2DragControl { TargetControl = titleBar };
+            new Guna2DragControl { TargetControl = lblTitle };
         }
 
-        private void CrearCard(string titulo, (string label, string sqlField)[] campos)
+        private Guna2Button CreateMenuButton(string text, Color fill)
         {
-            // 1. Panel principal de la tarjeta (El contenedor)
-            Panel card = new Panel
+            return new Guna2Button
             {
-                BackColor = Color.White,
-                Margin = new Padding(15),
-                Padding = new Padding(10), // Espacio de seguridad interno
-                Size = new Size(350, 150 + (campos.Length * 65))
-            };
-            card.Paint += OnCardPaint;
-
-            // 2. Título de la tarjeta - Usamos un Label con margen inferior
-            Label lblTitulo = new Label
-            {
-                Text = titulo.ToUpper(),
-                Font = new Font("Segoe UI Variable Display", 11, FontStyle.Bold),
-                ForeColor = Color.FromArgb(0, 120, 215),
-                Dock = DockStyle.Top,
+                Text = text,
+                Width = 200,
                 Height = 45,
-                TextAlign = ContentAlignment.BottomLeft, // Texto pegado abajo para dar aire arriba
-                Padding = new Padding(10, 0, 0, 5)
+                Margin = new Padding(0, 0, 0, 15),
+                FillColor = fill,
+                ForeColor = Color.White,
+                Font = T.H3,
+                BorderRadius = 8,
+                Cursor = Cursors.Hand
             };
+        }
 
-            // 3. Panel de Contenido - Este contendrá los inputs y tendrá un margen superior
-            Panel contenedorInterno = new Panel
-            {
-                Dock = DockStyle.Fill,
-                Padding = new Padding(10, 10, 10, 10) // Aquí damos el espacio para que no toque el título
-            };
+        private void ApplyTheme(Control parent)
+        {
+            parent.SuspendLayout();
 
-            TableLayoutPanel cuerpo = new TableLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                ColumnCount = 1,
-                RowCount = campos.Length * 2,
-                AutoSize = true
-            };
-            cuerpo.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            // Cambiar fondo del formulario principal
+            if (parent == this) {
+                this.BackColor = T.BgSurface;
+            }
 
-            foreach (var campo in campos)
+            Queue<Control> queue = new Queue<Control>();
+            queue.Enqueue(parent);
+
+            while (queue.Count > 0)
             {
-                // Etiqueta del campo
-                cuerpo.Controls.Add(new Label
-                {
-                    Text = campo.label,
-                    Font = new Font("Segoe UI", 9, FontStyle.Bold),
-                    ForeColor = Color.Gray,
-                    AutoSize = true,
-                    Margin = new Padding(0, 10, 0, 0)
+                Control c = queue.Dequeue();
+
+                if (c is Guna2Panel pnl) {
+                    if (pnl.Width == 220 || pnl.Height == 40) pnl.FillColor = T.BgDeep; // Sidebar/Titlebar
+                    else pnl.FillColor = T.BgCard; // Main Cards and LED Cards
+                }
+                else if (c is Guna2TextBox txt) {
+                    txt.FillColor = T.BgInput;
+                    txt.BorderColor = T.Border;
+                    txt.ForeColor = T.TxtPrimary;
+                }
+                else if (c is Guna2ComboBox cmb) {
+                    cmb.FillColor = T.BgInput;
+                    cmb.BorderColor = T.Border;
+                    cmb.ForeColor = T.TxtPrimary;
+                }
+                else if (c is ComboBox sc) {
+                    sc.BackColor = T.BgInput;
+                    sc.ForeColor = T.TxtPrimary;
+                    if (sc.Parent is Guna2Panel scPnl) {
+                        scPnl.FillColor = T.BgInput;
+                        scPnl.BorderColor = T.Border;
+                    }
+                }
+                else if (c is Guna2Button btn) {
+                    if (btn.Text == "Cargar HW (WMI)" || btn.Text == "Buscar en BD" || btn.Text == "Guardar Cambios" || btn.Text == "+") {
+                        btn.FillColor = T.Accent;
+                        btn.ForeColor = Color.White;
+                    } else if (btn.Text.Contains("Tema")) {
+                        btn.FillColor = T.BgOverlay;
+                        btn.ForeColor = T.TxtPrimary;
+                    }
+                }
+                else if (c is Guna2ControlBox cbox) {
+                    cbox.IconColor = T.TxtSecondary;
+                }
+                else if (c is Label lbl) {
+                    if (lbl.Font.Size >= 12) lbl.ForeColor = T.TxtPrimary; // Títulos principales
+                    else if (lbl.Font.Size == 8) lbl.ForeColor = T.TxtSecondary; // Títulos LED
+                    else lbl.ForeColor = T.TxtSecondary; // Labels de input
+                }
+
+                foreach (Control child in c.Controls) queue.Enqueue(child);
+            }
+
+            // Restaurar bordes de discrepancia (o color normal)
+            foreach (var key in campos.Keys) CheckDiscrepancy(key);
+
+            parent.ResumeLayout(true);
+        }
+
+        // ─── Cards ─────────────────────────────────────────────────────────────
+        private Guna2Panel BuildGeneralCard()
+        {
+            var pnl = new Guna2Panel { Dock = DockStyle.Fill, FillColor = T.BgCard, BorderRadius = 15, Margin = new Padding(0, 20, 10, 0), Padding = new Padding(20) };
+            var lbl = new Label { Text = "DATOS GENERALES", ForeColor = T.TxtPrimary, Font = T.H2, Dock = DockStyle.Top, Height = 40 };
+            
+            var flow = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
+            flow.Resize += (s, e) => { foreach (Control c in flow.Controls) c.Width = flow.Width - 25; };
+
+            AddInput(flow, "Número de Serie", "num_serie");
+            AddInput(flow, "Número de Inventario", "num_inv");
+            AddCombo(flow, "Estatus Operativo", "estatus_operativo");
+            AddCombo(flow, "Inmueble Físico", "clave_inmueble_ref");
+            AddCombo(flow, "Unidad Operativa", "id_unidad");
+            AddComboPlus(flow, "Departamento/Área", "id_ubicacion", AddUbicacion);
+            AddUserSearch(flow, "Usuario a Resguardo", "id_usuario_resguardo");
+            AddInput(flow, "Fecha Adquisición", "fecha_adquisicion");
+
+            pnl.Controls.Add(flow);
+            pnl.Controls.Add(lbl);
+            return pnl;
+        }
+
+        private Guna2Panel BuildTechCard()
+        {
+            var pnl = new Guna2Panel { Dock = DockStyle.Fill, FillColor = T.BgCard, BorderRadius = 15, Margin = new Padding(10, 20, 0, 0), Padding = new Padding(20) };
+            var lbl = new Label { Text = "ESPECIFICACIONES TÉCNICAS", ForeColor = T.TxtPrimary, Font = T.H2, Dock = DockStyle.Top, Height = 40 };
+            
+            var flow = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
+            flow.Resize += (s, e) => { foreach (Control c in flow.Controls) c.Width = flow.Width - 25; };
+
+            AddComboPlus(flow, "Modelo del Equipo", "clave_modelo", AddModelo);
+            AddInput(flow, "Nombre Host (PC)", "nom_pc");
+            AddInput(flow, "S.O. Detectado", "modelo_so");
+            AddInput(flow, "Procesador (CPU)", "cpu_info");
+            AddInput(flow, "RAM (GB)", "ram_gb");
+            AddInput(flow, "Almacenamiento (GB)", "almacenamiento_gb");
+            AddInput(flow, "Dirección IP", "dir_ip");
+            AddInput(flow, "Dirección MAC", "mac_address");
+            AddInput(flow, "Puerto / Nodo Red", "puerto_red");
+            AddInput(flow, "Switch Conectado", "switch_red");
+
+            pnl.Controls.Add(flow);
+            pnl.Controls.Add(lbl);
+            return pnl;
+        }
+
+        // ─── Input Builders ───────────────────────────────────────────────────
+        private void AddInput(Control parent, string label, string key)
+        {
+            var pnl = new Panel { Height = 65, Margin = new Padding(0, 0, 0, 10) };
+            var lbl = new Label { Text = label, ForeColor = T.TxtSecondary, Font = T.Small, Dock = DockStyle.Top, Height = 20 };
+            var txt = new Guna2TextBox { Name = key, Dock = DockStyle.Fill, FillColor = T.BgInput, BorderColor = T.Border, ForeColor = T.TxtPrimary, BorderRadius = 5 };
+            
+            // Badge for discrepancy
+            var badge = new Guna2CirclePictureBox { Size = new Size(10, 10), FillColor = Color.Transparent, Visible = false };
+            txt.IconRight = badge.Image; // Hack to use icon space, or we can use custom painting.
+            
+            txt.TextChanged += (_, __) => CheckDiscrepancy(key);
+            
+            pnl.Controls.Add(txt);
+            pnl.Controls.Add(lbl);
+            parent.Controls.Add(pnl);
+            campos[key] = txt;
+        }
+
+        private void AddCombo(Control parent, string label, string key)
+        {
+            var pnl = new Panel { Height = 65, Margin = new Padding(0, 0, 0, 10) };
+            var lbl = new Label { Text = label, ForeColor = T.TxtSecondary, Font = T.Small, Dock = DockStyle.Top, Height = 20 };
+            var cmb = new Guna2ComboBox { Name = key, Dock = DockStyle.Fill, FillColor = T.BgInput, BorderColor = T.Border, ForeColor = T.TxtPrimary, BorderRadius = 5 };
+            
+            if (key == "id_unidad") cmb.SelectedIndexChanged += async (_, __) => await OnUnidadChanged();
+            cmb.SelectedIndexChanged += (_, __) => CheckDiscrepancy(key);
+            
+            pnl.Controls.Add(cmb);
+            pnl.Controls.Add(lbl);
+            parent.Controls.Add(pnl);
+            campos[key] = cmb;
+        }
+
+        private void AddUserSearch(Control parent, string label, string key)
+        {
+            var pnl = new Panel { Height = 65, Margin = new Padding(0, 0, 0, 10) };
+            var lbl = new Label { Text = label, ForeColor = T.TxtSecondary, Font = T.Small, Dock = DockStyle.Top, Height = 20 };
+            
+            var row = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 45f));
+            
+            var cmbPnl = new Guna2Panel { Dock = DockStyle.Fill, FillColor = T.BgInput, BorderColor = T.Border, BorderThickness = 1, BorderRadius = 5, Padding = new Padding(5) };
+            var cmb = new ComboBox { Name = key, Dock = DockStyle.Fill, BackColor = T.BgInput, ForeColor = T.TxtPrimary, FlatStyle = FlatStyle.Flat, DropDownStyle = ComboBoxStyle.DropDownList };
+            cmb.SelectedIndexChanged += (_, __) => CheckDiscrepancy(key);
+            cmbPnl.Controls.Add(cmb);
+            
+            var btn = new Guna2Button { Text = "🔍", Dock = DockStyle.Fill, FillColor = T.BgOverlay, ForeColor = T.TxtPrimary, BorderRadius = 5, Cursor = Cursors.Hand };
+            btn.Click += async (_, __) => await SearchUserDialog(cmb);
+            
+            row.Controls.Add(cmbPnl, 0, 0);
+            row.Controls.Add(btn, 1, 0);
+            
+            pnl.Controls.Add(row);
+            pnl.Controls.Add(lbl);
+            parent.Controls.Add(pnl);
+            campos[key] = cmb;
+        }
+
+        private async Task SearchUserDialog(ComboBox cmb)
+        {
+            string term = Microsoft.VisualBasic.Interaction.InputBox("Ingrese matrícula o nombre completo para buscar:", "Buscar Usuario", "");
+            if (string.IsNullOrWhiteSpace(term)) return;
+            
+            var q = new { query = $@"query {{
+                usuarios(pagination:{{first:50}}, filters: {{ or: [
+                    {{ matricula: {{ contains: ""{term}"" }} }},
+                    {{ nombre_completo: {{ contains: ""{term}"" }} }}
+                ]}}) {{ edges {{ node {{ id_usuario matricula nombre_completo }} }} }}
+            }}" };
+            
+            try {
+                var r = await GQL(q);
+                if (r != null) {
+                    var edges = r["usuarios"]?["edges"];
+                    if (edges == null || !edges.HasValues) { MessageBox.Show("No se encontraron usuarios."); return; }
+                    
+                    catUsuarios.Clear();
+                    foreach (var e in edges) catUsuarios[e["node"]!["id_usuario"]!.ToString()] = e["node"]!["matricula"] + " - " + e["node"]!["nombre_completo"];
+                    
+                    FillCombo(cmb.Name, catUsuarios);
+                    if (cmb.Items.Count > 0) { cmb.SelectedIndex = 0; cmb.DroppedDown = true; }
+                }
+            } catch (Exception ex) { MessageBox.Show("Error al buscar: " + ex.Message); }
+        }
+
+        private void AddComboPlus(Control parent, string label, string key, Func<Task> onPlus)
+        {
+            var pnl = new Panel { Height = 65, Margin = new Padding(0, 0, 0, 10) };
+            var lbl = new Label { Text = label, ForeColor = T.TxtSecondary, Font = T.Small, Dock = DockStyle.Top, Height = 20 };
+            
+            var row = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 45f));
+            
+            var cmb = new Guna2ComboBox { Name = key, Dock = DockStyle.Fill, FillColor = T.BgInput, BorderColor = T.Border, ForeColor = T.TxtPrimary, BorderRadius = 5 };
+            var btn = new Guna2Button { Text = "+", Dock = DockStyle.Fill, FillColor = T.Accent, ForeColor = Color.White, Font = T.H2, BorderRadius = 5, Cursor = Cursors.Hand };
+            
+            cmb.SelectedIndexChanged += (_, __) => CheckDiscrepancy(key);
+            btn.Click += async (_, __) => await onPlus();
+            
+            row.Controls.Add(cmb, 0, 0);
+            row.Controls.Add(btn, 1, 0);
+            
+            pnl.Controls.Add(row);
+            pnl.Controls.Add(lbl);
+            parent.Controls.Add(pnl);
+            campos[key] = cmb;
+        }
+
+        // ─── Logic ────────────────────────────────────────────────────────────
+        private void UpdateLeds()
+        {
+            if (pnlLeds.InvokeRequired) { Invoke(UpdateLeds); return; }
+            pnlLeds.Controls.Clear();
+            
+            AddLed("Serial", wmiState.GetValueOrDefault("num_serie", "No Disp"));
+            AddLed("IP", wmiState.GetValueOrDefault("dir_ip", "No Disp"));
+            AddLed("CPU", wmiState.GetValueOrDefault("cpu_info", "No Disp"));
+            AddLed("RAM", wmiState.GetValueOrDefault("ram_gb", "0") + " GB");
+        }
+
+        private void AddLed(string title, string value)
+        {
+            var card = new Guna2Panel { Width = 280, Height = 70, FillColor = T.BgCard, BorderRadius = 10, Margin = new Padding(0, 0, 15, 0), Padding = new Padding(15, 10, 15, 10) };
+            var lblT = new Label { Text = title, ForeColor = T.TxtSecondary, Font = T.Caption, Dock = DockStyle.Top, Height = 15 };
+            var lblV = new Label { Text = value, ForeColor = T.TxtPrimary, Font = T.H3, Dock = DockStyle.Fill, AutoEllipsis = true };
+            
+            var dot = new Guna2CirclePictureBox { Size = new Size(10, 10), FillColor = value.Contains("No Disp") ? T.LedRed : T.LedGreen, Location = new Point(255, 15) };
+            
+            card.Controls.Add(dot);
+            card.Controls.Add(lblV);
+            card.Controls.Add(lblT);
+            pnlLeds.Controls.Add(card);
+        }
+
+        private void CheckDiscrepancy(string key)
+        {
+            if (!campos.ContainsKey(key)) return;
+            var ctrl = campos[key];
+            string currentVal = GetVal(key);
+            
+            bool hasDb = dbState.TryGetValue(key, out var dbVal);
+            bool hasWmi = wmiState.TryGetValue(key, out var wmiVal);
+            
+            Color edgeColor = T.Border;
+            
+            if (hasDb && currentVal != dbVal && !string.IsNullOrEmpty(currentVal)) {
+                edgeColor = T.LedYellow; // Changed from DB
+            }
+            if (hasWmi && currentVal != wmiVal && !string.IsNullOrEmpty(currentVal) && key != "num_serie") {
+                edgeColor = T.LedRed; // Discrepancy with physical HW
+            }
+            
+            if (ctrl is Guna2TextBox txt) {
+                txt.BorderColor = edgeColor;
+                txt.BorderThickness = edgeColor == T.Border ? 1 : 2;
+            } else if (ctrl is Guna2ComboBox cmb) {
+                cmb.BorderColor = edgeColor;
+                cmb.BorderThickness = edgeColor == T.Border ? 1 : 2;
+            } else if (ctrl is ComboBox c) {
+                c.Parent.BackColor = edgeColor;
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // WMI
+        // ═══════════════════════════════════════════════════════════════════════
+        private void LoadWMI()
+        {
+            try {
+                wmiState["nom_pc"] = Environment.MachineName;
+                
+                using (var searcher = new ManagementObjectSearcher("SELECT SerialNumber FROM Win32_BIOS"))
+                foreach (ManagementObject o in searcher.Get()) wmiState["num_serie"] = o["SerialNumber"]?.ToString()?.Trim() ?? "";
+
+                using (var searcher = new ManagementObjectSearcher("SELECT IPAddress,MACAddress FROM Win32_NetworkAdapterConfiguration WHERE IPEnabled='TRUE'"))
+                foreach (ManagementObject o in searcher.Get()) {
+                    if (o["IPAddress"] is string[] ips && ips.Length > 0) wmiState["dir_ip"] = ips[0];
+                    wmiState["mac_address"] = o["MACAddress"]?.ToString() ?? "";
+                }
+
+                using (var searcher = new ManagementObjectSearcher("SELECT Name FROM Win32_Processor"))
+                foreach (ManagementObject o in searcher.Get()) wmiState["cpu_info"] = o["Name"]?.ToString()?.Trim() ?? "";
+
+                long ramBytes = 0;
+                using (var searcher = new ManagementObjectSearcher("SELECT Capacity FROM Win32_PhysicalMemory"))
+                foreach (ManagementObject o in searcher.Get()) ramBytes += Convert.ToInt64(o["Capacity"]);
+                wmiState["ram_gb"] = (ramBytes / (1024L * 1024 * 1024)).ToString();
+
+                long diskBytes = 0;
+                using (var searcher = new ManagementObjectSearcher("SELECT Size FROM Win32_DiskDrive WHERE MediaType='Fixed hard disk media'"))
+                foreach (ManagementObject o in searcher.Get()) if (o["Size"] != null) diskBytes += Convert.ToInt64(o["Size"]);
+                wmiState["almacenamiento_gb"] = diskBytes > 0 ? (diskBytes / (1024L * 1024 * 1024)).ToString() : "256";
+
+                using (var searcher = new ManagementObjectSearcher("SELECT Caption FROM Win32_OperatingSystem"))
+                foreach (ManagementObject o in searcher.Get()) wmiState["modelo_so"] = o["Caption"]?.ToString()?.Replace("Microsoft ", "")?.Trim() ?? "";
+
+                Invoke(() => {
+                    UpdateLeds();
+                    // Auto-fill empty fields
+                    foreach(var kv in wmiState) {
+                        if(string.IsNullOrEmpty(GetVal(kv.Key))) SetVal(kv.Key, kv.Value);
+                    }
                 });
-
-                // TextBox del campo
-                TextBox txt = new TextBox
-                {
-                    Name = campo.sqlField,
-                    Dock = DockStyle.Top,
-                    BorderStyle = BorderStyle.FixedSingle,
-                    ReadOnly = true,
-                    BackColor = Color.FromArgb(248, 249, 250),
-                    Font = new Font("Segoe UI", 10),
-                    Height = 32
-                };
-
-                // CREAR MENÚ CONTEXTUAL PARA EL TEXTBOX
-                ContextMenuStrip menu = new ContextMenuStrip();
-                ToolStripMenuItem itemCancelar = new ToolStripMenuItem("Cancelar Cambio");
-                itemCancelar.Click += (s, e) => {
-                    if (valoresOriginales.ContainsKey(txt.Name))
-                    {
-                        txt.Text = valoresOriginales[txt.Name];
-                        ResaltarSiCambio(txt); // Quitará el resaltado al ser iguales
-                    }
-                };
-                menu.Items.Add(itemCancelar);
-                txt.ContextMenuStrip = menu;
-
-                // Evento para resaltar si el usuario escribe manualmente (si habilitas edición)
-                txt.TextChanged += (s, e) => ResaltarSiCambio(txt);
-
-                cuerpo.Controls.Add(txt);
-                if (!camposSql.ContainsKey(campo.sqlField)) camposSql.Add(campo.sqlField, txt);
-            }
-
-            // ENSAMBLAJE: El orden importa mucho
-            contenedorInterno.Controls.Add(cuerpo);
-            card.Controls.Add(contenedorInterno); // Se agrega el contenido
-            card.Controls.Add(lblTitulo);        // Se agrega el título al final para que quede arriba
-
-            flowLayoutPanel1.Controls.Add(card);
+            } catch (Exception ex) { Console.WriteLine("WMI Error: " + ex.Message); }
         }
 
-        private void ResaltarSiCambio(TextBox txt)
+        // ═══════════════════════════════════════════════════════════════════════
+        // GraphQL
+        // ═══════════════════════════════════════════════════════════════════════
+        private async Task LoadCatalogs()
         {
-            if (valoresOriginales.ContainsKey(txt.Name))
-            {
-                string valorBD = valoresOriginales[txt.Name];
+            var q = new { query = @"query {
+                catModelos { clave_modelo descrip_disp }
+                marcas { clave_marca marca }
+                inmuebles { clave descripcion desc_corta }
+                unidades { id_unidad nombre }
+            }"};
+            
+            try {
+                var data = await GQL(q);
+                if (data == null) return;
 
-                if (txt.Text != valorBD)
-                {
-                    // Si hay cambio, el color de resaltado manda siempre
-                    txt.BackColor = colorCambio;
-                    txt.Font = new Font(txt.Font, FontStyle.Bold);
+                catModelos.Clear(); foreach (var m in data["catModelos"]!) catModelos[m["clave_modelo"]!.ToString()] = m["descrip_disp"]?.ToString() ?? "";
+                catMarcas.Clear(); foreach (var m in data["marcas"]!) catMarcas[m["clave_marca"]!.ToString()] = m["marca"]?.ToString() ?? "";
+                catInmuebles.Clear(); foreach (var i in data["inmuebles"]!) catInmuebles[i["clave"]!.ToString()] = i["desc_corta"]?.ToString() ?? i["descripcion"]?.ToString() ?? "";
+                catUnidades.Clear(); foreach (var u in data["unidades"]!) catUnidades[u["id_unidad"]!.ToString()] = u["nombre"]?.ToString() ?? "";
+
+                FillCombo("clave_modelo", catModelos);
+                FillCombo("clave_inmueble_ref", catInmuebles);
+                FillCombo("id_unidad", catUnidades);
+                
+                var cmbEst = campos["estatus_operativo"] as Guna2ComboBox;
+                if (cmbEst != null) { cmbEst.Items.Clear(); cmbEst.Items.AddRange(new object[] { "ACTIVO", "INACTIVO", "EN REPARACIÓN", "BAJA" }); }
+
+            } catch { }
+        }
+
+        private async Task OnUnidadChanged(bool forceRefresh = false)
+        {
+            var idStr = GetVal("id_unidad");
+            if (!int.TryParse(idStr, out int idU)) return;
+            if (!forceRefresh && idU == unidadSeleccionadaId) return;
+            
+            unidadSeleccionadaId = idU;
+            
+            var q = new { query = $"query {{ ubicacionesPorUnidad(id_unidad: {idU}) {{ id_ubicacion nombre_ubicacion }} }}" };
+            try {
+                var data = await GQL(q);
+                catUbicaciones.Clear();
+                if (data != null) foreach (var u in data["ubicacionesPorUnidad"]!) catUbicaciones[u["id_ubicacion"]!.ToString()] = u["nombre_ubicacion"]!.ToString();
+                FillCombo("id_ubicacion", catUbicaciones);
+            } catch { }
+        }
+
+        private async Task SyncFromDB()
+        {
+            string ser = GetVal("num_serie");
+            if (string.IsNullOrEmpty(ser)) { MessageBox.Show("Ingrese un número de serie."); return; }
+
+            btnSync.Enabled = false;
+            var q = new { query = $@"query {{
+                bienByNumSerie(num_serie: ""{ser}"") {{
+                    id_bien num_inv estatus_operativo clave_inmueble_ref clave_modelo id_usuario_resguardo id_unidad id_ubicacion fecha_adquisicion
+                    especificacionTI {{ nom_pc cpu_info ram_gb almacenamiento_gb mac_address dir_ip puerto_red switch_red modelo_so }}
+                }}
+            }}"};
+            
+            try {
+                var data = await GQL(q);
+                var bien = data?["bienByNumSerie"];
+                if (bien == null || bien.Type == JTokenType.Null) { MessageBox.Show("No encontrado en BD."); btnSync.Enabled = true; return; }
+
+                idBienActual = bien["id_bien"]!.ToString();
+                dbState.Clear();
+
+                SetDBState("num_inv", bien["num_inv"]?.ToString());
+                SetDBState("fecha_adquisicion", bien["fecha_adquisicion"]?.Type != JTokenType.Null ? Convert.ToDateTime(bien["fecha_adquisicion"]).ToString("dd/MM/yyyy") : "");
+                SetDBState("estatus_operativo", bien["estatus_operativo"]?.ToString()?.ToUpper());
+                SetDBState("clave_inmueble_ref", bien["clave_inmueble_ref"]?.ToString());
+                SetDBState("clave_modelo", bien["clave_modelo"]?.ToString());
+                SetDBState("id_usuario_resguardo", bien["id_usuario_resguardo"]?.ToString());
+                
+                string sUnidad = bien["id_unidad"]?.ToString() ?? "";
+                SetDBState("id_unidad", sUnidad);
+                if (int.TryParse(sUnidad, out int idu)) { 
+                    SetVal("id_unidad", sUnidad);
+                    await OnUnidadChanged(true); // Force fetch ubicaciones for this unit
                 }
-                else
-                {
-                    // Si NO hay cambio, el color depende de si es editable o no
-                    // Blanco si es editable, Gris claro si está bloqueado
-                    txt.BackColor = txt.ReadOnly ? Color.FromArgb(248, 249, 250) : Color.White;
-                    txt.Font = new Font(txt.Font, FontStyle.Regular);
-                }
-            }
-        }
-        private void OnCardPaint(object sender, PaintEventArgs e)
-        {
-            Panel p = (Panel)sender;
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            GraphicsPath path = new GraphicsPath();
-            int r = 25; // Radio del redondeo
-            path.AddArc(0, 0, r, r, 180, 90);
-            path.AddArc(p.Width - r, 0, r, r, 270, 90);
-            path.AddArc(p.Width - r, p.Height - r, r, r, 0, 90);
-            path.AddArc(0, p.Height - r, r, r, 90, 90);
-            p.Region = new Region(path);
-        }
+                
+                SetDBState("id_ubicacion", bien["id_ubicacion"]?.ToString());
+                SetVal("id_ubicacion", bien["id_ubicacion"]?.ToString() ?? "");
 
-        private void FormPrincipal_Resize(object sender, EventArgs e)
-        {
-            int margin = 15;
-            foreach (Control card in flowLayoutPanel1.Controls)
-            {
-                // Ajuste para 3, 2 o 1 columna según el ancho
-                int col = flowLayoutPanel1.Width > 1100 ? 3 : (flowLayoutPanel1.Width > 750 ? 2 : 1);
-                card.Width = (flowLayoutPanel1.Width / col) - (margin * 2);
-            }
-        }
-
-        // Método para sincronizar el diccionario de respaldo después de guardar
-        private void ActualizarRespaldosLocales()
-        {
-            foreach (var item in camposSql)
-            {
-                if (valoresOriginales.ContainsKey(item.Key))
-                    valoresOriginales[item.Key] = item.Value.Text;
-                else
-                    valoresOriginales.Add(item.Key, item.Value.Text);
-
-                // Quitamos el resaltado amarillo ya que ahora los datos son iguales a la BD
-                item.Value.BackColor = Color.FromArgb(248, 249, 250);
-                item.Value.Font = new Font(item.Value.Font, FontStyle.Regular);
-            }
-        }
-
-        // Función auxiliar para que el resumen no use nombres de columnas SQL
-        private string ObtenerNombreAmigable(string campoSql)
-        {
-            switch (campoSql)
-            {
-                case "num_serie": return "Número de Serie";
-                case "clave_modelo": return "Modelo del Dispositivo";
-                case "nom_pc": return "Nombre de la PC";
-                case "monitor": return "Monitor";
-                case "dir_ip": return "Dirección IP";
-                case "N_user": return "Nombre del Usuario";
-                case "correo": return "Correo Electrónico";
-                default: return campoSql; // Si no está en la lista, devuelve el original
-            }
-        }
-
-        #endregion
-
-        #region Lógica de Negocio (WMI y SQL)
-
-        private void CargarDatosDesdeBD()
-        {
-            string serialPC = "";
-
-            // 1. Obtenemos el Serial de la PC actual mediante WMI
-            try
-            {
-                ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT SerialNumber FROM Win32_BIOS");
-                foreach (ManagementObject obj in searcher.Get())
-                {
-                    serialPC = obj["SerialNumber"]?.ToString();
-                }
-            }
-            catch { return; }
-
-            if (string.IsNullOrEmpty(serialPC)) return;
-
-            // 2. Buscamos en la Base de Datos
-            string query = "SELECT * FROM inventario1 WHERE num_serie = @serial";
-
-            using (SqlConnection conn = new SqlConnection(connectionString))
-            {
-                try
-                {
-                    conn.Open();
-                    SqlCommand cmd = new SqlCommand(query, conn);
-                    cmd.Parameters.AddWithValue("@serial", serialPC);
-
-                    using (SqlDataReader reader = cmd.ExecuteReader())
-                    {
-                        if (reader.Read())
-                        {
-                            valoresOriginales.Clear(); // Limpiamos respaldos anteriores
-
-                            for (int i = 0; i < reader.FieldCount; i++)
-                            {
-                                string columna = reader.GetName(i);
-                                string valor = reader[i]?.ToString() ?? "";
-
-                                if (camposSql.ContainsKey(columna))
-                                {
-                                    camposSql[columna].Text = valor;
-                                    // GUARDAMOS EL RESPALDO
-                                    if (!valoresOriginales.ContainsKey(columna))
-                                        valoresOriginales.Add(columna, valor);
-                                    else
-                                        valoresOriginales[columna] = valor;
-
-                                    // Quitamos cualquier resaltado previo
-                                    camposSql[columna].BackColor = Color.FromArgb(248, 249, 250);
-                                    camposSql[columna].Font = new Font(camposSql[columna].Font, FontStyle.Regular);
-                                }
-                            }
+                // Load User data specifically if it exists to populate the dropdown
+                string idUser = bien["id_usuario_resguardo"]?.ToString() ?? "";
+                if (!string.IsNullOrEmpty(idUser) && idUser != "0") {
+                    try {
+                        var qu = new { query = $@"query {{ usuarios(filters: {{ id_usuario: {{ eq: {idUser} }} }}) {{ edges {{ node {{ matricula nombre_completo }} }} }} }}" };
+                        var rU = await GQL(qu);
+                        if (rU != null && rU["usuarios"]?["edges"]?.HasValues == true) {
+                            var n = rU["usuarios"]!["edges"]![0]!["node"]!;
+                            catUsuarios[idUser] = n["matricula"] + " - " + n["nombre_completo"];
+                            FillCombo("id_usuario_resguardo", catUsuarios);
                         }
-                    }
+                    } catch { }
                 }
-                catch (Exception ex) { Console.WriteLine(ex.Message); }
-            }
+
+                var esp = bien["especificacionTI"];
+                if (esp != null && esp.Type != JTokenType.Null) {
+                    SetDBState("nom_pc", esp["nom_pc"]?.ToString());
+                    SetDBState("cpu_info", esp["cpu_info"]?.ToString());
+                    SetDBState("ram_gb", esp["ram_gb"]?.ToString());
+                    SetDBState("almacenamiento_gb", esp["almacenamiento_gb"]?.ToString());
+                    SetDBState("mac_address", esp["mac_address"]?.ToString());
+                    SetDBState("dir_ip", esp["dir_ip"]?.ToString());
+                    SetDBState("puerto_red", esp["puerto_red"]?.ToString());
+                    SetDBState("switch_red", esp["switch_red"]?.ToString());
+                    SetDBState("modelo_so", esp["modelo_so"]?.ToString());
+                }
+                
+                // Refresh UI to show db states
+                foreach(var kv in dbState) SetVal(kv.Key, kv.Value);
+                MessageBox.Show("Sincronizado con BD.");
+            } catch (Exception ex) { MessageBox.Show("Error: " + ex.Message); }
+            btnSync.Enabled = true;
         }
 
-        // Método auxiliar para refrescar datos que cambian (IP, Usuario) sin borrar lo de la BD
-        private void ActualizarDatosLocalesSoloLectura()
+        private async Task SaveChanges()
         {
-            camposSql["nom_pc"].Text = Environment.MachineName;
-            camposSql["N_user"].Text = Environment.UserName;
+            int.TryParse(GetVal("ram_gb"), out int ram);
+            int.TryParse(GetVal("almacenamiento_gb"), out int alm);
+            int.TryParse(GetVal("id_usuario_resguardo"), out int idUser);
+            int.TryParse(GetVal("id_unidad"), out int idUnidad);
+            int.TryParse(GetVal("id_ubicacion"), out int idUbicacion);
 
-            // Red
-            var net = new ManagementObjectSearcher("SELECT IPAddress FROM Win32_NetworkAdapterConfiguration WHERE IPEnabled = 'TRUE'");
-            foreach (ManagementObject obj in net.Get())
-            {
-                string[] ips = (string[])obj["IPAddress"];
-                if (ips != null) camposSql["dir_ip"].Text = ips[0];
-            }
-        }
+            string N(string v) => string.IsNullOrEmpty(v) ? "null" : $"\"{v}\"";
 
-        private void btnObtenerDatos_Click_1(object sender, EventArgs e)
-        {
-            try
-            {
-                // 1. Obtener Serial (PK)
-                ManagementObjectSearcher bios = new ManagementObjectSearcher("SELECT SerialNumber FROM Win32_BIOS");
-                foreach (ManagementObject obj in bios.Get())
-                    camposSql["num_serie"].Text = obj["SerialNumber"]?.ToString();
+            try {
+                btnSave.Enabled = false;
 
-                // 2. Obtener Red (IP y MAC)
-                ManagementObjectSearcher net = new ManagementObjectSearcher("SELECT IPAddress, MACAddress FROM Win32_NetworkAdapterConfiguration WHERE IPEnabled = 'TRUE'");
-                foreach (ManagementObject obj in net.Get())
-                {
-                    string[] ips = (string[])obj["IPAddress"];
-                    if (ips != null && ips.Length > 0) camposSql["dir_ip"].Text = ips[0];
-                    camposSql["mac_address"].Text = obj["MACAddress"]?.ToString();
-                }
-
-                // 3. Obtener Información del Monitor (NUEVO)
-                ManagementObjectSearcher monitorSearcher = new ManagementObjectSearcher("SELECT Caption FROM Win32_DesktopMonitor");
-                List<string> listaMonitores = new List<string>();
-                foreach (ManagementObject obj in monitorSearcher.Get())
-                {
-                    string name = obj["Caption"]?.ToString();
-                    if (!string.IsNullOrEmpty(name)) listaMonitores.Add(name);
-                }
-                // Unimos los nombres si hay más de uno (ej. "Monitor1, Monitor2")
-                string monitoresDetectados = string.Join(", ", listaMonitores);
-                camposSql["monitor"].Text = monitoresDetectados.Length > 70 ? monitoresDetectados.Substring(0, 70) : monitoresDetectados;
-
-                // 4. Obtener Sistema Operativo Detallado
-                ManagementObjectSearcher os = new ManagementObjectSearcher("SELECT Caption FROM Win32_OperatingSystem");
-                foreach (ManagementObject obj in os.Get())
-                {
-                    string fullOS = obj["Caption"]?.ToString() ?? "";
-                    camposSql["clave_so"].Text = fullOS.Replace("Microsoft ", "").Trim();
-                }
-
-                // 5. Nombre de PC y Usuario Actual
-                camposSql["nom_pc"].Text = Environment.MachineName;
-                camposSql["N_user"].Text = Environment.UserName;
-
-                //6. Obtener el Modelo del dispostitivo
-                ManagementObjectSearcher modelSearcher = new ManagementObjectSearcher("SELECT Name FROM Win32_ComputerSystemProduct");
-                foreach (ManagementObject obj in modelSearcher.Get())
-                {
-                    // Asigna el nombre comercial (ej. "HP ProBook 440 G8") al campo clave_modelo
-                    camposSql["clave_modelo"].Text = obj["Name"]?.ToString();
-                }
-
-                // 6. Obtener Correo Electrónico (Versión Mejorada)
-                try
-                {
-                    string email = null;
-
-                    // Intento 1: Cuenta de Dominio / Institucional (Active Directory)
-                    try
-                    {
-                        UserPrincipal user = UserPrincipal.Current;
-                        email = user.EmailAddress;
+                // Si no hay idBienActual, es un registro nuevo (CREATE)
+                if (string.IsNullOrEmpty(idBienActual)) {
+                    var mutCreate = new { query = $@"mutation {{ createBien(
+                        id_categoria: 1 id_unidad_medida: 1 num_serie: {N(GetVal("num_serie"))} num_inv: {N(GetVal("num_inv"))} estatus_operativo: {N(GetVal("estatus_operativo"))}
+                        clave_inmueble_ref: {N(GetVal("clave_inmueble_ref"))} clave_modelo: {N(GetVal("clave_modelo"))}
+                        id_usuario_resguardo: {(idUser > 0 ? idUser.ToString() : "null")} id_unidad: {(idUnidad > 0 ? idUnidad.ToString() : "null")} id_ubicacion: {(idUbicacion > 0 ? idUbicacion.ToString() : "null")}
+                    ) {{ id_bien }} }}" };
+                    
+                    var rCreate = await GQL(mutCreate);
+                    if (rCreate != null) {
+                        idBienActual = rCreate["createBien"]!["id_bien"]!.ToString();
+                    } else {
+                        throw new Exception("Fallo al crear el Bien base.");
                     }
-                    catch { /* Omitir si no hay contexto de dominio */ }
-
-                    // Intento 2: Si falla, buscamos en el Registro (Cuentas Microsoft Modernas)
-                    if (string.IsNullOrEmpty(email))
-                    {
-                        // Ruta 1: Identidades de inicio de sesión
-                        using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\IdentityCRL\LogonIdentities"))
-                        {
-                            if (key != null && key.GetSubKeyNames().Length > 0)
-                            {
-                                email = key.GetSubKeyNames()[0];
-                            }
-                        }
-                    }
-
-                    if (string.IsNullOrEmpty(email))
-                    {
-                        // Ruta 2: Propiedades extendidas de usuario (Suele contener el email en el nombre de la subllave)
-                        using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\IdentityCRL\UserExtendedProperties"))
-                        {
-                            if (key != null && key.GetSubKeyNames().Length > 0)
-                            {
-                                email = key.GetSubKeyNames()[0];
-                            }
-                        }
-                    }
-
-                    // Resultado final
-                    camposSql["correo"].Text = !string.IsNullOrEmpty(email) ? email : "Cuenta Local / No vinculado";
-                }
-                catch
-                {
-                    camposSql["correo"].Text = "Error al detectar";
+                } 
+                else {
+                    // ACTUALIZAR EXISTENTE
+                    var mutBien = new { query = $@"mutation {{ updateBien(
+                        id_bien: ""{idBienActual}"" num_inv: {N(GetVal("num_inv"))} estatus_operativo: {N(GetVal("estatus_operativo"))}
+                        clave_inmueble_ref: {N(GetVal("clave_inmueble_ref"))} clave_modelo: {N(GetVal("clave_modelo"))}
+                        id_usuario_resguardo: {(idUser > 0 ? idUser.ToString() : "null")} id_unidad: {(idUnidad > 0 ? idUnidad.ToString() : "null")} id_ubicacion: {(idUbicacion > 0 ? idUbicacion.ToString() : "null")}
+                    ) {{ id_bien }} }}" };
+                    await GQL(mutBien);
                 }
 
-                foreach (var txt in camposSql.Values)
-                {
-                    ResaltarSiCambio(txt);
-                }
+                // SIEMPRE UPSERT SPECS
+                var mutSpec = new { query = $@"mutation {{ upsertEspecificacionTI(
+                    id_bien: ""{idBienActual}"" nom_pc: {N(GetVal("nom_pc"))} cpu_info: {N(GetVal("cpu_info"))} ram_gb: {ram} almacenamiento_gb: {alm}
+                    mac_address: {N(GetVal("mac_address"))} dir_ip: {N(GetVal("dir_ip"))} puerto_red: {N(GetVal("puerto_red"))} switch_red: {N(GetVal("switch_red"))} modelo_so: {N(GetVal("modelo_so"))}
+                ) {{ id_bien }} }}" };
 
-                MessageBox.Show("Datos de hardware, monitor y usuario cargados correctamente.");
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Error al recuperar información: " + ex.Message);
-            }
+                var rSpec = await GQL(mutSpec);
+                
+                MessageBox.Show("Guardado exitoso.");
+                await SyncFromDB(); // Reload state
+            } catch (Exception ex) { MessageBox.Show("Error: " + ex.Message); }
+            btnSave.Enabled = true;
         }
-        private void btnEnviar_Click(object sender, EventArgs e)
-        {
-            if (string.IsNullOrEmpty(camposSql["num_serie"].Text))
-            {
-                MessageBox.Show("El Número de Serie es obligatorio.");
-                return;
-            }
 
-            // 1. Generar resumen de cambios para confirmación
-            List<string> listaCambios = new List<string>();
-            foreach (var item in camposSql)
-            {
-                string valorActual = item.Value.Text.Trim();
-                string valorOriginal = valoresOriginales.ContainsKey(item.Key) ? valoresOriginales[item.Key].Trim() : "";
-
-                if (valorActual != valorOriginal)
-                {
-                    string mostrarOriginal = string.IsNullOrEmpty(valorOriginal) ? "[Vacío]" : $"'{valorOriginal}'";
-                    string mostrarActual = string.IsNullOrEmpty(valorActual) ? "[Vacío]" : $"'{valorActual}'";
-                    listaCambios.Add($"• {item.Key}: de {mostrarOriginal} a {mostrarActual}");
-                }
-            }
-
-            if (listaCambios.Count == 0)
-            {
-                MessageBox.Show("No hay cambios nuevos que guardar.");
-                return;
-            }
-
-            if (MessageBox.Show("¿Confirmar cambios?\n\n" + string.Join("\n", listaCambios), "Auditoría",
-                MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.No) return;
-
-            // 2. QUERY EXPANDIDA: Ahora incluye TODOS los campos de las tarjetas
-            string query = @"
-        IF EXISTS (SELECT 1 FROM inventario1 WHERE num_serie = @num_serie)
-        BEGIN
-            UPDATE inventario1 SET 
-                nom_pc = @nom_pc, IDBienes = @IDBienes, num_inv = @num_inv,
-                clave_modelo = @clave_modelo, monitor = @monitor, puerto = @puerto, switch = @switch,
-                dir_ip = @dir_ip, mac_address = @mac_address, clave_so = @clave_so, Antivirus = @Antivirus,
-                ubicacion = @ubicacion, N_user = @N_user, m_User = @m_User, correo = @correo, extension = @extension,
-                status = @status, clave = @clave, clave_proy = @clave_proy, fecha_adq = @fecha_adq,
-                observaciones = @observaciones, Actualizacion = GETDATE()
-            WHERE num_serie = @num_serie
-        END
-        ELSE
-        BEGIN
-            INSERT INTO inventario1 (
-                num_serie, nom_pc, IDBienes, num_inv, clave_modelo, monitor, puerto, switch,
-                dir_ip, mac_address, clave_so, Antivirus, ubicacion, N_user, m_User, correo, extension,
-                status, clave, clave_proy, fecha_adq, observaciones, Actualizacion)
-            VALUES (
-                @num_serie, @nom_pc, @IDBienes, @num_inv, @clave_modelo, @monitor, @puerto, @switch,
-                @dir_ip, @mac_address, @clave_so, @Antivirus, @ubicacion, @N_user, @m_User, @correo, @extension,
-                @status, @clave, @clave_proy, @fecha_adq, @observaciones, GETDATE())
-        END";
-
-            using (SqlConnection conn = new SqlConnection(connectionString))
-            {
-                try
-                {
-                    conn.Open();
-                    SqlCommand cmd = new SqlCommand(query, conn);
-
-                    // Mapeo automático de parámetros desde el diccionario
-                    foreach (var campo in camposSql)
-                    {
-                        // Agregamos @ al nombre del campo para que coincida con la query
-                        cmd.Parameters.AddWithValue("@" + campo.Key, campo.Value.Text.Trim());
-                    }
-
-                    cmd.ExecuteNonQuery();
-
-                    // Sincronizar UI: poner fondos grises y actualizar respaldos
-                    ActualizarRespaldosLocales();
-
-                    MessageBox.Show("Base de Datos actualizada con éxito.");
-                }
-                catch (Exception ex) { MessageBox.Show("Error SQL: " + ex.Message); }
-            }
+        // ─── Helpers ──────────────────────────────────────────────────────────
+        private async Task<JObject?> GQL(object body) {
+            var resp = await http.PostAsync("", new StringContent(JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json"));
+            var root = JObject.Parse(await resp.Content.ReadAsStringAsync());
+            if (root["errors"] != null) { Console.WriteLine("GQL Error: " + root["errors"]); return null; }
+            return root["data"] as JObject;
         }
-        private void btnEditar_Click(object sender, EventArgs e)
-        {
-            // 1. Detectamos el modo actual basado en el primer campo
-            bool estabaBloqueado = camposSql["num_serie"].ReadOnly;
 
-            // 2. Cambiamos el texto del botón
-            btnEditar.Text = estabaBloqueado ? "Bloquear Edición" : "Permitir Edición";
-
-            // 3. Aplicamos el cambio de estado y refrescamos colores
-            foreach (var txt in camposSql.Values)
-            {
-                // Si estaba bloqueado, ahora permitimos edición (!ReadOnly)
-                txt.ReadOnly = !estabaBloqueado;
-
-                // Llamamos a nuestra función inteligente para que decida el color correcto
-                ResaltarSiCambio(txt);
+        private void FillCombo(string key, Dictionary<string, string> dict) {
+            if (!campos.ContainsKey(key)) return;
+            var ctrl = campos[key];
+            if (ctrl is Guna2ComboBox cmb) {
+                cmb.Items.Clear(); foreach (var kv in dict) cmb.Items.Add(new KV(kv.Key, kv.Value));
+                cmb.DisplayMember = "Valor"; cmb.ValueMember = "Clave";
+            } else if (ctrl is ComboBox c) {
+                c.Items.Clear(); foreach (var kv in dict) c.Items.Add(new KV(kv.Key, kv.Value));
+                c.DisplayMember = "Valor"; c.ValueMember = "Clave";
             }
         }
 
-        private void btnObtenerDatosBD_Click(object sender, EventArgs e)
-        {
-            CargarDatosDesdeBD();
+        private string GetVal(string key) {
+            if (!campos.ContainsKey(key)) return "";
+            var c = campos[key];
+            if (c is Guna2TextBox t) return t.Text.Trim();
+            if (c is Guna2ComboBox cmb && cmb.SelectedItem is KV kv) return kv.Clave;
+            if (c is Guna2ComboBox cmb2 && cmb2.SelectedItem is string s) return s;
+            if (c is ComboBox sc && sc.SelectedItem is KV skv) return skv.Clave;
+            return c.Text.Trim();
         }
 
-        #endregion
+        private void SetVal(string key, string val) {
+            if (!campos.ContainsKey(key)) return;
+            var c = campos[key];
+            if (c is Guna2TextBox t) { t.Text = val; }
+            else if (c is Guna2ComboBox cmb) {
+                if (key == "estatus_operativo") cmb.SelectedItem = val;
+                else { foreach (KV kv in cmb.Items) if (kv.Clave == val) { cmb.SelectedItem = kv; break; } }
+            }
+            else if (c is ComboBox sc) {
+                foreach (KV kv in sc.Items) if (kv.Clave == val) { sc.SelectedItem = kv; break; }
+            }
+            CheckDiscrepancy(key);
+        }
+
+        private void SetDBState(string key, string? val) {
+            dbState[key] = val ?? "";
+        }
+
+        // ─── Dialogs ──────────────────────────────────────────────────────────
+        private async Task AddUbicacion() {
+            if (unidadSeleccionadaId == 0) { MessageBox.Show("Seleccione Unidad primero."); return; }
+            string input = Microsoft.VisualBasic.Interaction.InputBox("Nombre de la ubicación:", "Nueva Ubicación", "");
+            if (string.IsNullOrWhiteSpace(input)) return;
+            
+            var mut = new { query = $"mutation {{ createUbicacion(id_unidad:{unidadSeleccionadaId}, nombre_ubicacion:\"{input.Trim()}\") {{ id_ubicacion nombre_ubicacion }} }}" };
+            var r = await GQL(mut);
+            if (r != null) {
+                var nueva = r["createUbicacion"]!;
+                catUbicaciones[nueva["id_ubicacion"]!.ToString()] = nueva["nombre_ubicacion"]!.ToString();
+                FillCombo("id_ubicacion", catUbicaciones);
+                SetVal("id_ubicacion", nueva["id_ubicacion"]!.ToString());
+            }
+        }
+
+        private async Task AddModelo() {
+            string clave = Microsoft.VisualBasic.Interaction.InputBox("Clave Modelo:", "Nuevo Modelo", "");
+            if (string.IsNullOrWhiteSpace(clave)) return;
+            string desc = Microsoft.VisualBasic.Interaction.InputBox("Descripción:", "Nuevo Modelo", "");
+            if (string.IsNullOrWhiteSpace(desc)) return;
+            
+            var mut = new { query = $"mutation {{ createCatModelo(clave_modelo:\"{clave.Trim()}\", descrip_disp:\"{desc.Trim()}\") {{ clave_modelo descrip_disp }} }}" };
+            var r = await GQL(mut);
+            if (r != null) {
+                var nuevo = r["createCatModelo"]!;
+                catModelos[nuevo["clave_modelo"]!.ToString()] = nuevo["descrip_disp"]!.ToString();
+                FillCombo("clave_modelo", catModelos);
+                SetVal("clave_modelo", nuevo["clave_modelo"]!.ToString());
+            }
+        }
+    }
+
+    internal sealed class KV
+    {
+        public string Clave { get; }
+        public string Valor { get; }
+        public KV(string clave, string valor) { Clave = clave; Valor = valor; }
+        public override string ToString() => Valor;
     }
 }
