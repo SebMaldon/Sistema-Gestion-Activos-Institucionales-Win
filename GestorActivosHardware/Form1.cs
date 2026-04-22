@@ -54,7 +54,7 @@ namespace GestorActivosHardware
         private void SetupForm()
         {
             Text = "Gestor Activos - IMSS";
-            Size = new Size(1400, 950);
+            Size = new Size(1500, 1000);
             StartPosition = FormStartPosition.CenterScreen;
             BackColor = T.BgSurface;
             FormBorderStyle = FormBorderStyle.None;
@@ -71,7 +71,7 @@ namespace GestorActivosHardware
             Controls.Clear();
             
             // Titlebar
-            var titleBar = new Guna2Panel { Dock = DockStyle.Top, Height = 40, FillColor = T.BgDeep };
+            var titleBar = new Guna2Panel { Dock = DockStyle.Top, Height = 40, FillColor = T.BgDeep, Width = this.Width };
             var lblTitle = new Label { Text = "Gestor de Activos de Hardware", ForeColor = T.TxtPrimary, Font = T.H3, Location = new Point(20, 10), AutoSize = true };
             
             var btnClose = new Guna2ControlBox { Anchor = AnchorStyles.Top | AnchorStyles.Right, Location = new Point(this.Width - 45, 0), Size = new Size(45, 40), FillColor = Color.Transparent, IconColor = T.TxtSecondary, HoverState = { FillColor = T.LedRed, IconColor = Color.White } };
