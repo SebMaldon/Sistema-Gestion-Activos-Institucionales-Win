@@ -33,6 +33,7 @@ namespace GestorActivosHardware
         private readonly Dictionary<string, string> catUnidades = new();
         private readonly Dictionary<string, string> catUbicaciones = new();
         private int unidadSeleccionadaId = 0;
+        private string fechaActualizacionBD = "";
 
         // UI Controls
         private FlowLayoutPanel pnlLeds = null!;
@@ -217,16 +218,16 @@ namespace GestorActivosHardware
             var lbl = new Label { Text = "DATOS GENERALES", ForeColor = T.TxtPrimary, Font = T.H2, Dock = DockStyle.Top, Height = 40 };
             
             var flow = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-            flow.Resize += (s, e) => { foreach (Control c in flow.Controls) c.Width = flow.Width - 25; };
+            flow.Resize += (s, e) => { foreach (Control c in flow.Controls) c.Width = flow.Width - 45; };
 
             AddInput(flow, "Número de Serie", "num_serie");
             AddInput(flow, "Número de Inventario", "num_inv");
-            AddCombo(flow, "Estatus Operativo", "estatus_operativo");
+            AddComboFixed(flow, "Estatus Operativo", "estatus_operativo");
             AddCombo(flow, "Inmueble Físico", "clave_inmueble_ref");
             AddCombo(flow, "Unidad Operativa", "id_unidad");
             AddComboPlus(flow, "Departamento/Área", "id_ubicacion", AddUbicacion);
             AddUserSearch(flow, "Usuario a Resguardo", "id_usuario_resguardo");
-            AddInput(flow, "Fecha Adquisición", "fecha_adquisicion");
+            AddDate(flow, "Fecha Adquisición", "fecha_adquisicion");
 
             pnl.Controls.Add(flow);
             pnl.Controls.Add(lbl);
@@ -239,7 +240,7 @@ namespace GestorActivosHardware
             var lbl = new Label { Text = "ESPECIFICACIONES TÉCNICAS", ForeColor = T.TxtPrimary, Font = T.H2, Dock = DockStyle.Top, Height = 40 };
             
             var flow = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-            flow.Resize += (s, e) => { foreach (Control c in flow.Controls) c.Width = flow.Width - 25; };
+            flow.Resize += (s, e) => { foreach (Control c in flow.Controls) c.Width = flow.Width - 45; };
 
             AddComboPlus(flow, "Modelo del Equipo", "clave_modelo", AddModelo);
             AddInput(flow, "Nombre Host (PC)", "nom_pc");
@@ -261,7 +262,7 @@ namespace GestorActivosHardware
         private void AddInput(Control parent, string label, string key)
         {
             var pnl = new Panel { Height = 65, Margin = new Padding(0, 0, 0, 10) };
-            var lbl = new Label { Text = label, ForeColor = T.TxtSecondary, Font = T.Small, Dock = DockStyle.Top, Height = 20 };
+            var lbl = new Label { Text = label, ForeColor = T.TxtSecondary, Font = T.Small, Dock = DockStyle.Top, Height = 24, Padding = new Padding(0, 0, 0, 3) };
             var txt = new Guna2TextBox { Name = key, Dock = DockStyle.Fill, FillColor = T.BgInput, BorderColor = T.Border, ForeColor = T.TxtPrimary, BorderRadius = 5 };
             
             // Badge for discrepancy
@@ -276,16 +277,57 @@ namespace GestorActivosHardware
             campos[key] = txt;
         }
 
-        private void AddCombo(Control parent, string label, string key)
+        private void AddDate(Control parent, string label, string key)
         {
             var pnl = new Panel { Height = 65, Margin = new Padding(0, 0, 0, 10) };
-            var lbl = new Label { Text = label, ForeColor = T.TxtSecondary, Font = T.Small, Dock = DockStyle.Top, Height = 20 };
-            var cmb = new Guna2ComboBox { Name = key, Dock = DockStyle.Fill, FillColor = T.BgInput, BorderColor = T.Border, ForeColor = T.TxtPrimary, BorderRadius = 5 };
+            var lbl = new Label { Text = label, ForeColor = T.TxtSecondary, Font = T.Small, Dock = DockStyle.Top, Height = 24, Padding = new Padding(0, 0, 0, 2) };
             
-            if (key == "id_unidad") cmb.SelectedIndexChanged += async (_, __) => await OnUnidadChanged();
+            var dtp = new Guna.UI2.WinForms.Guna2DateTimePicker { 
+                Name = key, Dock = DockStyle.Fill, 
+                FillColor = T.BgInput, ForeColor = T.TxtPrimary, 
+                BorderColor = T.Border, BorderThickness = 1, BorderRadius = 5, 
+                Format = DateTimePickerFormat.Short,
+                MaxDate = DateTime.Now
+            };
+            
+            dtp.ValueChanged += (_, __) => CheckDiscrepancy(key);
+            
+            pnl.Controls.Add(dtp);
+            pnl.Controls.Add(lbl);
+            parent.Controls.Add(pnl);
+            campos[key] = dtp;
+        }
+
+        private void AddComboFixed(Control parent, string label, string key)
+        {
+            var pnl = new Panel { Height = 65, Margin = new Padding(0, 0, 0, 10) };
+            var lbl = new Label { Text = label, ForeColor = T.TxtSecondary, Font = T.Small, Dock = DockStyle.Top, Height = 24, Padding = new Padding(0, 0, 0, 2) };
+            
+            var cmb = new Guna.UI2.WinForms.Guna2ComboBox { Name = key, Dock = DockStyle.Fill, FillColor = T.BgInput, BorderColor = T.Border, ForeColor = T.TxtPrimary, BorderRadius = 5 };
+            
             cmb.SelectedIndexChanged += (_, __) => CheckDiscrepancy(key);
             
             pnl.Controls.Add(cmb);
+            pnl.Controls.Add(lbl);
+            parent.Controls.Add(pnl);
+            campos[key] = cmb;
+        }
+
+        private void AddCombo(Control parent, string label, string key)
+        {
+            var pnl = new Panel { Height = 65, Margin = new Padding(0, 0, 0, 10) };
+            var lbl = new Label { Text = label, ForeColor = T.TxtSecondary, Font = T.Small, Dock = DockStyle.Top, Height = 24, Padding = new Padding(0, 0, 0, 4) };
+            
+            var cmbPnl = new Guna2Panel { Dock = DockStyle.Fill, FillColor = T.BgInput, BorderColor = T.Border, BorderThickness = 1, BorderRadius = 5, Padding = new Padding(5) };
+            var cmb = new ComboBox { Name = key, Dock = DockStyle.Fill, BackColor = T.BgInput, ForeColor = T.TxtPrimary, FlatStyle = FlatStyle.Flat, DropDownStyle = ComboBoxStyle.DropDown };
+            
+            cmb.TextUpdate += (s, e) => HandleLocalSearch(cmb);
+
+            if (key == "id_unidad") cmb.SelectedIndexChanged += async (_, __) => await OnUnidadChanged();
+            cmb.SelectedIndexChanged += (_, __) => CheckDiscrepancy(key);
+            
+            cmbPnl.Controls.Add(cmb);
+            pnl.Controls.Add(cmbPnl);
             pnl.Controls.Add(lbl);
             parent.Controls.Add(pnl);
             campos[key] = cmb;
@@ -296,7 +338,7 @@ namespace GestorActivosHardware
         private void AddUserSearch(Control parent, string label, string key)
         {
             var pnl = new Panel { Height = 65, Margin = new Padding(0, 0, 0, 10) };
-            var lbl = new Label { Text = label, ForeColor = T.TxtSecondary, Font = T.Small, Dock = DockStyle.Top, Height = 20 };
+            var lbl = new Label { Text = label, ForeColor = T.TxtSecondary, Font = T.Small, Dock = DockStyle.Top, Height = 24, Padding = new Padding(0, 0, 0, 4) };
             
             var cmbPnl = new Guna2Panel { Dock = DockStyle.Fill, FillColor = T.BgInput, BorderColor = T.Border, BorderThickness = 1, BorderRadius = 5, Padding = new Padding(5) };
             var cmb = new ComboBox { Name = key, Dock = DockStyle.Fill, BackColor = T.BgInput, ForeColor = T.TxtPrimary, FlatStyle = FlatStyle.Flat, DropDownStyle = ComboBoxStyle.DropDown };
@@ -364,19 +406,34 @@ namespace GestorActivosHardware
         private void AddComboPlus(Control parent, string label, string key, Func<Task> onPlus)
         {
             var pnl = new Panel { Height = 65, Margin = new Padding(0, 0, 0, 10) };
-            var lbl = new Label { Text = label, ForeColor = T.TxtSecondary, Font = T.Small, Dock = DockStyle.Top, Height = 20 };
+            var lbl = new Label { Text = label, ForeColor = T.TxtSecondary, Font = T.Small, Dock = DockStyle.Top, Height = 24, Padding = new Padding(0, 0, 0, 2) };
             
             var row = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
             row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-            row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 45f));
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90f));
             
-            var cmb = new Guna2ComboBox { Name = key, Dock = DockStyle.Fill, FillColor = T.BgInput, BorderColor = T.Border, ForeColor = T.TxtPrimary, BorderRadius = 5 };
-            var btn = new Guna2Button { Text = "+", Dock = DockStyle.Fill, FillColor = T.Accent, ForeColor = Color.White, Font = T.H2, BorderRadius = 5, Cursor = Cursors.Hand };
+            var cmbPnl = new Guna2Panel { Dock = DockStyle.Fill, FillColor = T.BgInput, BorderColor = T.Border, BorderThickness = 1, BorderRadius = 5, Padding = new Padding(5), Margin = new Padding(0) };
+            var cmb = new ComboBox { Name = key, Dock = DockStyle.Fill, BackColor = T.BgInput, ForeColor = T.TxtPrimary, FlatStyle = FlatStyle.Flat, DropDownStyle = ComboBoxStyle.DropDown };
+            
+            cmb.TextUpdate += (s, e) => HandleLocalSearch(cmb);
+
+            var btn = new Guna2Button { 
+                Text = "Añadir", 
+                Dock = DockStyle.Fill, 
+                FillColor = T.Accent, 
+                ForeColor = Color.White, 
+                Font = T.Small, 
+                BorderRadius = 5, 
+                Cursor = Cursors.Hand,
+                Margin = new Padding(5, 0, 0, 0)
+            };
             
             cmb.SelectedIndexChanged += (_, __) => CheckDiscrepancy(key);
             btn.Click += async (_, __) => await onPlus();
             
-            row.Controls.Add(cmb, 0, 0);
+            cmbPnl.Controls.Add(cmb);
+            
+            row.Controls.Add(cmbPnl, 0, 0);
             row.Controls.Add(btn, 1, 0);
             
             pnl.Controls.Add(row);
@@ -395,12 +452,13 @@ namespace GestorActivosHardware
             AddLed("IP", wmiState.GetValueOrDefault("dir_ip", "No Disp"));
             AddLed("CPU", wmiState.GetValueOrDefault("cpu_info", "No Disp"));
             AddLed("RAM", wmiState.GetValueOrDefault("ram_gb", "0") + " GB");
+            if (!string.IsNullOrEmpty(fechaActualizacionBD)) AddLed("Últ. Actualización BD", fechaActualizacionBD);
         }
 
         private void AddLed(string title, string value)
         {
-            var card = new Guna2Panel { Width = 280, Height = 70, FillColor = T.BgCard, BorderRadius = 10, Margin = new Padding(0, 0, 15, 0), Padding = new Padding(15, 10, 15, 10) };
-            var lblT = new Label { Text = title, ForeColor = T.TxtSecondary, Font = T.Caption, Dock = DockStyle.Top, Height = 15 };
+            var card = new Guna2Panel { Width = 255, Height = 70, FillColor = T.BgCard, BorderRadius = 10, Margin = new Padding(0, 0, 15, 0), Padding = new Padding(15, 10, 15, 10) };
+            var lblT = new Label { Text = title, ForeColor = T.TxtSecondary, Font = T.Caption, Dock = DockStyle.Top, Height = 20 };
             var lblV = new Label { Text = value, ForeColor = T.TxtPrimary, Font = T.H3, Dock = DockStyle.Fill, AutoEllipsis = true };
             
             var dot = new Guna2CirclePictureBox { Size = new Size(10, 10), FillColor = value.Contains("No Disp") ? T.LedRed : T.LedGreen, Location = new Point(255, 15) };
@@ -475,9 +533,9 @@ namespace GestorActivosHardware
 
                 Invoke(() => {
                     UpdateLeds();
-                    // Auto-fill empty fields
+                    // Sobrescribir con datos WMI para que el sistema marque en rojo las discrepancias respecto a la BD
                     foreach(var kv in wmiState) {
-                        if(string.IsNullOrEmpty(GetVal(kv.Key))) SetVal(kv.Key, kv.Value);
+                        SetVal(kv.Key, kv.Value);
                     }
                 });
             } catch (Exception ex) { Console.WriteLine("WMI Error: " + ex.Message); }
@@ -534,12 +592,12 @@ namespace GestorActivosHardware
         private async Task SyncFromDB()
         {
             string ser = GetVal("num_serie");
-            if (string.IsNullOrEmpty(ser)) { MessageBox.Show("Ingrese un número de serie."); return; }
+            if (string.IsNullOrEmpty(ser)) { ShowCustomAlert("Ingrese un número de serie.", "Aviso"); return; }
 
             btnSync.Enabled = false;
             var q = new { query = $@"query {{
                 bienByNumSerie(num_serie: ""{ser}"") {{
-                    id_bien num_inv estatus_operativo clave_inmueble_ref clave_modelo id_usuario_resguardo id_unidad id_ubicacion fecha_adquisicion
+                    id_bien num_inv estatus_operativo clave_inmueble_ref clave_modelo id_usuario_resguardo id_unidad id_ubicacion fecha_adquisicion fecha_actualizacion
                     especificacionTI {{ nom_pc cpu_info ram_gb almacenamiento_gb mac_address dir_ip puerto_red switch_red modelo_so }}
                 }}
             }}"};
@@ -547,10 +605,15 @@ namespace GestorActivosHardware
             try {
                 var data = await GQL(q);
                 var bien = data?["bienByNumSerie"];
-                if (bien == null || bien.Type == JTokenType.Null) { MessageBox.Show("No encontrado en BD."); btnSync.Enabled = true; return; }
+                if (bien == null || bien.Type == JTokenType.Null) { ShowCustomAlert("No encontrado en BD.", "Error"); btnSync.Enabled = true; return; }
 
                 idBienActual = bien["id_bien"]!.ToString();
                 dbState.Clear();
+                
+                // Guardar fecha de actualización para mostrar en LEDs
+                fechaActualizacionBD = bien["fecha_actualizacion"]?.Type != JTokenType.Null 
+                    ? Convert.ToDateTime(bien["fecha_actualizacion"]).ToString("dd/MM/yyyy HH:mm") 
+                    : "Sin datos";
 
                 SetDBState("num_inv", bien["num_inv"]?.ToString());
                 SetDBState("fecha_adquisicion", bien["fecha_adquisicion"]?.Type != JTokenType.Null ? Convert.ToDateTime(bien["fecha_adquisicion"]).ToString("dd/MM/yyyy") : "");
@@ -598,13 +661,35 @@ namespace GestorActivosHardware
                 
                 // Refresh UI to show db states
                 foreach(var kv in dbState) SetVal(kv.Key, kv.Value);
-                MessageBox.Show("Sincronizado con BD.");
-            } catch (Exception ex) { MessageBox.Show("Error: " + ex.Message); }
+                UpdateLeds(); // Refresh LEDs with fecha_actualizacion
+                ShowCustomAlert("Sincronizado con BD.", "Éxito");
+            } catch (Exception ex) { ShowCustomAlert("Error: " + ex.Message, "Error"); }
             btnSync.Enabled = true;
         }
 
         private async Task SaveChanges()
         {
+            var cambiosStr = new List<string>();
+            if (!string.IsNullOrEmpty(idBienActual)) {
+                foreach (var key in campos.Keys) {
+                    if (dbState.TryGetValue(key, out var oldVal)) {
+                        string newVal = GetVal(key);
+                        if (newVal != oldVal) {
+                            string lbl = campos[key].Parent?.Controls.OfType<Label>().FirstOrDefault()?.Text ?? key;
+                            cambiosStr.Add($"- {lbl}: '{oldVal}' -> '{newVal}'");
+                        }
+                    }
+                }
+                
+                if (cambiosStr.Count == 0) {
+                    ShowCustomAlert("No se detectaron cambios en los campos.", "Información");
+                    return;
+                }
+                
+                var resp = ShowCustomAlert("¿Guardar los siguientes cambios en la BD?\n\n" + string.Join("\n", cambiosStr), "Confirmar Guardado", true);
+                if (resp != DialogResult.Yes) return;
+            }
+
             int.TryParse(GetVal("ram_gb"), out int ram);
             int.TryParse(GetVal("almacenamiento_gb"), out int alm);
             int.TryParse(GetVal("id_usuario_resguardo"), out int idUser);
@@ -612,6 +697,12 @@ namespace GestorActivosHardware
             int.TryParse(GetVal("id_ubicacion"), out int idUbicacion);
 
             string N(string v) => string.IsNullOrEmpty(v) ? "null" : $"\"{v}\"";
+
+            string fAdqStr = GetVal("fecha_adquisicion");
+            string fAdqGQL = "null";
+            if (DateTime.TryParseExact(fAdqStr, "dd/MM/yyyy", null, System.Globalization.DateTimeStyles.None, out var dAdq)) {
+                fAdqGQL = $"\"{dAdq.ToString("yyyy-MM-dd")}\"";
+            }
 
             try {
                 btnSave.Enabled = false;
@@ -622,6 +713,7 @@ namespace GestorActivosHardware
                         id_categoria: 1 id_unidad_medida: 1 num_serie: {N(GetVal("num_serie"))} num_inv: {N(GetVal("num_inv"))} estatus_operativo: {N(GetVal("estatus_operativo"))}
                         clave_inmueble_ref: {N(GetVal("clave_inmueble_ref"))} clave_modelo: {N(GetVal("clave_modelo"))}
                         id_usuario_resguardo: {(idUser > 0 ? idUser.ToString() : "null")} id_unidad: {(idUnidad > 0 ? idUnidad.ToString() : "null")} id_ubicacion: {(idUbicacion > 0 ? idUbicacion.ToString() : "null")}
+                        fecha_adquisicion: {fAdqGQL}
                     ) {{ id_bien }} }}" };
                     
                     var rCreate = await GQL(mutCreate);
@@ -637,6 +729,7 @@ namespace GestorActivosHardware
                         id_bien: ""{idBienActual}"" num_inv: {N(GetVal("num_inv"))} estatus_operativo: {N(GetVal("estatus_operativo"))}
                         clave_inmueble_ref: {N(GetVal("clave_inmueble_ref"))} clave_modelo: {N(GetVal("clave_modelo"))}
                         id_usuario_resguardo: {(idUser > 0 ? idUser.ToString() : "null")} id_unidad: {(idUnidad > 0 ? idUnidad.ToString() : "null")} id_ubicacion: {(idUbicacion > 0 ? idUbicacion.ToString() : "null")}
+                        fecha_adquisicion: {fAdqGQL}
                     ) {{ id_bien }} }}" };
                     await GQL(mutBien);
                 }
@@ -649,9 +742,9 @@ namespace GestorActivosHardware
 
                 var rSpec = await GQL(mutSpec);
                 
-                MessageBox.Show("Guardado exitoso.");
+                ShowCustomAlert("Guardado exitoso.", "Éxito");
                 await SyncFromDB(); // Reload state
-            } catch (Exception ex) { MessageBox.Show("Error: " + ex.Message); }
+            } catch (Exception ex) { ShowCustomAlert("Error: " + ex.Message, "Error"); }
             btnSave.Enabled = true;
         }
 
@@ -663,13 +756,41 @@ namespace GestorActivosHardware
             return root["data"] as JObject;
         }
 
+        private void HandleLocalSearch(ComboBox cmb)
+        {
+            if (cmb.Tag is not Dictionary<string, string> dict) return;
+            
+            string term = cmb.Text.ToLower();
+            var filtered = string.IsNullOrWhiteSpace(term) 
+                ? dict 
+                : dict.Where(kv => kv.Value.ToLower().Contains(term)).ToDictionary(kv => kv.Key, kv => kv.Value);
+            
+            string currentText = cmb.Text;
+            int cursor = cmb.SelectionStart;
+            
+            cmb.BeginUpdate();
+            cmb.Items.Clear();
+            foreach (var kv in filtered) cmb.Items.Add(new KV(kv.Key, kv.Value));
+            cmb.EndUpdate();
+            
+            cmb.Text = currentText;
+            cmb.SelectionStart = cursor;
+            
+            if (cmb.Items.Count > 0 && !cmb.DroppedDown) {
+                cmb.DroppedDown = true;
+                Cursor.Current = Cursors.Default;
+            }
+        }
+
         private void FillCombo(string key, Dictionary<string, string> dict) {
             if (!campos.ContainsKey(key)) return;
             var ctrl = campos[key];
             if (ctrl is Guna2ComboBox cmb) {
+                cmb.Tag = dict;
                 cmb.Items.Clear(); foreach (var kv in dict) cmb.Items.Add(new KV(kv.Key, kv.Value));
                 cmb.DisplayMember = "Valor"; cmb.ValueMember = "Clave";
             } else if (ctrl is ComboBox c) {
+                c.Tag = dict;
                 c.Items.Clear(); foreach (var kv in dict) c.Items.Add(new KV(kv.Key, kv.Value));
                 c.DisplayMember = "Valor"; c.ValueMember = "Clave";
             }
@@ -696,6 +817,11 @@ namespace GestorActivosHardware
             else if (c is ComboBox sc) {
                 foreach (KV kv in sc.Items) if (kv.Clave == val) { sc.SelectedItem = kv; break; }
             }
+            else if (c is Guna.UI2.WinForms.Guna2DateTimePicker dtp) {
+                if (DateTime.TryParseExact(val, "dd/MM/yyyy", null, System.Globalization.DateTimeStyles.None, out var d)) {
+                    dtp.Value = d;
+                }
+            }
             CheckDiscrepancy(key);
         }
 
@@ -704,10 +830,109 @@ namespace GestorActivosHardware
         }
 
         // ─── Dialogs ──────────────────────────────────────────────────────────
+        private string[]? ShowCustomDialog(string title, string[] labels)
+        {
+            using var frm = new Form {
+                Text = title,
+                StartPosition = FormStartPosition.CenterParent,
+                FormBorderStyle = FormBorderStyle.None,
+                BackColor = T.BgCard,
+                Width = 450,
+                ShowInTaskbar = false
+            };
+
+            var border = new Guna.UI2.WinForms.Guna2Panel { Dock = DockStyle.Fill, BorderColor = T.Accent, BorderThickness = 2, FillColor = Color.Transparent };
+            frm.Controls.Add(border);
+
+            var lblTitle = new Label { Text = title, ForeColor = T.TxtPrimary, Font = T.H2, Location = new Point(20, 20), AutoSize = true, BackColor = Color.Transparent };
+            border.Controls.Add(lblTitle);
+
+            var inputs = new Guna.UI2.WinForms.Guna2TextBox[labels.Length];
+            int y = 70;
+            for (int i = 0; i < labels.Length; i++) {
+                var lbl = new Label { Text = labels[i], ForeColor = T.TxtSecondary, Font = T.Small, Location = new Point(20, y), AutoSize = true, BackColor = Color.Transparent, MaximumSize = new Size(410, 0) };
+                border.Controls.Add(lbl);
+                
+                int lblH = lbl.PreferredHeight > 20 ? lbl.PreferredHeight : 20;
+                
+                var txt = new Guna.UI2.WinForms.Guna2TextBox { Location = new Point(20, y + lblH + 5), Width = 410, Height = 40, FillColor = T.BgInput, BorderColor = T.Border, ForeColor = T.TxtPrimary, BorderRadius = 5 };
+                inputs[i] = txt;
+                border.Controls.Add(txt);
+                
+                y += lblH + 5 + 40 + 20;
+            }
+
+            var btnOk = new Guna.UI2.WinForms.Guna2Button { Text = "Aceptar", Location = new Point(210, y), Width = 100, Height = 40, FillColor = T.Accent, ForeColor = Color.White, BorderRadius = 5 };
+            var btnCancel = new Guna.UI2.WinForms.Guna2Button { Text = "Cancelar", Location = new Point(330, y), Width = 100, Height = 40, FillColor = T.BgOverlay, ForeColor = T.TxtPrimary, BorderRadius = 5 };
+            
+            btnOk.Click += (s, e) => frm.DialogResult = DialogResult.OK;
+            btnCancel.Click += (s, e) => frm.DialogResult = DialogResult.Cancel;
+            
+            border.Controls.Add(btnOk);
+            border.Controls.Add(btnCancel);
+            
+            frm.Height = y + 40 + 20;
+
+            if (frm.ShowDialog() == DialogResult.OK) {
+                return inputs.Select(x => x.Text).ToArray();
+            }
+            return null;
+        }
+
+        private DialogResult ShowCustomAlert(string msg, string title = "Información", bool isQuestion = false)
+        {
+            using var frm = new Form {
+                Text = title,
+                StartPosition = FormStartPosition.CenterParent,
+                FormBorderStyle = FormBorderStyle.None,
+                BackColor = T.BgCard,
+                Width = 400,
+                ShowInTaskbar = false
+            };
+
+            var border = new Guna.UI2.WinForms.Guna2Panel { Dock = DockStyle.Fill, BorderColor = T.Accent, BorderThickness = 2, FillColor = Color.Transparent };
+            frm.Controls.Add(border);
+
+            var lblTitle = new Label { Text = title, ForeColor = T.TxtPrimary, Font = T.H2, Location = new Point(20, 20), AutoSize = true, BackColor = Color.Transparent };
+            border.Controls.Add(lblTitle);
+
+            var lblMsg = new Label { Text = msg, ForeColor = T.TxtSecondary, Font = T.Small, Location = new Point(20, 60), AutoSize = true, BackColor = Color.Transparent, MaximumSize = new Size(360, 0) };
+            border.Controls.Add(lblMsg);
+            
+            int msgH = lblMsg.PreferredHeight > 40 ? lblMsg.PreferredHeight : 40;
+            int btnY = 60 + msgH + 20;
+
+            if (isQuestion) {
+                var btnYes = new Guna.UI2.WinForms.Guna2Button { Text = "Sí", Location = new Point(160, btnY), Width = 100, Height = 40, FillColor = T.Accent, ForeColor = Color.White, BorderRadius = 5 };
+                var btnNo = new Guna.UI2.WinForms.Guna2Button { Text = "No", Location = new Point(280, btnY), Width = 100, Height = 40, FillColor = T.BgOverlay, ForeColor = T.TxtPrimary, BorderRadius = 5 };
+                
+                btnYes.Click += (s, e) => frm.DialogResult = DialogResult.Yes;
+                btnNo.Click += (s, e) => frm.DialogResult = DialogResult.No;
+                
+                border.Controls.Add(btnYes);
+                border.Controls.Add(btnNo);
+            } else {
+                var btnOk = new Guna.UI2.WinForms.Guna2Button { Text = "Aceptar", Location = new Point(280, btnY), Width = 100, Height = 40, FillColor = T.Accent, ForeColor = Color.White, BorderRadius = 5 };
+                btnOk.Click += (s, e) => frm.DialogResult = DialogResult.OK;
+                border.Controls.Add(btnOk);
+            }
+
+            frm.Height = btnY + 40 + 20;
+            return frm.ShowDialog();
+        }
+
         private async Task AddUbicacion() {
-            if (unidadSeleccionadaId == 0) { MessageBox.Show("Seleccione Unidad primero."); return; }
-            string input = Microsoft.VisualBasic.Interaction.InputBox("Nombre de la ubicación:", "Nueva Ubicación", "");
-            if (string.IsNullOrWhiteSpace(input)) return;
+            if (unidadSeleccionadaId == 0) { ShowCustomAlert("Seleccione Unidad primero.", "Aviso"); return; }
+            
+            string unidadNombre = "";
+            if (catUnidades.TryGetValue(unidadSeleccionadaId.ToString(), out string? nom)) unidadNombre = nom;
+            string msg = string.IsNullOrEmpty(unidadNombre) 
+                ? "Nombre de la ubicación (Se vinculará a la Unidad seleccionada):" 
+                : $"Nombre de la ubicación (Se vinculará a la unidad: {unidadNombre}):";
+            
+            var res = ShowCustomDialog("Nueva Ubicación", new[] { msg });
+            if (res == null || string.IsNullOrWhiteSpace(res[0])) return;
+            string input = res[0];
             
             var mut = new { query = $"mutation {{ createUbicacion(id_unidad:{unidadSeleccionadaId}, nombre_ubicacion:\"{input.Trim()}\") {{ id_ubicacion nombre_ubicacion }} }}" };
             var r = await GQL(mut);
@@ -720,10 +945,11 @@ namespace GestorActivosHardware
         }
 
         private async Task AddModelo() {
-            string clave = Microsoft.VisualBasic.Interaction.InputBox("Clave Modelo:", "Nuevo Modelo", "");
-            if (string.IsNullOrWhiteSpace(clave)) return;
-            string desc = Microsoft.VisualBasic.Interaction.InputBox("Descripción:", "Nuevo Modelo", "");
-            if (string.IsNullOrWhiteSpace(desc)) return;
+            var res = ShowCustomDialog("Nuevo Modelo", new[] { "Clave Modelo (Ej. LPT-HP):", "Descripción:" });
+            if (res == null || string.IsNullOrWhiteSpace(res[0]) || string.IsNullOrWhiteSpace(res[1])) return;
+            
+            string clave = res[0];
+            string desc = res[1];
             
             var mut = new { query = $"mutation {{ createCatModelo(clave_modelo:\"{clave.Trim()}\", descrip_disp:\"{desc.Trim()}\") {{ clave_modelo descrip_disp }} }}" };
             var r = await GQL(mut);
