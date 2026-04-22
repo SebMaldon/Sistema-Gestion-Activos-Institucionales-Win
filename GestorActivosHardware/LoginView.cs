@@ -85,14 +85,14 @@ namespace GestorActivosHardware
             card.ShadowDecoration.Color   = Color.FromArgb(120, 0, 0, 0);
             card.ShadowDecoration.Depth   = 25;
 
-            // Logo / ícono
-            var pIcon = new Panel { Size = new Size(64, 64), Location = new Point(158, 28), BackColor = Color.Transparent };
-            pIcon.Paint += (_, e) =>
+            // Logo
+            var pbLogo = new PictureBox
             {
-                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-                using var b = new SolidBrush(T.Accent);
-                e.Graphics.FillEllipse(b, 0, 0, 64, 64);
-                e.Graphics.DrawString("HA", new Font("Segoe UI", 18, FontStyle.Bold), Brushes.White, 8f, 14f);
+                Size      = new Size(80, 80),
+                Location  = new Point(150, 15),
+                BackColor = Color.Transparent,
+                SizeMode  = PictureBoxSizeMode.Zoom,
+                ImageLocation = "IMSS.png" // Descomentar esta línea para la imagen
             };
 
             var lblTitle = new Label
@@ -116,26 +116,47 @@ namespace GestorActivosHardware
                 TextAlign = ContentAlignment.MiddleCenter
             };
 
-            // ── Inputs con floating label ─────────────────────────────────
-            _lblFloatMat = FloatLabel("Matrícula", 176);
-            _txtMat = StyledInput("Matrícula", 192, isPassword: false);
+            // ── Inputs ─────────────────────────────────────────────────────────
+            var lblMat = new Label { Text = "MATRÍCULA", Font = T.Caption, ForeColor = T.TxtSecondary, Location = new Point(20, 165), AutoSize = true };
+            _txtMat = StyledInput("Ej. 12345678", 185, isPassword: false);
 
-            _lblFloatPass = FloatLabel("Contraseña", 262);
-            _txtPass = StyledInput("Contraseña", 278, isPassword: true);
-
-            AttachFloat(_txtMat,  _lblFloatMat);
-            AttachFloat(_txtPass, _lblFloatPass);
+            var lblPass = new Label { Text = "CONTRASEÑA", Font = T.Caption, ForeColor = T.TxtSecondary, Location = new Point(20, 245), AutoSize = true };
+            _txtPass = StyledInput("••••••••", 265, isPassword: true);
+            
+            Bitmap GenEye(Color c) {
+                var bmp = new Bitmap(24, 24);
+                using var g = Graphics.FromImage(bmp);
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                using var p = new Pen(c, 1.5f);
+                // Dibujar forma de ojo (vectorial)
+                g.DrawCurve(p, new Point[] { new Point(2, 12), new Point(12, 6), new Point(22, 12) });
+                g.DrawCurve(p, new Point[] { new Point(2, 12), new Point(12, 18), new Point(22, 12) });
+                g.DrawEllipse(p, 8, 8, 8, 8); // Iris
+                using var b = new SolidBrush(c);
+                g.FillEllipse(b, 10, 10, 4, 4); // Pupila
+                return bmp;
+            }
+            
+            _txtPass.IconRightSize = new Size(24, 24);
+            _txtPass.IconRightOffset = new Point(5, 0); // Desplazar un poco a la izquierda (en Guna offset X positivo mueve a la izquierda)
+            _txtPass.IconRight = GenEye(T.TxtSecondary);
+            _txtPass.IconRightCursor = Cursors.Hand;
+            _txtPass.IconRightClick += (_, __) => {
+                _txtPass.PasswordChar = _txtPass.PasswordChar == '\0' ? '●' : '\0';
+                _txtPass.IconRight = GenEye(_txtPass.PasswordChar == '\0' ? T.Accent : T.TxtSecondary);
+            };
 
             // ── Botón login ───────────────────────────────────────────────
             _btnLogin = new Guna2Button
             {
                 Text         = "INICIAR SESIÓN",
                 Size         = new Size(340, 48),
-                Location     = new Point(20, 350),
+                Location     = new Point(20, 335),
                 FillColor    = T.Accent,
                 ForeColor    = Color.White,
                 Font         = new Font("Segoe UI", 11, FontStyle.Bold),
-                BorderRadius = 10
+                BorderRadius = 10,
+                Cursor       = Cursors.Hand
             };
             _btnLogin.Click += async (_, __) => await DoLogin();
             _txtPass.KeyDown += async (_, e) => { if (e.KeyCode == Keys.Enter) await DoLogin(); };
@@ -143,7 +164,7 @@ namespace GestorActivosHardware
             _lblError = new Label
             {
                 Size      = new Size(340, 40),
-                Location  = new Point(20, 405),
+                Location  = new Point(20, 390),
                 ForeColor = T.LedRed,
                 Font      = T.Small,
                 TextAlign = ContentAlignment.MiddleCenter,
@@ -161,9 +182,9 @@ namespace GestorActivosHardware
             };
 
             card.Controls.AddRange(new Control[] {
-                pIcon, lblTitle, lblSub,
-                _lblFloatMat, _txtMat,
-                _lblFloatPass, _txtPass,
+                pbLogo, lblTitle, lblSub,
+                lblMat, _txtMat,
+                lblPass, _txtPass,
                 _btnLogin, _lblError, lblVer
             });
 
@@ -175,36 +196,23 @@ namespace GestorActivosHardware
         {
             var t = new Guna2TextBox
             {
-                Size          = new Size(340, 42),
+                Size          = new Size(340, 46),
                 Location      = new Point(20, top),
                 FillColor     = T.BgInput,
                 BorderRadius  = 8,
                 BorderColor   = T.Border,
                 ForeColor     = T.TxtPrimary,
-                PlaceholderText = "",
+                PlaceholderText = placeholder,
+                PlaceholderForeColor = T.TxtMuted,
                 Font          = T.Body,
-                PasswordChar  = isPassword ? '●' : '\0'
+                PasswordChar  = isPassword ? '●' : '\0',
+                TextOffset    = new Point(5, 0)
             };
+            
+            t.Enter += (_, __) => t.BorderColor = T.Accent;
+            t.Leave += (_, __) => t.BorderColor = T.Border;
+            
             return t;
-        }
-
-        private Label FloatLabel(string text, int top) => new Label
-        {
-            Text      = text,
-            Font      = T.Small,
-            ForeColor = T.TxtMuted,
-            AutoSize  = true,
-            Location  = new Point(30, top + 13)
-        };
-
-        private void AttachFloat(Guna2TextBox txt, Label lbl)
-        {
-            txt.Enter += (_, __) => { lbl.ForeColor = T.Accent;    lbl.Font = T.Caption; lbl.Top -= 12; };
-            txt.Leave += (_, __) =>
-            {
-                if (string.IsNullOrEmpty(txt.Text)) { lbl.ForeColor = T.TxtMuted; lbl.Font = T.Small; lbl.Top += 12; }
-                else lbl.ForeColor = T.TxtSecondary;
-            };
         }
 
         // ════════════════════════════════════════════════════════════════════

@@ -54,7 +54,7 @@ namespace GestorActivosHardware
         private void SetupForm()
         {
             Text = "Gestor Activos - IMSS";
-            Size = new Size(1500, 1000);
+            Size = new Size(1650, 1000);
             StartPosition = FormStartPosition.CenterScreen;
             BackColor = T.BgSurface;
             FormBorderStyle = FormBorderStyle.None;
@@ -291,57 +291,74 @@ namespace GestorActivosHardware
             campos[key] = cmb;
         }
 
+        private System.Threading.CancellationTokenSource? searchCts;
+
         private void AddUserSearch(Control parent, string label, string key)
         {
             var pnl = new Panel { Height = 65, Margin = new Padding(0, 0, 0, 10) };
             var lbl = new Label { Text = label, ForeColor = T.TxtSecondary, Font = T.Small, Dock = DockStyle.Top, Height = 20 };
             
-            var row = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
-            row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-            row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 45f));
-            
             var cmbPnl = new Guna2Panel { Dock = DockStyle.Fill, FillColor = T.BgInput, BorderColor = T.Border, BorderThickness = 1, BorderRadius = 5, Padding = new Padding(5) };
-            var cmb = new ComboBox { Name = key, Dock = DockStyle.Fill, BackColor = T.BgInput, ForeColor = T.TxtPrimary, FlatStyle = FlatStyle.Flat, DropDownStyle = ComboBoxStyle.DropDownList };
+            var cmb = new ComboBox { Name = key, Dock = DockStyle.Fill, BackColor = T.BgInput, ForeColor = T.TxtPrimary, FlatStyle = FlatStyle.Flat, DropDownStyle = ComboBoxStyle.DropDown };
+            
             cmb.SelectedIndexChanged += (_, __) => CheckDiscrepancy(key);
+            
+            cmb.TextUpdate += async (s, e) => {
+                string term = cmb.Text;
+                if (term.Length < 3) return; // Solo buscar si hay 3 o más letras
+
+                searchCts?.Cancel();
+                searchCts = new System.Threading.CancellationTokenSource();
+                var token = searchCts.Token;
+
+                try {
+                    await Task.Delay(500, token); // Debounce medio segundo
+                    if (token.IsCancellationRequested) return;
+
+                    await LiveSearchUser(cmb, term);
+                } catch (TaskCanceledException) { }
+            };
+
             cmbPnl.Controls.Add(cmb);
-            
-            var btn = new Guna2Button { Text = "🔍", Dock = DockStyle.Fill, FillColor = T.BgOverlay, ForeColor = T.TxtPrimary, BorderRadius = 5, Cursor = Cursors.Hand };
-            btn.Click += async (_, __) => await SearchUserDialog(cmb);
-            
-            row.Controls.Add(cmbPnl, 0, 0);
-            row.Controls.Add(btn, 1, 0);
-            
-            pnl.Controls.Add(row);
+            pnl.Controls.Add(cmbPnl);
             pnl.Controls.Add(lbl);
             parent.Controls.Add(pnl);
             campos[key] = cmb;
         }
 
-        private async Task SearchUserDialog(ComboBox cmb)
+        private async Task LiveSearchUser(ComboBox cmb, string term)
         {
-            string term = Microsoft.VisualBasic.Interaction.InputBox("Ingrese matrícula o nombre completo para buscar:", "Buscar Usuario", "");
-            if (string.IsNullOrWhiteSpace(term)) return;
-            
             var q = new { query = $@"query {{
-                usuarios(pagination:{{first:50}}, filters: {{ or: [
-                    {{ matricula: {{ contains: ""{term}"" }} }},
-                    {{ nombre_completo: {{ contains: ""{term}"" }} }}
-                ]}}) {{ edges {{ node {{ id_usuario matricula nombre_completo }} }} }}
+                usuarios(pagination:{{first:20}}, search: ""{term}"") {{ edges {{ node {{ id_usuario matricula nombre_completo }} }} }}
             }}" };
             
             try {
                 var r = await GQL(q);
                 if (r != null) {
                     var edges = r["usuarios"]?["edges"];
-                    if (edges == null || !edges.HasValues) { MessageBox.Show("No se encontraron usuarios."); return; }
+                    if (edges == null || !edges.HasValues) return;
                     
                     catUsuarios.Clear();
                     foreach (var e in edges) catUsuarios[e["node"]!["id_usuario"]!.ToString()] = e["node"]!["matricula"] + " - " + e["node"]!["nombre_completo"];
                     
-                    FillCombo(cmb.Name, catUsuarios);
-                    if (cmb.Items.Count > 0) { cmb.SelectedIndex = 0; cmb.DroppedDown = true; }
+                    // Actualizar UI evitando que el usuario pierda el cursor mientras escribe
+                    string currentText = cmb.Text;
+                    int cursor = cmb.SelectionStart;
+                    
+                    cmb.BeginUpdate();
+                    cmb.Items.Clear();
+                    foreach (var kv in catUsuarios) cmb.Items.Add(new KV(kv.Key, kv.Value));
+                    cmb.EndUpdate();
+                    
+                    cmb.Text = currentText;
+                    cmb.SelectionStart = cursor;
+                    
+                    if (cmb.Items.Count > 0 && !cmb.DroppedDown) {
+                        cmb.DroppedDown = true;
+                        Cursor.Current = Cursors.Default;
+                    }
                 }
-            } catch (Exception ex) { MessageBox.Show("Error al buscar: " + ex.Message); }
+            } catch { }
         }
 
         private void AddComboPlus(Control parent, string label, string key, Func<Task> onPlus)
@@ -556,10 +573,10 @@ namespace GestorActivosHardware
                 string idUser = bien["id_usuario_resguardo"]?.ToString() ?? "";
                 if (!string.IsNullOrEmpty(idUser) && idUser != "0") {
                     try {
-                        var qu = new { query = $@"query {{ usuarios(filters: {{ id_usuario: {{ eq: {idUser} }} }}) {{ edges {{ node {{ matricula nombre_completo }} }} }} }}" };
+                        var qu = new { query = $@"query {{ usuario(id_usuario: ""{idUser}"") {{ matricula nombre_completo }} }}" };
                         var rU = await GQL(qu);
-                        if (rU != null && rU["usuarios"]?["edges"]?.HasValues == true) {
-                            var n = rU["usuarios"]!["edges"]![0]!["node"]!;
+                        if (rU != null && rU["usuario"] != null) {
+                            var n = rU["usuario"]!;
                             catUsuarios[idUser] = n["matricula"] + " - " + n["nombre_completo"];
                             FillCombo("id_usuario_resguardo", catUsuarios);
                         }
