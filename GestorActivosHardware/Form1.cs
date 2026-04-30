@@ -29,6 +29,7 @@ namespace GestorActivosHardware
         private readonly Dictionary<string, string> catUsuarios = new();
         private readonly Dictionary<string, string> catModelos = new();
         private readonly Dictionary<string, string> catMarcas = new();
+        private readonly Dictionary<string, string> catTiposDispositivo = new();
         private readonly Dictionary<string, string> catInmuebles = new();
         private readonly Dictionary<string, string> catUnidades = new();
         private readonly Dictionary<string, string> catUbicaciones = new();
@@ -549,8 +550,9 @@ namespace GestorActivosHardware
             var q = new { query = @"query {
                 catModelos { clave_modelo descrip_disp }
                 marcas { clave_marca marca }
-                inmuebles { clave descripcion desc_corta }
-                unidades { id_unidad nombre }
+                tiposDispositivo { tipo_disp nombre_tipo }
+                inmuebles: catLegacyInmuebles { clave descripcion desc_corta }
+                unidades: catUnidades { id_unidad nombre }
             }"};
             
             try {
@@ -559,6 +561,7 @@ namespace GestorActivosHardware
 
                 catModelos.Clear(); foreach (var m in data["catModelos"]!) catModelos[m["clave_modelo"]!.ToString()] = m["descrip_disp"]?.ToString() ?? "";
                 catMarcas.Clear(); foreach (var m in data["marcas"]!) catMarcas[m["clave_marca"]!.ToString()] = m["marca"]?.ToString() ?? "";
+                catTiposDispositivo.Clear(); foreach (var t in data["tiposDispositivo"]!) catTiposDispositivo[t["tipo_disp"]!.ToString()] = t["nombre_tipo"]?.ToString() ?? "";
                 catInmuebles.Clear(); foreach (var i in data["inmuebles"]!) catInmuebles[i["clave"]!.ToString()] = i["desc_corta"]?.ToString() ?? i["descripcion"]?.ToString() ?? "";
                 catUnidades.Clear(); foreach (var u in data["unidades"]!) catUnidades[u["id_unidad"]!.ToString()] = u["nombre"]?.ToString() ?? "";
 
@@ -945,20 +948,90 @@ namespace GestorActivosHardware
         }
 
         private async Task AddModelo() {
-            var res = ShowCustomDialog("Nuevo Modelo", new[] { "Clave Modelo (Ej. LPT-HP):", "Descripción:" });
-            if (res == null || string.IsNullOrWhiteSpace(res[0]) || string.IsNullOrWhiteSpace(res[1])) return;
+            var res = ShowModeloDialog();
+            if (res == null) return;
+            var (clave, desc, marcaId, tipoId) = res.Value;
             
-            string clave = res[0];
-            string desc = res[1];
-            
-            var mut = new { query = $"mutation {{ createCatModelo(clave_modelo:\"{clave.Trim()}\", descrip_disp:\"{desc.Trim()}\") {{ clave_modelo descrip_disp }} }}" };
+            if (string.IsNullOrWhiteSpace(clave) || string.IsNullOrWhiteSpace(desc) || string.IsNullOrWhiteSpace(tipoId) || string.IsNullOrWhiteSpace(marcaId)) {
+                ShowCustomAlert("Todos los campos son obligatorios.", "Aviso");
+                return;
+            }
+
+            string mId = string.IsNullOrEmpty(marcaId) ? "null" : marcaId;
+            string tId = string.IsNullOrEmpty(tipoId) ? "null" : tipoId;
+
+            var mut = new { query = $"mutation {{ createCatModelo(clave_modelo:\"{clave.Trim()}\", descrip_disp:\"{desc.Trim()}\", clave_marca:{mId}, tipo_disp:{tId}) {{ clave_modelo descrip_disp }} }}" };
             var r = await GQL(mut);
             if (r != null) {
                 var nuevo = r["createCatModelo"]!;
                 catModelos[nuevo["clave_modelo"]!.ToString()] = nuevo["descrip_disp"]!.ToString();
                 FillCombo("clave_modelo", catModelos);
                 SetVal("clave_modelo", nuevo["clave_modelo"]!.ToString());
+                ShowCustomAlert("Modelo añadido con éxito.", "Éxito");
             }
+        }
+
+        private (string clave, string desc, string marcaId, string tipoId)? ShowModeloDialog()
+        {
+            using var frm = new Form {
+                Text = "Nuevo Modelo", StartPosition = FormStartPosition.CenterParent, FormBorderStyle = FormBorderStyle.None,
+                BackColor = T.BgCard, Width = 460, Height = 500, ShowInTaskbar = false
+            };
+
+            var border = new Guna2Panel { Dock = DockStyle.Fill, BorderColor = T.Accent, BorderThickness = 2, FillColor = Color.Transparent };
+            frm.Controls.Add(border);
+
+            var lblTitle = new Label { Text = "Nuevo Modelo de Equipo", ForeColor = T.TxtPrimary, Font = T.H2, Location = new Point(20, 20), AutoSize = true, BackColor = Color.Transparent };
+            border.Controls.Add(lblTitle);
+
+            int y = 70;
+            void AddField(string label, Control c) {
+                border.Controls.Add(new Label { Text = label, ForeColor = T.TxtSecondary, Font = T.Small, Location = new Point(20, y), AutoSize = true });
+                c.Location = new Point(20, y + 22);
+                c.Width = 420;
+                border.Controls.Add(c);
+                y += 75;
+            }
+
+            var txtClave = new Guna2TextBox { Height = 38, FillColor = T.BgInput, BorderColor = T.Border, ForeColor = T.TxtPrimary, BorderRadius = 5 };
+            var txtDesc = new Guna2TextBox { Height = 38, FillColor = T.BgInput, BorderColor = T.Border, ForeColor = T.TxtPrimary, BorderRadius = 5 };
+            
+            var cmbMarcaPnl = new Guna2Panel { Height = 38, FillColor = T.BgInput, BorderColor = T.Border, BorderThickness = 1, BorderRadius = 5, Padding = new Padding(5) };
+            var cmbMarca = new ComboBox { Dock = DockStyle.Fill, BackColor = T.BgInput, ForeColor = T.TxtPrimary, FlatStyle = FlatStyle.Flat, DropDownStyle = ComboBoxStyle.DropDown };
+            cmbMarcaPnl.Controls.Add(cmbMarca);
+            
+            var cmbTipoPnl = new Guna2Panel { Height = 38, FillColor = T.BgInput, BorderColor = T.Border, BorderThickness = 1, BorderRadius = 5, Padding = new Padding(5) };
+            var cmbTipo = new ComboBox { Dock = DockStyle.Fill, BackColor = T.BgInput, ForeColor = T.TxtPrimary, FlatStyle = FlatStyle.Flat, DropDownStyle = ComboBoxStyle.DropDown };
+            cmbTipoPnl.Controls.Add(cmbTipo);
+
+            AddField("Clave Modelo (Ej. LPT-HP):", txtClave);
+            AddField("Descripción / Nombre:", txtDesc);
+            AddField("Marca:", cmbMarcaPnl);
+            AddField("Tipo de Dispositivo:", cmbTipoPnl);
+
+            // Setup Searchable Combos
+            void SetupCombo(ComboBox cmb, Dictionary<string, string> dict) {
+                cmb.Tag = dict;
+                cmb.DisplayMember = "Valor"; cmb.ValueMember = "Clave";
+                foreach (var kv in dict) cmb.Items.Add(new KV(kv.Key, kv.Value));
+                cmb.TextUpdate += (s, e) => HandleLocalSearch(cmb);
+            }
+            SetupCombo(cmbMarca, catMarcas);
+            SetupCombo(cmbTipo, catTiposDispositivo);
+
+            var btnOk = new Guna2Button { Text = "Aceptar", Location = new Point(210, y), Width = 110, Height = 40, FillColor = T.Accent, ForeColor = Color.White, BorderRadius = 5 };
+            var btnCancel = new Guna2Button { Text = "Cancelar", Location = new Point(330, y), Width = 100, Height = 40, FillColor = T.BgOverlay, ForeColor = T.TxtPrimary, BorderRadius = 5 };
+            btnOk.Click += (s, e) => frm.DialogResult = DialogResult.OK;
+            btnCancel.Click += (s, e) => frm.DialogResult = DialogResult.Cancel;
+            border.Controls.Add(btnOk); border.Controls.Add(btnCancel);
+
+            frm.Height = y + 60;
+            if (frm.ShowDialog() == DialogResult.OK) {
+                string mId = (cmbMarca.SelectedItem as KV)?.Clave ?? "";
+                string tId = (cmbTipo.SelectedItem as KV)?.Clave ?? "";
+                return (txtClave.Text, txtDesc.Text, mId, tId);
+            }
+            return null;
         }
     }
 
