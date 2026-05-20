@@ -2,7 +2,10 @@ const GRAPHQL_API_URL = 'http://localhost:4000/graphql';
 
 export const queryGraphQL = async (query, variables = {}) => {
   const token = localStorage.getItem('jwtToken');
-  const headers = { 'Content-Type': 'application/json' };
+  const headers = { 
+    'Content-Type': 'application/json',
+    'x-origen': 'win'
+  };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const response = await fetch(GRAPHQL_API_URL, {
