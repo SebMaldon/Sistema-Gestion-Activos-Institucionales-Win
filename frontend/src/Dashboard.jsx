@@ -17,9 +17,10 @@ import SearchableSelect from './components/SearchableSelect';
 import { ModalUbicacion, ModalModeloMarca } from './components/Modals';
 
 const initialFormState = {
-  num_serie: '', num_inv: '', estatus_operativo: 'ACTIVO', clave_unidad_ref: '', 
-  clave_modelo: '', id_usuario_resguardo: '', id_segmento: '', id_ubicacion: '', fecha_adquisicion: '',
-  nom_pc: '', cpu_info: '', ram_gb: '', almacenamiento_gb: '', 
+  num_serie: '', num_inv: '', estatus_operativo: 'ACTIVO',
+  clave_unidad_ref: '', clave_modelo: '', id_usuario_resguardo: '',
+  id_segmento: '', id_ubicacion: '', fecha_adquisicion: '',
+  nombre_host: '', windows_serial: '', cpu_info: '', ram_gb: '', almacenamiento_gb: '', 
   mac_address: '', dir_ip: '', puerto_red: '', switch_red: '', modelo_so: '',
   fecha_act_antivirus: '', correo_usuario: '', correos_usuario: [], usuario_pc: '', tipo_usuario_pc: '', fecha_actualizacion: ''
 };
@@ -130,7 +131,7 @@ export default function Dashboard() {
             id_bien num_inv estatus_operativo clave_unidad_ref clave_modelo 
             id_usuario_resguardo id_segmento id_ubicacion fecha_adquisicion
             especificacionTI {
-              nom_pc cpu_info ram_gb almacenamiento_gb mac_address dir_ip puerto_red switch_red modelo_so
+              nombre_host windows_serial cpu_info ram_gb almacenamiento_gb mac_address dir_ip puerto_red switch_red modelo_so
             }
           }
         }
@@ -152,7 +153,8 @@ export default function Dashboard() {
           id_ubicacion: bien.id_ubicacion ? String(bien.id_ubicacion) : '',
           fecha_adquisicion: bien.fecha_adquisicion ? bien.fecha_adquisicion.split('T')[0] : '',
           fecha_actualizacion: bien.fecha_actualizacion ? new Date(bien.fecha_actualizacion).toLocaleString() : '',
-          nom_pc: esp.nom_pc || '',
+          nombre_host: esp.nombre_host || '',
+          windows_serial: esp.windows_serial || '',
           cpu_info: esp.cpu_info || '',
           ram_gb: esp.ram_gb ? String(esp.ram_gb) : '',
           almacenamiento_gb: esp.almacenamiento_gb ? String(esp.almacenamiento_gb) : '',
@@ -394,7 +396,8 @@ export default function Dashboard() {
               </h2>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <FieldInput label="Nombre de Host (PC)" val={formState.nom_pc} onChange={v => updateForm('nom_pc', v)} color={getBorderColor('nom_pc')} readOnly={true} />
+                <FieldInput label="Nombre de Host (PC)" val={formState.nombre_host} onChange={v => updateForm('nombre_host', v)} color={getBorderColor('nombre_host')} readOnly={true} />
+                <FieldInput label="Serial SO (Windows)" val={formState.windows_serial} onChange={v => updateForm('windows_serial', v)} color={getBorderColor('windows_serial')} readOnly={true} />
                 <FieldInput label="Sistema Operativo" val={formState.modelo_so} onChange={v => updateForm('modelo_so', v)} color={getBorderColor('modelo_so')} readOnly={true} />
                 <FieldInput label="Procesador (CPU)" val={formState.cpu_info} onChange={v => updateForm('cpu_info', v)} color={getBorderColor('cpu_info')} readOnly={true} />
                 <FieldInput label="Memoria RAM (GB)" val={formState.ram_gb} onChange={v => updateForm('ram_gb', v)} color={getBorderColor('ram_gb')} type="number" readOnly={true} />
