@@ -18,7 +18,8 @@ const initialFormState = {
   num_serie: '', num_inv: '', estatus_operativo: 'ACTIVO', clave_inmueble_ref: '', 
   clave_modelo: '', id_usuario_resguardo: '', id_unidad: '', id_ubicacion: '', fecha_adquisicion: '',
   nom_pc: '', cpu_info: '', ram_gb: '', almacenamiento_gb: '', 
-  mac_address: '', dir_ip: '', puerto_red: '', switch_red: '', modelo_so: ''
+  mac_address: '', dir_ip: '', puerto_red: '', switch_red: '', modelo_so: '',
+  fecha_act_antivirus: '', correo_usuario: '', correos_usuario: [], usuario_pc: '', tipo_usuario_pc: '', fecha_actualizacion: ''
 };
 
 export default function Dashboard() {
@@ -95,7 +96,8 @@ export default function Dashboard() {
       // Merge WMI data into formState
       setFormState(prev => ({
         ...prev,
-        ...data
+        ...data,
+        correo_usuario: data.correos_usuario && data.correos_usuario.length > 0 && !prev.correo_usuario ? data.correos_usuario[0] : prev.correo_usuario
       }));
 
       if (data && data.num_serie && !searchSerial) {
@@ -118,7 +120,7 @@ export default function Dashboard() {
         query {
           bienByNumSerie(num_serie: "${searchSerial}") {
             id_bien num_inv estatus_operativo clave_inmueble_ref clave_modelo 
-            id_usuario_resguardo id_unidad id_ubicacion fecha_adquisicion
+            id_usuario_resguardo id_unidad id_ubicacion fecha_adquisicion fecha_actualizacion
             especificacionTI {
               nom_pc cpu_info ram_gb almacenamiento_gb mac_address dir_ip puerto_red switch_red modelo_so
             }
@@ -141,6 +143,7 @@ export default function Dashboard() {
           id_unidad: bien.id_unidad ? String(bien.id_unidad) : '',
           id_ubicacion: bien.id_ubicacion ? String(bien.id_ubicacion) : '',
           fecha_adquisicion: bien.fecha_adquisicion ? bien.fecha_adquisicion.split('T')[0] : '',
+          fecha_actualizacion: bien.fecha_actualizacion ? new Date(bien.fecha_actualizacion).toLocaleString() : '',
           nom_pc: esp.nom_pc || '',
           cpu_info: esp.cpu_info || '',
           ram_gb: esp.ram_gb ? String(esp.ram_gb) : '',
@@ -268,9 +271,16 @@ export default function Dashboard() {
             
             {/* Sección 1: Generales */}
             <section className="bg-white border border-[#E0E0E0] border-t-4 border-t-[#006241] rounded-3xl p-8 shadow-sm relative">
-              <h2 className="text-xl font-bold mb-8 flex items-center gap-3 text-[#333333]">
-                <HardDrive className="w-6 h-6 text-[#006241]" /> Datos Generales
-              </h2>
+              <div className="flex justify-between items-center mb-8">
+                <h2 className="text-xl font-bold flex items-center gap-3 text-[#333333]">
+                  <HardDrive className="w-6 h-6 text-[#006241]" /> Datos Generales
+                </h2>
+                {formState.fecha_actualizacion && (
+                  <span className="text-xs font-bold bg-green-50 text-green-700 px-3 py-1 rounded-full border border-green-200">
+                    Última Modificación (BD): {formState.fecha_actualizacion}
+                  </span>
+                )}
+              </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <FieldInput label="No. Serie" val={formState.num_serie} onChange={v => updateForm('num_serie', v)} color={getBorderColor('num_serie')} />
@@ -349,6 +359,51 @@ export default function Dashboard() {
                 <FieldInput label="Dirección MAC" val={formState.mac_address} onChange={v => updateForm('mac_address', v)} color={getBorderColor('mac_address')} />
                 <FieldInput label="Puerto / Nodo Red" val={formState.puerto_red} onChange={v => updateForm('puerto_red', v)} color={getBorderColor('puerto_red')} />
                 <FieldInput label="Switch Conectado" val={formState.switch_red} onChange={v => updateForm('switch_red', v)} color={getBorderColor('switch_red')} />
+              </div>
+            </section>
+
+            {/* Sección 3: Seguridad y Usuario */}
+            <section className="bg-white border border-[#E0E0E0] border-t-4 border-t-[#004f34] rounded-3xl p-8 shadow-sm relative">
+              <h2 className="text-xl font-bold mb-8 flex items-center gap-3 text-[#333333]">
+                <Activity className="w-6 h-6 text-[#004f34]" /> Seguridad y Usuario de PC
+              </h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="w-full">
+                  <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block mb-1">Última Act. Antivirus</label>
+                  <input type="text" readOnly value={formState.fecha_act_antivirus || ''} className={clsx("w-full bg-gray-50 text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none", getBorderColor('fecha_act_antivirus'))} />
+                </div>
+
+                <div className="w-full">
+                  <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block mb-1">Usuario de la PC</label>
+                  <input type="text" readOnly value={formState.usuario_pc || ''} className={clsx("w-full bg-gray-50 text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none", getBorderColor('usuario_pc'))} />
+                </div>
+
+                <div className="w-full">
+                  <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block mb-1">Tipo de Usuario</label>
+                  <input type="text" readOnly value={formState.tipo_usuario_pc || ''} className={clsx("w-full bg-gray-50 text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none", getBorderColor('tipo_usuario_pc'))} />
+                </div>
+
+                <div className="w-full md:col-span-2 lg:col-span-3">
+                  <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block mb-1">Correo Electrónico (Windows)</label>
+                  {formState.correos_usuario && formState.correos_usuario.length > 1 ? (
+                    <select
+                      value={formState.correo_usuario || ''}
+                      onChange={e => updateForm('correo_usuario', e.target.value)}
+                      className={clsx("w-full bg-white text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]", getBorderColor('correo_usuario'))}
+                    >
+                      <option value="">-- Seleccione un correo --</option>
+                      {formState.correos_usuario.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  ) : (
+                    <input 
+                      type="text" 
+                      value={formState.correo_usuario || (formState.correos_usuario && formState.correos_usuario[0]) || ''} 
+                      onChange={e => updateForm('correo_usuario', e.target.value)}
+                      className={clsx("w-full bg-white text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]", getBorderColor('correo_usuario'))} 
+                    />
+                  )}
+                </div>
               </div>
             </section>
           </div>

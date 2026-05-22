@@ -13,6 +13,11 @@ namespace GestorActivosHardware.Services
         public string ram_gb { get; set; } = "";
         public string almacenamiento_gb { get; set; } = "";
         public string modelo_so { get; set; } = "";
+        
+        public string fecha_act_antivirus { get; set; } = "";
+        public System.Collections.Generic.List<string> correos_usuario { get; set; } = new System.Collections.Generic.List<string>();
+        public string usuario_pc { get; set; } = "";
+        public string tipo_usuario_pc { get; set; } = "";
     }
 
     public static class WmiService
@@ -21,8 +26,49 @@ namespace GestorActivosHardware.Services
         {
             var info = new HardwareInfo
             {
-                nom_pc = Environment.MachineName
+                nom_pc = Environment.MachineName,
+                usuario_pc = Environment.UserName
             };
+
+            try
+            {
+                using (var identity = System.Security.Principal.WindowsIdentity.GetCurrent())
+                {
+                    var principal = new System.Security.Principal.WindowsPrincipal(identity);
+                    info.tipo_usuario_pc = principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator) 
+                        ? "Administrador" 
+                        : "Avanzado";
+                }
+            }
+            catch { }
+
+            try
+            {
+                using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\IdentityCRL\UserExtendedProperties"))
+                {
+                    if (key != null)
+                    {
+                        info.correos_usuario.AddRange(key.GetSubKeyNames());
+                    }
+                }
+            }
+            catch { }
+
+            try
+            {
+                using (var searcher = new ManagementObjectSearcher(@"root\Microsoft\Windows\Defender", "SELECT AntivirusSignatureLastUpdated FROM MSFT_MpComputerStatus"))
+                {
+                    foreach (ManagementObject o in searcher.Get())
+                    {
+                        var dateStr = o["AntivirusSignatureLastUpdated"]?.ToString();
+                        if (!string.IsNullOrEmpty(dateStr))
+                        {
+                            info.fecha_act_antivirus = ManagementDateTimeConverter.ToDateTime(dateStr).ToString("yyyy-MM-dd HH:mm:ss");
+                        }
+                    }
+                }
+            }
+            catch { }
 
             try
             {

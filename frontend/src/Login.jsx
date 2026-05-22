@@ -94,7 +94,7 @@ export default function Login() {
           </button>
         </form>
         
-        <p className="text-center mt-8 text-xs text-[#9e9e9e] font-medium">v2.0 — IMSS Telecom</p>
+        <p className="text-center mt-8 text-xs text-[#9e9e9e] font-medium">v2.0 — IMSS</p>
       </div>
     </div>
   );
