@@ -327,7 +327,7 @@ export default function Dashboard() {
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <FieldInput label="No. Serie" val={formState.num_serie} onChange={v => updateForm('num_serie', v)} color={getBorderColor('num_serie')} />
+                <FieldInput label="No. Serie" val={formState.num_serie} onChange={v => updateForm('num_serie', v)} color={getBorderColor('num_serie')} readOnly={true} />
                 <FieldInput label="No. Inventario" val={formState.num_inv} onChange={v => updateForm('num_inv', v)} color={getBorderColor('num_inv')} />
                 
                 <div className="w-full">
@@ -394,13 +394,13 @@ export default function Dashboard() {
               </h2>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <FieldInput label="Nombre de Host (PC)" val={formState.nom_pc} onChange={v => updateForm('nom_pc', v)} color={getBorderColor('nom_pc')} />
-                <FieldInput label="Sistema Operativo" val={formState.modelo_so} onChange={v => updateForm('modelo_so', v)} color={getBorderColor('modelo_so')} />
-                <FieldInput label="Procesador (CPU)" val={formState.cpu_info} onChange={v => updateForm('cpu_info', v)} color={getBorderColor('cpu_info')} />
-                <FieldInput label="Memoria RAM (GB)" val={formState.ram_gb} onChange={v => updateForm('ram_gb', v)} color={getBorderColor('ram_gb')} type="number" />
-                <FieldInput label="Almacenamiento (GB)" val={formState.almacenamiento_gb} onChange={v => updateForm('almacenamiento_gb', v)} color={getBorderColor('almacenamiento_gb')} type="number" />
-                <FieldInput label="Dirección IPv4" val={formState.dir_ip} onChange={v => updateForm('dir_ip', v)} color={getBorderColor('dir_ip')} />
-                <FieldInput label="Dirección MAC" val={formState.mac_address} onChange={v => updateForm('mac_address', v)} color={getBorderColor('mac_address')} />
+                <FieldInput label="Nombre de Host (PC)" val={formState.nom_pc} onChange={v => updateForm('nom_pc', v)} color={getBorderColor('nom_pc')} readOnly={true} />
+                <FieldInput label="Sistema Operativo" val={formState.modelo_so} onChange={v => updateForm('modelo_so', v)} color={getBorderColor('modelo_so')} readOnly={true} />
+                <FieldInput label="Procesador (CPU)" val={formState.cpu_info} onChange={v => updateForm('cpu_info', v)} color={getBorderColor('cpu_info')} readOnly={true} />
+                <FieldInput label="Memoria RAM (GB)" val={formState.ram_gb} onChange={v => updateForm('ram_gb', v)} color={getBorderColor('ram_gb')} type="number" readOnly={true} />
+                <FieldInput label="Almacenamiento (GB)" val={formState.almacenamiento_gb} onChange={v => updateForm('almacenamiento_gb', v)} color={getBorderColor('almacenamiento_gb')} type="number" readOnly={true} />
+                <FieldInput label="Dirección IPv4" val={formState.dir_ip} onChange={v => updateForm('dir_ip', v)} color={getBorderColor('dir_ip')} readOnly={true} />
+                <FieldInput label="Dirección MAC" val={formState.mac_address} onChange={v => updateForm('mac_address', v)} color={getBorderColor('mac_address')} readOnly={true} />
                 <FieldInput label="Puerto / Nodo Red" val={formState.puerto_red} onChange={v => updateForm('puerto_red', v)} color={getBorderColor('puerto_red')} />
                 <FieldInput label="Switch Conectado" val={formState.switch_red} onChange={v => updateForm('switch_red', v)} color={getBorderColor('switch_red')} />
               </div>
@@ -488,18 +488,16 @@ export default function Dashboard() {
   );
 }
 
-function FieldInput({ label, val, onChange, color, type = "text" }) {
+function FieldInput({ label, val, onChange, color, type = "text", readOnly = false }) {
   return (
     <div className="w-full">
       <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block mb-1">{label}</label>
-      <input
-        type={type}
-        value={val || ''}
-        onChange={(e) => onChange(e.target.value)}
-        className={clsx(
-          "w-full bg-white text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241] transition-colors",
-          color
-        )}
+      <input 
+        type={type} 
+        value={val || ''} 
+        readOnly={readOnly}
+        onChange={e => !readOnly && onChange(e.target.value)} 
+        className={clsx("w-full bg-white text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]", color, readOnly && "bg-gray-100 cursor-not-allowed text-gray-500")} 
       />
     </div>
   );
