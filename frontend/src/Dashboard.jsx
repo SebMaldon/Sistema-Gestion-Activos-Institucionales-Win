@@ -7,7 +7,9 @@ import {
   saveAsset, 
   queryGraphQL, 
   logout,
-  searchUsuarios
+  searchUsuarios,
+  solicitarActualizacionBien,
+  getUserRole
 } from './services/graphqlClient';
 import { LogOut, RefreshCcw, Save, Server, Monitor, HardDrive, Cpu, MapPin, Network, Activity } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -15,8 +17,8 @@ import SearchableSelect from './components/SearchableSelect';
 import { ModalUbicacion, ModalModeloMarca } from './components/Modals';
 
 const initialFormState = {
-  num_serie: '', num_inv: '', estatus_operativo: 'ACTIVO', clave_inmueble_ref: '', 
-  clave_modelo: '', id_usuario_resguardo: '', id_unidad: '', id_ubicacion: '', fecha_adquisicion: '',
+  num_serie: '', num_inv: '', estatus_operativo: 'ACTIVO', clave_unidad_ref: '', 
+  clave_modelo: '', id_usuario_resguardo: '', id_segmento: '', id_ubicacion: '', fecha_adquisicion: '',
   nom_pc: '', cpu_info: '', ram_gb: '', almacenamiento_gb: '', 
   mac_address: '', dir_ip: '', puerto_red: '', switch_red: '', modelo_so: '',
   fecha_act_antivirus: '', correo_usuario: '', correos_usuario: [], usuario_pc: '', tipo_usuario_pc: '', fecha_actualizacion: ''
@@ -54,8 +56,14 @@ export default function Dashboard() {
     try {
       const data = await getCatalogs();
       if (data) {
-        setCatUnidades(data.unidades.map(u => ({ value: String(u.id_unidad), label: u.nombre })));
-        setCatInmuebles(data.inmuebles.map(i => ({ value: i.clave, label: i.desc_corta || i.descripcion })));
+        if (data.segmentos) {
+          setCatUnidades(data.segmentos.map(s => ({ value: String(s.id_segmento), label: s.nombre })));
+        }
+        if (data.unidades) {
+          setCatInmuebles(data.unidades.map(u => ({ value: u.clave, label: u.desc_corta || u.descripcion })));
+        } else {
+          setCatInmuebles([]);
+        }
         setCatModelos(data.catModelos.map(m => ({ value: m.clave_modelo, label: m.descrip_disp })));
         setCatMarcas(data.marcas.map(m => ({ value: String(m.clave_marca), label: m.marca })));
         setCatTiposDisp(data.tiposDispositivo.map(t => ({ value: String(t.tipo_disp), label: t.nombre_tipo })));
@@ -68,14 +76,14 @@ export default function Dashboard() {
 
   // Watch Unidad Change -> Fetch Ubicaciones
   useEffect(() => {
-    if (formState.id_unidad) {
-      getUbicacionesPorUnidad(formState.id_unidad).then(data => {
+    if (formState.clave_unidad_ref) {
+      getUbicacionesPorUnidad(formState.clave_unidad_ref).then(data => {
         setCatUbicaciones(data.map(u => ({ value: String(u.id_ubicacion), label: u.nombre_ubicacion })));
       });
     } else {
       setCatUbicaciones([]);
     }
-  }, [formState.id_unidad]);
+  }, [formState.clave_unidad_ref]);
 
   const updateForm = (key, value) => {
     setFormState(prev => ({ ...prev, [key]: value }));
@@ -119,8 +127,8 @@ export default function Dashboard() {
       const query = `
         query {
           bienByNumSerie(num_serie: "${searchSerial}") {
-            id_bien num_inv estatus_operativo clave_inmueble_ref clave_modelo 
-            id_usuario_resguardo id_unidad id_ubicacion fecha_adquisicion fecha_actualizacion
+            id_bien num_inv estatus_operativo clave_unidad_ref clave_modelo 
+            id_usuario_resguardo id_segmento id_ubicacion fecha_adquisicion
             especificacionTI {
               nom_pc cpu_info ram_gb almacenamiento_gb mac_address dir_ip puerto_red switch_red modelo_so
             }
@@ -137,10 +145,10 @@ export default function Dashboard() {
           num_serie: searchSerial,
           num_inv: bien.num_inv || '',
           estatus_operativo: bien.estatus_operativo || 'ACTIVO',
-          clave_inmueble_ref: bien.clave_inmueble_ref || '',
+          clave_unidad_ref: bien.clave_unidad_ref || '',
           clave_modelo: bien.clave_modelo || '',
           id_usuario_resguardo: bien.id_usuario_resguardo ? String(bien.id_usuario_resguardo) : '',
-          id_unidad: bien.id_unidad ? String(bien.id_unidad) : '',
+          id_segmento: bien.id_segmento ? String(bien.id_segmento) : '',
           id_ubicacion: bien.id_ubicacion ? String(bien.id_ubicacion) : '',
           fecha_adquisicion: bien.fecha_adquisicion ? bien.fecha_adquisicion.split('T')[0] : '',
           fecha_actualizacion: bien.fecha_actualizacion ? new Date(bien.fecha_actualizacion).toLocaleString() : '',
@@ -184,12 +192,48 @@ export default function Dashboard() {
     setLoadingAction(true);
     try {
       const isNew = !dbInfo || !dbInfo.id_bien;
-      const dataToSave = { ...formState, especificacionTI: formState }; 
-      
-      const newId = await saveAsset(isNew, dataToSave);
-      alert('Guardado exitoso.');
-      setSearchSerial(formState.num_serie); // Para resincronizar
-      await syncDB(); // Recargar de base de datos
+      const userRole = getUserRole();
+
+      // Rol Maestro (1) → guardado directo
+      if (userRole === 1) {
+        const dataToSave = { ...formState, especificacionTI: formState }; 
+        await saveAsset(isNew, dataToSave);
+        alert('Guardado exitoso.');
+        setSearchSerial(formState.num_serie);
+        await syncDB();
+      } else {
+        // Roles 2, 3, 4 → solicitud de cambio
+        const datosNuevos = {};
+
+        if (isNew) {
+          // Creación: enviar todos los campos con valor
+          Object.keys(formState).forEach(key => {
+            if (formState[key] !== '' && formState[key] !== undefined && formState[key] !== null) {
+              datosNuevos[key] = formState[key];
+            }
+          });
+          datosNuevos._esCreacion = true;
+        } else {
+          // Actualización: solo campos que cambiaron vs dbInfo
+          Object.keys(formState).forEach(key => {
+            if (key === 'id_bien') return;
+            const current = String(formState[key] ?? '');
+            const original = String(dbInfo[key] ?? '');
+            if (current !== original) {
+              datosNuevos[key] = formState[key];
+            }
+          });
+        }
+
+        if (Object.keys(datosNuevos).filter(k => k !== '_esCreacion').length === 0) {
+          alert('No se detectaron cambios para enviar.');
+          return;
+        }
+
+        const idBien = isNew ? 'NUEVO_' + formState.num_serie : dbInfo.id_bien;
+        await solicitarActualizacionBien(idBien, JSON.stringify(datosNuevos));
+        alert('Tus cambios han sido enviados a revisión y están pendientes de aprobación.');
+      }
     } catch (err) {
       alert('Error guardando: ' + err.message);
     } finally {
@@ -300,19 +344,19 @@ export default function Dashboard() {
                   </select>
                 </div>
 
-                <div className={clsx("w-full rounded-xl border bg-white", getBorderColor('clave_inmueble_ref'))}>
-                  <SearchableSelect label="Inmueble Físico" options={catInmuebles} value={formState.clave_inmueble_ref} onChange={v => updateForm('clave_inmueble_ref', v)} />
+                <div className={clsx("w-full rounded-xl border bg-white", getBorderColor('clave_unidad_ref'))}>
+                  <SearchableSelect label="Inmueble Físico" options={catInmuebles} value={formState.clave_unidad_ref} onChange={v => updateForm('clave_unidad_ref', v)} />
                 </div>
                 
-                <div className={clsx("w-full rounded-xl border bg-white", getBorderColor('id_unidad'))}>
-                  <SearchableSelect label="Unidad Operativa" options={catUnidades} value={formState.id_unidad} onChange={v => updateForm('id_unidad', v)} />
+                <div className={clsx("w-full rounded-xl border bg-white", getBorderColor('id_segmento'))}>
+                  <SearchableSelect label="Unidad Operativa" options={catUnidades} value={formState.id_segmento} onChange={v => updateForm('id_segmento', v)} />
                 </div>
                 
                 <div className="w-full flex items-end gap-2">
                   <div className={clsx("flex-1 rounded-xl border bg-white", getBorderColor('id_ubicacion'))}>
-                    <SearchableSelect label="Ubicación Específica" options={catUbicaciones} value={formState.id_ubicacion} onChange={v => updateForm('id_ubicacion', v)} disabled={!formState.id_unidad} placeholder={formState.id_unidad ? "Buscar ubicación..." : "Seleccione unidad primero"} />
+                    <SearchableSelect label="Ubicación Específica" options={catUbicaciones} value={formState.id_ubicacion} onChange={v => updateForm('id_ubicacion', v)} disabled={!formState.clave_unidad_ref} placeholder={formState.clave_unidad_ref ? "Buscar ubicación..." : "Seleccione unidad primero"} />
                   </div>
-                  <button onClick={() => setShowModalUbicacion(true)} disabled={!formState.id_unidad} className="h-[42px] px-3 bg-white hover:bg-[#F9FAFB] border border-[#E0E0E0] text-[#006241] font-bold rounded-xl disabled:opacity-50 transition-colors">
+                  <button onClick={() => setShowModalUbicacion(true)} disabled={!formState.clave_unidad_ref} className="h-[42px] px-3 bg-white hover:bg-[#F9FAFB] border border-[#E0E0E0] text-[#006241] font-bold rounded-xl disabled:opacity-50 transition-colors">
                     +
                   </button>
                 </div>
@@ -413,8 +457,8 @@ export default function Dashboard() {
       {/* Modals */}
       {showModalUbicacion && (
         <ModalUbicacion 
-          unidadId={formState.id_unidad}
-          unidadNombre={catUnidades.find(u => u.value === formState.id_unidad)?.label || ''}
+          unidadId={formState.clave_unidad_ref}
+          unidadNombre={catUnidades.find(u => u.value === formState.id_segmento)?.label || ''}
           onClose={() => setShowModalUbicacion(false)} 
           onSuccess={(nuevaUb) => {
             setCatUbicaciones(prev => [...prev, { value: String(nuevaUb.id_ubicacion), label: nuevaUb.nombre_ubicacion }]);

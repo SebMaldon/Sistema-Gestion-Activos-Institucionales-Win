@@ -2,7 +2,10 @@ const GRAPHQL_API_URL = 'http://localhost:4000/graphql';
 
 export const queryGraphQL = async (query, variables = {}) => {
   const token = localStorage.getItem('jwtToken');
-  const headers = { 'Content-Type': 'application/json' };
+  const headers = { 
+    'Content-Type': 'application/json',
+    'x-origen': 'win'
+  };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const response = await fetch(GRAPHQL_API_URL, {
@@ -40,8 +43,8 @@ export const getCatalogs = async () => {
       catModelos { clave_modelo descrip_disp }
       marcas { clave_marca marca }
       tiposDispositivo { tipo_disp nombre_tipo }
-      inmuebles: catLegacyInmuebles { clave descripcion desc_corta }
-      unidades: catUnidades { id_unidad nombre }
+      unidades: catUnidades { clave descripcion desc_corta }
+      segmentos: catSegmentos { id_segmento nombre }
     }
   `;
   return await queryGraphQL(query);
@@ -65,15 +68,15 @@ export const searchUsuarios = async (term) => {
 
 export const getUbicacionesPorUnidad = async (id_unidad) => {
   if (!id_unidad) return [];
-  const query = `query { ubicacionesPorUnidad(id_unidad: ${id_unidad}) { id_ubicacion nombre_ubicacion } }`;
+  const query = `query { ubicacionesPorUnidad(id_segmento: ${id_unidad}) { id_ubicacion nombre_ubicacion } }`;
   const data = await queryGraphQL(query);
   return data?.ubicacionesPorUnidad || [];
 };
 
-export const createUbicacion = async (id_unidad, nombre_ubicacion) => {
+export const createUbicacion = async (id_segmento, nombre_ubicacion) => {
   const query = `
     mutation { 
-      createUbicacion(id_unidad: ${id_unidad}, nombre_ubicacion: "${nombre_ubicacion}") { 
+      createUbicacion(id_segmento: ${id_unidad}, nombre_ubicacion: "${nombre_ubicacion}") { 
         id_ubicacion nombre_ubicacion 
       } 
     }
@@ -102,8 +105,8 @@ export const createModelo = async (clave_modelo, descrip_disp, clave_marca, tipo
 
 export const saveAsset = async (isNew, assetData) => {
   const { 
-    id_bien, num_serie, num_inv, estatus_operativo, clave_inmueble_ref, 
-    clave_modelo, id_usuario_resguardo, id_unidad, id_ubicacion, fecha_adquisicion 
+    id_bien, num_serie, num_inv, estatus_operativo, clave_unidad_ref, 
+    clave_modelo, id_usuario_resguardo, id_segmento, id_ubicacion, fecha_adquisicion 
   } = assetData;
 
   const N = (v) => v ? `"${v}"` : "null";
@@ -116,10 +119,10 @@ export const saveAsset = async (isNew, assetData) => {
       num_serie: ${N(num_serie)}
       num_inv: ${N(num_inv)}
       estatus_operativo: ${N(estatus_operativo)}
-      clave_inmueble_ref: ${N(clave_inmueble_ref)}
+      clave_unidad_ref: ${N(clave_unidad_ref)}
       clave_modelo: ${N(clave_modelo)}
       id_usuario_resguardo: ${I(id_usuario_resguardo)}
-      id_unidad: ${I(id_unidad)}
+      id_segmento: ${I(id_unidad)}
       id_ubicacion: ${I(id_ubicacion)}
       fecha_adquisicion: ${N(fecha_adquisicion)}
     ) { id_bien } }
@@ -130,10 +133,10 @@ export const saveAsset = async (isNew, assetData) => {
       id_bien: "${id_bien}"
       num_inv: ${N(num_inv)}
       estatus_operativo: ${N(estatus_operativo)}
-      clave_inmueble_ref: ${N(clave_inmueble_ref)}
+      clave_unidad_ref: ${N(clave_unidad_ref)}
       clave_modelo: ${N(clave_modelo)}
       id_usuario_resguardo: ${I(id_usuario_resguardo)}
-      id_unidad: ${I(id_unidad)}
+      id_segmento: ${I(id_unidad)}
       id_ubicacion: ${I(id_ubicacion)}
       fecha_adquisicion: ${N(fecha_adquisicion)}
     ) { id_bien } }
@@ -171,3 +174,26 @@ export const saveAsset = async (isNew, assetData) => {
   await queryGraphQL(mutSpec);
   return finalIdBien;
 };
+
+export const solicitarActualizacionBien = async (idBien, datosNuevosJSON) => {
+  const query = `
+    mutation($idBien: ID!, $datosNuevos: String!) {
+      solicitarActualizacionBien(idBien: $idBien, datosNuevos: $datosNuevos) {
+        id estado fecha_solicitud
+      }
+    }
+  `;
+  return await queryGraphQL(query, { idBien, datosNuevos: datosNuevosJSON });
+};
+
+export const getUserRole = () => {
+  const token = localStorage.getItem('jwtToken');
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.id_rol;
+  } catch {
+    return null;
+  }
+};
+
