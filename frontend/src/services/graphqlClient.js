@@ -68,15 +68,15 @@ export const searchUsuarios = async (term) => {
 
 export const getUbicacionesPorUnidad = async (id_unidad) => {
   if (!id_unidad) return [];
-  const query = `query { ubicacionesPorUnidad(id_segmento: ${id_unidad}) { id_ubicacion nombre_ubicacion } }`;
+  const query = `query { ubicacionesPorUnidad(id_unidad: "${id_unidad}") { id_ubicacion nombre_ubicacion } }`;
   const data = await queryGraphQL(query);
   return data?.ubicacionesPorUnidad || [];
 };
 
-export const createUbicacion = async (id_segmento, nombre_ubicacion) => {
+export const createUbicacion = async (id_unidad, nombre_ubicacion) => {
   const query = `
     mutation { 
-      createUbicacion(id_segmento: ${id_unidad}, nombre_ubicacion: "${nombre_ubicacion}") { 
+      createUbicacion(id_unidad: "${id_unidad}", nombre_ubicacion: "${nombre_ubicacion}") { 
         id_ubicacion nombre_ubicacion 
       } 
     }
@@ -122,7 +122,7 @@ export const saveAsset = async (isNew, assetData) => {
       clave_unidad_ref: ${N(clave_unidad_ref)}
       clave_modelo: ${N(clave_modelo)}
       id_usuario_resguardo: ${I(id_usuario_resguardo)}
-      id_segmento: ${I(id_unidad)}
+      id_segmento: ${I(id_segmento)}
       id_ubicacion: ${I(id_ubicacion)}
       fecha_adquisicion: ${N(fecha_adquisicion)}
     ) { id_bien } }
@@ -136,42 +136,43 @@ export const saveAsset = async (isNew, assetData) => {
       clave_unidad_ref: ${N(clave_unidad_ref)}
       clave_modelo: ${N(clave_modelo)}
       id_usuario_resguardo: ${I(id_usuario_resguardo)}
-      id_segmento: ${I(id_unidad)}
+      id_segmento: ${I(id_segmento)}
       id_ubicacion: ${I(id_ubicacion)}
       fecha_adquisicion: ${N(fecha_adquisicion)}
     ) { id_bien } }
   `;
 
-  let finalIdBien = id_bien;
-  if (isNew) {
-    const res = await queryGraphQL(mutCreate);
-    finalIdBien = res.createBien.id_bien;
-  } else {
-    await queryGraphQL(mutUpdate);
-  }
-
-  // Especificaciones
-  const {
-    nom_pc, cpu_info, ram_gb, almacenamiento_gb,
-    mac_address, dir_ip, puerto_red, switch_red, modelo_so
-  } = assetData.especificacionTI || {};
-
   const mutSpec = `
     mutation { upsertEspecificacionTI(
-      id_bien: "${finalIdBien}"
-      nom_pc: ${N(nom_pc)}
-      cpu_info: ${N(cpu_info)}
-      ram_gb: ${parseInt(ram_gb) || 0}
-      almacenamiento_gb: ${parseInt(almacenamiento_gb) || 0}
-      mac_address: ${N(mac_address)}
-      dir_ip: ${N(dir_ip)}
-      puerto_red: ${N(puerto_red)}
-      switch_red: ${N(switch_red)}
-      modelo_so: ${N(modelo_so)}
+      id_bien: "${id_bien}"
+      cpu_info: ${N(assetData.cpu_info)}
+      ram_gb: ${I(assetData.ram_gb)}
+      almacenamiento_gb: ${I(assetData.almacenamiento_gb)}
+      mac_address: ${N(assetData.mac_address)}
+      dir_ip: ${N(assetData.dir_ip)}
+      puerto_red: ${N(assetData.puerto_red)}
+      switch_red: ${N(assetData.switch_red)}
+      modelo_so: ${N(assetData.modelo_so)}
     ) { id_bien } }
   `;
 
-  await queryGraphQL(mutSpec);
+  const finalIdBien = isNew ? (await queryGraphQL(mutCreate)).createBien.id_bien : (await queryGraphQL(mutUpdate)).updateBien.id_bien;
+
+  if (assetData.cpu_info || assetData.ram_gb || assetData.almacenamiento_gb) {
+    await queryGraphQL(`
+      mutation { upsertEspecificacionTI(
+        id_bien: "${finalIdBien}"
+        cpu_info: ${N(assetData.cpu_info)}
+        ram_gb: ${I(assetData.ram_gb)}
+        almacenamiento_gb: ${I(assetData.almacenamiento_gb)}
+        mac_address: ${N(assetData.mac_address)}
+        dir_ip: ${N(assetData.dir_ip)}
+        puerto_red: ${N(assetData.puerto_red)}
+        switch_red: ${N(assetData.switch_red)}
+        modelo_so: ${N(assetData.modelo_so)}
+      ) { id_bien } }
+    `);
+  }
   return finalIdBien;
 };
 
@@ -196,4 +197,3 @@ export const getUserRole = () => {
     return null;
   }
 };
-

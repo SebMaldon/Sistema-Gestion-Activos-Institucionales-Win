@@ -227,7 +227,7 @@ export default function Dashboard() {
           return;
         }
 
-        const idBien = isNew ? 'NUEVO_' + formState.num_serie : dbInfo.id_bien;
+        const idBien = isNew ? crypto.randomUUID() : dbInfo.id_bien;
         await solicitarActualizacionBien(idBien, JSON.stringify(datosNuevos));
         alert('Tus cambios han sido enviados a revisión y están pendientes de aprobación.');
       }
