@@ -103,11 +103,18 @@ export default function Dashboard() {
       setWmiInfo(data);
       
       // Merge WMI data into formState
-      setFormState(prev => ({
-        ...prev,
-        ...data,
-        correo_usuario: data.correos_usuario && data.correos_usuario.length > 0 && !prev.correo_usuario ? data.correos_usuario[0] : prev.correo_usuario
-      }));
+      setFormState(prev => {
+        const newData = { ...prev, ...data };
+        if (data.nom_pc) {
+          newData.nombre_host = data.nom_pc;
+          delete newData.nom_pc;
+        }
+        if (data.windows_serial || data.serial_number) {
+          newData.windows_serial = data.windows_serial || data.serial_number;
+        }
+        newData.correo_usuario = data.correos_usuario && data.correos_usuario.length > 0 && !prev.correo_usuario ? data.correos_usuario[0] : prev.correo_usuario;
+        return newData;
+      });
 
       if (data && data.num_serie && !searchSerial) {
         setSearchSerial(data.num_serie);
