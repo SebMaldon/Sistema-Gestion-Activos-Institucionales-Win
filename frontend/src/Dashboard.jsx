@@ -22,7 +22,8 @@ const initialFormState = {
   id_segmento: '', id_ubicacion: '', fecha_adquisicion: '',
   nombre_host: '', windows_serial: '', cpu_info: '', ram_gb: '', almacenamiento_gb: '', 
   mac_address: '', dir_ip: '', puerto_red: '', switch_red: '', modelo_so: '',
-  fecha_act_antivirus: '', correo_usuario: '', correos_usuario: [], usuario_pc: '', tipo_usuario_pc: '', fecha_actualizacion: ''
+  fecha_act_antivirus: '', correo_usuario: '', correos_usuario: [], usuario_pc: '', tipo_usuario_pc: '', fecha_actualizacion: '',
+  monitor_marca: '', monitor_modelo: '', monitor_num_serie: ''
 };
 
 export default function Dashboard() {
@@ -365,18 +366,12 @@ export default function Dashboard() {
                   <div className={clsx("flex-1 rounded-xl border bg-white", getBorderColor('id_ubicacion'))}>
                     <SearchableSelect label="Ubicación Específica" options={catUbicaciones} value={formState.id_ubicacion} onChange={v => updateForm('id_ubicacion', v)} disabled={!formState.clave_unidad_ref} placeholder={formState.clave_unidad_ref ? "Buscar ubicación..." : "Seleccione unidad primero"} />
                   </div>
-                  <button onClick={() => setShowModalUbicacion(true)} disabled={!formState.clave_unidad_ref} className="h-[42px] px-3 bg-white hover:bg-[#F9FAFB] border border-[#E0E0E0] text-[#006241] font-bold rounded-xl disabled:opacity-50 transition-colors">
-                    +
-                  </button>
                 </div>
 
                 <div className="w-full flex items-end gap-2">
                   <div className={clsx("flex-1 rounded-xl border bg-white", getBorderColor('clave_modelo'))}>
                     <SearchableSelect label="Modelo (PC)" options={catModelos} value={formState.clave_modelo} onChange={v => updateForm('clave_modelo', v)} />
                   </div>
-                  <button onClick={() => setShowModalModelo(true)} className="h-[42px] px-3 bg-white hover:bg-[#F9FAFB] border border-[#E0E0E0] text-[#006241] font-bold rounded-xl transition-colors">
-                    +
-                  </button>
                 </div>
 
                 <div className={clsx("w-full rounded-xl border bg-white", getBorderColor('id_usuario_resguardo'))}>
@@ -391,7 +386,7 @@ export default function Dashboard() {
 
                 <div className="w-full">
                   <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block mb-1">Fecha Adquisición</label>
-                  <input type="date" value={formState.fecha_adquisicion} onChange={e => updateForm('fecha_adquisicion', e.target.value)} className={clsx("w-full bg-white text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]", getBorderColor('fecha_adquisicion'))} />
+                  <input type="date" value={formState.fecha_adquisicion} disabled className={clsx("w-full bg-gray-50 text-gray-500 cursor-not-allowed rounded-xl py-2 px-3 border shadow-sm focus:outline-none", getBorderColor('fecha_adquisicion'))} />
                 </div>
               </div>
             </section>
@@ -413,6 +408,11 @@ export default function Dashboard() {
                 <FieldInput label="Dirección MAC" val={formState.mac_address} onChange={v => updateForm('mac_address', v)} color={getBorderColor('mac_address')} readOnly={true} />
                 <FieldInput label="Puerto / Nodo Red" val={formState.puerto_red} onChange={v => updateForm('puerto_red', v)} color={getBorderColor('puerto_red')} />
                 <FieldInput label="Switch Conectado" val={formState.switch_red} onChange={v => updateForm('switch_red', v)} color={getBorderColor('switch_red')} />
+                
+                <div className="col-span-full border-t border-[#E0E0E0] my-4"></div>
+                <FieldInput label="Marca de Monitor" val={formState.monitor_marca} onChange={v => updateForm('monitor_marca', v)} color={getBorderColor('monitor_marca')} readOnly={true} />
+                <FieldInput label="Modelo de Monitor" val={formState.monitor_modelo} onChange={v => updateForm('monitor_modelo', v)} color={getBorderColor('monitor_modelo')} readOnly={true} />
+                <FieldInput label="No. Serie Monitor" val={formState.monitor_num_serie} onChange={v => updateForm('monitor_num_serie', v)} color={getBorderColor('monitor_num_serie')} readOnly={true} />
               </div>
             </section>
 

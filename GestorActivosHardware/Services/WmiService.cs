@@ -18,6 +18,11 @@ namespace GestorActivosHardware.Services
         public System.Collections.Generic.List<string> correos_usuario { get; set; } = new System.Collections.Generic.List<string>();
         public string usuario_pc { get; set; } = "";
         public string tipo_usuario_pc { get; set; } = "";
+        public string windows_serial { get; set; } = "";
+        
+        public string monitor_marca { get; set; } = "";
+        public string monitor_modelo { get; set; } = "";
+        public string monitor_num_serie { get; set; } = "";
     }
 
     public static class WmiService
@@ -104,9 +109,63 @@ namespace GestorActivosHardware.Services
                             
                 info.almacenamiento_gb = diskBytes > 0 ? (diskBytes / (1024L * 1024 * 1024)).ToString() : "256";
 
-                using (var searcher = new ManagementObjectSearcher("SELECT Caption FROM Win32_OperatingSystem"))
+                using (var searcher = new ManagementObjectSearcher("SELECT Caption, SerialNumber FROM Win32_OperatingSystem"))
                     foreach (ManagementObject o in searcher.Get())
+                    {
                         info.modelo_so = o["Caption"]?.ToString()?.Replace("Microsoft ", "")?.Trim() ?? "";
+                        info.windows_serial = o["SerialNumber"]?.ToString()?.Trim() ?? "";
+                    }
+
+                // Intentar extraer información de monitores conectados
+                try
+                {
+                    using (var searcher = new ManagementObjectSearcher("root\\WMI", "SELECT * FROM WmiMonitorID"))
+                    {
+                        foreach (ManagementObject o in searcher.Get())
+                        {
+                            // Extraer la marca del monitor (Fabricante)
+                            if (o["ManufacturerName"] != null)
+                            {
+                                ushort[] mfgArray = (ushort[])o["ManufacturerName"];
+                                string mfg = "";
+                                foreach (ushort c in mfgArray)
+                                {
+                                    if (c > 0 && c < 256) mfg += (char)c;
+                                }
+                                info.monitor_marca = mfg.Trim();
+                            }
+
+                            // Extraer el modelo del monitor (Código de producto / Nombre amigable)
+                            if (o["UserFriendlyName"] != null)
+                            {
+                                ushort[] nameArray = (ushort[])o["UserFriendlyName"];
+                                string name = "";
+                                foreach (ushort c in nameArray)
+                                {
+                                    if (c > 0 && c < 256) name += (char)c;
+                                }
+                                info.monitor_modelo = name.Trim();
+                            }
+
+                            // Extraer el número de serie del monitor
+                            if (o["SerialNumberID"] != null)
+                            {
+                                ushort[] serialArray = (ushort[])o["SerialNumberID"];
+                                string serial = "";
+                                foreach (ushort c in serialArray)
+                                {
+                                    if (c > 0 && c < 256) serial += (char)c;
+                                }
+                                info.monitor_num_serie = serial.Trim();
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error retrieving Monitor info: {ex.Message}");
+                }
+
             }
             catch (Exception ex)
             {
