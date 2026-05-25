@@ -23,7 +23,7 @@ const initialFormState = {
   nombre_host: '', windows_serial: '', cpu_info: '', ram_gb: '', almacenamiento_gb: '', 
   mac_address: '', dir_ip: '', puerto_red: '', switch_red: '', modelo_so: '',
   fecha_act_antivirus: '', correo_usuario: '', correos_usuario: [], usuario_pc: '', tipo_usuario_pc: '', fecha_actualizacion: '',
-  monitor_marca: '', monitor_modelo: '', monitor_num_serie: ''
+  tipo_equipo: '', monitores: []
 };
 
 export default function Dashboard() {
@@ -410,9 +410,27 @@ export default function Dashboard() {
                 <FieldInput label="Switch Conectado" val={formState.switch_red} onChange={v => updateForm('switch_red', v)} color={getBorderColor('switch_red')} />
                 
                 <div className="col-span-full border-t border-[#E0E0E0] my-4"></div>
-                <FieldInput label="Marca de Monitor" val={formState.monitor_marca} onChange={v => updateForm('monitor_marca', v)} color={getBorderColor('monitor_marca')} readOnly={true} />
-                <FieldInput label="Modelo de Monitor" val={formState.monitor_modelo} onChange={v => updateForm('monitor_modelo', v)} color={getBorderColor('monitor_modelo')} readOnly={true} />
-                <FieldInput label="No. Serie Monitor" val={formState.monitor_num_serie} onChange={v => updateForm('monitor_num_serie', v)} color={getBorderColor('monitor_num_serie')} readOnly={true} />
+                
+                <div className="col-span-full flex justify-between items-center">
+                   <h3 className="text-md font-bold text-[#333333]">Monitores Físicos Conectados</h3>
+                   {formState.tipo_equipo && (
+                     <span className="text-xs font-bold bg-blue-50 text-blue-700 px-3 py-1 rounded-full border border-blue-200">
+                       Equipo detectado: {formState.tipo_equipo}
+                     </span>
+                   )}
+                </div>
+
+                {(!formState.monitores || formState.monitores.length === 0) && (
+                  <div className="col-span-full text-sm text-gray-500 italic">No se detectaron monitores externos.</div>
+                )}
+                
+                {formState.monitores && formState.monitores.map((mon, idx) => (
+                  <div key={idx} className="col-span-full grid grid-cols-1 md:grid-cols-3 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                    <FieldInput label={`Monitor ${idx + 1} - Marca`} val={mon.marca} readOnly={true} />
+                    <FieldInput label={`Monitor ${idx + 1} - Modelo`} val={mon.modelo} readOnly={true} />
+                    <FieldInput label={`Monitor ${idx + 1} - No. Serie`} val={mon.num_serie} readOnly={true} />
+                  </div>
+                ))}
               </div>
             </section>
 

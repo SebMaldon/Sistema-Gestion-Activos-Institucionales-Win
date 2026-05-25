@@ -3,6 +3,13 @@ using System.Management;
 
 namespace GestorActivosHardware.Services
 {
+    public class MonitorInfo
+    {
+        public string marca { get; set; } = "";
+        public string modelo { get; set; } = "";
+        public string num_serie { get; set; } = "";
+    }
+
     public class HardwareInfo
     {
         public string nom_pc { get; set; } = "";
@@ -20,9 +27,8 @@ namespace GestorActivosHardware.Services
         public string tipo_usuario_pc { get; set; } = "";
         public string windows_serial { get; set; } = "";
         
-        public string monitor_marca { get; set; } = "";
-        public string monitor_modelo { get; set; } = "";
-        public string monitor_num_serie { get; set; } = "";
+        public string tipo_equipo { get; set; } = "";
+        public System.Collections.Generic.List<MonitorInfo> monitores { get; set; } = new System.Collections.Generic.List<MonitorInfo>();
     }
 
     public static class WmiService
@@ -116,35 +122,85 @@ namespace GestorActivosHardware.Services
                         info.windows_serial = o["SerialNumber"]?.ToString()?.Trim() ?? "";
                     }
 
+                // Determinar si es PC o Laptop usando Win32_SystemEnclosure
+                info.tipo_equipo = "Desktop";
+                try
+                {
+                    using (var searcher = new ManagementObjectSearcher("SELECT ChassisTypes FROM Win32_SystemEnclosure"))
+                    {
+                        foreach (ManagementObject o in searcher.Get())
+                        {
+                            if (o["ChassisTypes"] != null)
+                            {
+                                ushort[] types = (ushort[])o["ChassisTypes"];
+                                foreach (ushort type in types)
+                                {
+                                    // 8=Portable, 9=Laptop, 10=Notebook, 14=Sub Notebook, 31=Convertible
+                                    if (type == 8 || type == 9 || type == 10 || type == 14 || type == 31)
+                                    {
+                                        info.tipo_equipo = "Laptop";
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch { }
+
                 // Intentar extraer información de monitores conectados
                 try
                 {
+                    // Primero, mapeamos qué monitores son internos vs externos usando WmiMonitorConnectionParams
+                    System.Collections.Generic.HashSet<string> monitoresInternos = new System.Collections.Generic.HashSet<string>();
+                    using (var searcherCon = new ManagementObjectSearcher("root\\WMI", "SELECT InstanceName, VideoOutputTechnology FROM WmiMonitorConnectionParams"))
+                    {
+                        foreach (ManagementObject o in searcherCon.Get())
+                        {
+                            string instanceName = o["InstanceName"]?.ToString() ?? "";
+                            // VideoOutputTechnology: 0x80000000 = 2147483648 (Internal)
+                            if (o["VideoOutputTechnology"] != null)
+                            {
+                                uint tech = Convert.ToUInt32(o["VideoOutputTechnology"]);
+                                if (tech == 2147483648) 
+                                {
+                                    monitoresInternos.Add(instanceName);
+                                }
+                            }
+                        }
+                    }
+
                     using (var searcher = new ManagementObjectSearcher("root\\WMI", "SELECT * FROM WmiMonitorID"))
                     {
                         foreach (ManagementObject o in searcher.Get())
                         {
+                            string instanceName = o["InstanceName"]?.ToString() ?? "";
+                            
+                            // Si es laptop y el monitor es interno, lo saltamos
+                            if (info.tipo_equipo == "Laptop" && monitoresInternos.Contains(instanceName))
+                            {
+                                continue;
+                            }
+
+                            MonitorInfo mInfo = new MonitorInfo();
+
                             // Extraer la marca del monitor (Fabricante)
                             if (o["ManufacturerName"] != null)
                             {
                                 ushort[] mfgArray = (ushort[])o["ManufacturerName"];
                                 string mfg = "";
                                 foreach (ushort c in mfgArray)
-                                {
                                     if (c > 0 && c < 256) mfg += (char)c;
-                                }
-                                info.monitor_marca = mfg.Trim();
+                                mInfo.marca = mfg.Trim();
                             }
 
-                            // Extraer el modelo del monitor (Código de producto / Nombre amigable)
+                            // Extraer el modelo del monitor
                             if (o["UserFriendlyName"] != null)
                             {
                                 ushort[] nameArray = (ushort[])o["UserFriendlyName"];
                                 string name = "";
                                 foreach (ushort c in nameArray)
-                                {
                                     if (c > 0 && c < 256) name += (char)c;
-                                }
-                                info.monitor_modelo = name.Trim();
+                                mInfo.modelo = name.Trim();
                             }
 
                             // Extraer el número de serie del monitor
@@ -153,11 +209,11 @@ namespace GestorActivosHardware.Services
                                 ushort[] serialArray = (ushort[])o["SerialNumberID"];
                                 string serial = "";
                                 foreach (ushort c in serialArray)
-                                {
                                     if (c > 0 && c < 256) serial += (char)c;
-                                }
-                                info.monitor_num_serie = serial.Trim();
+                                mInfo.num_serie = serial.Trim();
                             }
+
+                            info.monitores.Add(mInfo);
                         }
                     }
                 }
