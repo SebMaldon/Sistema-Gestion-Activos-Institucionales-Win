@@ -104,9 +104,21 @@ export default function Dashboard() {
       const data = await fetchHardwareInfo();
       setWmiInfo(data);
 
+      const scannedSerial = data.num_serie || '';
+      const isDifferentMachine = searchSerial && scannedSerial && scannedSerial !== searchSerial;
+
+      if (isDifferentMachine) {
+        setSearchSerial(scannedSerial);
+        setDbInfo(null);
+      } else if (scannedSerial && !searchSerial) {
+        setSearchSerial(scannedSerial);
+      }
+
       // Merge WMI data into formState
       setFormState(prev => {
-        const newData = { ...prev, ...data };
+        const baseState = isDifferentMachine ? initialFormState : prev;
+        const newData = { ...baseState, ...data };
+        
         if (data.nom_pc) {
           newData.nombre_host = data.nom_pc;
           delete newData.nom_pc;
@@ -117,14 +129,10 @@ export default function Dashboard() {
         if (data.correos_usuario && data.correos_usuario.length > 0) {
           newData.correo_usuario = data.correos_usuario[0];
         } else {
-          newData.correo_usuario = prev.correo_usuario;
+          newData.correo_usuario = baseState.correo_usuario;
         }
         return newData;
       });
-
-      if (data && data.num_serie && !searchSerial) {
-        setSearchSerial(data.num_serie);
-      }
     } catch (err) {
       alert('Error obteniendo WMI del backend C#. Asegúrate de que el backend C# esté corriendo.');
     } finally {
