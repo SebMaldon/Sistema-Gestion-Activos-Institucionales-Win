@@ -153,6 +153,12 @@ export const saveAsset = async (isNew, assetData) => {
       puerto_red: ${N(assetData.puerto_red)}
       switch_red: ${N(assetData.switch_red)}
       modelo_so: ${N(assetData.modelo_so)}
+      cuenta_windows: ${N(assetData.usuario_pc)}
+      correo: ${N(assetData.correo_usuario)}
+      tipo_user: ${N(assetData.tipo_usuario_pc)}
+      last_scan: ${N(assetData.fecha_act_antivirus)}
+      nombre_host: ${N(assetData.nombre_host)}
+      windows_serial: ${N(assetData.windows_serial)}
     ) { id_bien } }
   `;
 
@@ -170,6 +176,12 @@ export const saveAsset = async (isNew, assetData) => {
         puerto_red: ${N(assetData.puerto_red)}
         switch_red: ${N(assetData.switch_red)}
         modelo_so: ${N(assetData.modelo_so)}
+        cuenta_windows: ${N(assetData.usuario_pc)}
+        correo: ${N(assetData.correo_usuario)}
+        tipo_user: ${N(assetData.tipo_usuario_pc)}
+        last_scan: ${N(assetData.fecha_act_antivirus)}
+        nombre_host: ${N(assetData.nombre_host)}
+        windows_serial: ${N(assetData.windows_serial)}
       ) { id_bien } }
     `);
   }

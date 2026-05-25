@@ -137,9 +137,10 @@ export default function Dashboard() {
         query {
           bienByNumSerie(num_serie: "${searchSerial}") {
             id_bien num_inv estatus_operativo clave_unidad_ref clave_modelo 
-            id_usuario_resguardo id_segmento id_ubicacion fecha_adquisicion
+            id_usuario_resguardo id_segmento id_ubicacion fecha_adquisicion fecha_actualizacion
             especificacionTI {
               nombre_host windows_serial cpu_info ram_gb almacenamiento_gb mac_address dir_ip puerto_red switch_red modelo_so
+              cuenta_windows correo tipo_user last_scan
             }
           }
         }
@@ -170,7 +171,11 @@ export default function Dashboard() {
           dir_ip: esp.dir_ip || '',
           puerto_red: esp.puerto_red || '',
           switch_red: esp.switch_red || '',
-          modelo_so: esp.modelo_so || ''
+          modelo_so: esp.modelo_so || '',
+          usuario_pc: esp.cuenta_windows || '',
+          correo_usuario: esp.correo || '',
+          tipo_usuario_pc: esp.tipo_user || '',
+          fecha_act_antivirus: esp.last_scan || ''
         };
 
         setDbInfo(mergedObj);
@@ -330,8 +335,8 @@ export default function Dashboard() {
                   <HardDrive className="w-6 h-6 text-[#006241]" /> Datos Generales
                 </h2>
                 {formState.fecha_actualizacion && (
-                  <span className="text-xs font-bold bg-green-50 text-green-700 px-3 py-1 rounded-full border border-green-200">
-                    Última Modificación (BD): {formState.fecha_actualizacion}
+                  <span className="text-xs font-medium text-gray-400 opacity-70 italic ml-4">
+                    Última Modificación: {formState.fecha_actualizacion}
                   </span>
                 )}
               </div>
@@ -441,20 +446,9 @@ export default function Dashboard() {
               </h2>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div className="w-full">
-                  <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block mb-1">Última Act. Antivirus</label>
-                  <input type="text" readOnly value={formState.fecha_act_antivirus || ''} className={clsx("w-full bg-gray-50 text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none", getBorderColor('fecha_act_antivirus'))} />
-                </div>
-
-                <div className="w-full">
-                  <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block mb-1">Usuario de la PC</label>
-                  <input type="text" readOnly value={formState.usuario_pc || ''} className={clsx("w-full bg-gray-50 text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none", getBorderColor('usuario_pc'))} />
-                </div>
-
-                <div className="w-full">
-                  <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block mb-1">Tipo de Usuario</label>
-                  <input type="text" readOnly value={formState.tipo_usuario_pc || ''} className={clsx("w-full bg-gray-50 text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none", getBorderColor('tipo_usuario_pc'))} />
-                </div>
+                <FieldInput label="Última Act. Antivirus" val={formState.fecha_act_antivirus} color={getBorderColor('fecha_act_antivirus')} readOnly={true} />
+                <FieldInput label="Usuario de la PC" val={formState.usuario_pc} color={getBorderColor('usuario_pc')} readOnly={true} />
+                <FieldInput label="Tipo de Usuario" val={formState.tipo_usuario_pc} color={getBorderColor('tipo_usuario_pc')} readOnly={true} />
 
                 <div className="w-full md:col-span-2 lg:col-span-3">
                   <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block mb-1">Correo Electrónico (Windows)</label>
@@ -525,7 +519,11 @@ function FieldInput({ label, val, onChange, color, type = "text", readOnly = fal
         value={val || ''} 
         readOnly={readOnly}
         onChange={e => !readOnly && onChange(e.target.value)} 
-        className={clsx("w-full bg-white text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]", color, readOnly && "bg-gray-100 cursor-not-allowed text-gray-500")} 
+        className={clsx(
+          "w-full text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]", 
+          color, 
+          readOnly ? "bg-gray-100 cursor-not-allowed text-gray-500" : "bg-white"
+        )} 
       />
     </div>
   );
