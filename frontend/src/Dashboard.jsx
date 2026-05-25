@@ -114,7 +114,11 @@ export default function Dashboard() {
         if (data.windows_serial || data.serial_number) {
           newData.windows_serial = data.windows_serial || data.serial_number;
         }
-        newData.correo_usuario = data.correos_usuario && data.correos_usuario.length > 0 && !prev.correo_usuario ? data.correos_usuario[0] : prev.correo_usuario;
+        if (data.correos_usuario && data.correos_usuario.length > 0) {
+          newData.correo_usuario = data.correos_usuario[0];
+        } else {
+          newData.correo_usuario = prev.correo_usuario;
+        }
         return newData;
       });
 
