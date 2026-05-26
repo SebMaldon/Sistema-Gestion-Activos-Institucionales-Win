@@ -12,7 +12,7 @@ import {
   getUserRole,
   procesarMonitoresEquipo
 } from './services/graphqlClient';
-import { LogOut, RefreshCcw, Save, Server, Monitor, HardDrive, Cpu, MapPin, Network, Activity, Plus } from 'lucide-react';
+import { LogOut, RefreshCcw, Save, Server, Monitor, HardDrive, Cpu, MapPin, Network, Activity, Plus, ChevronDown, ChevronUp } from 'lucide-react';
 import { clsx } from 'clsx';
 import SearchableSelect from './components/SearchableSelect';
 import { ModalUbicacion, ModalModeloMarca } from './components/Modals';
@@ -46,6 +46,15 @@ export default function Dashboard() {
 
   const [searchSerial, setSearchSerial] = useState('');
   const [loadingAction, setLoadingAction] = useState(false);
+
+  const [collapsed, setCollapsed] = useState({
+    generales: false,
+    seguridad: false,
+    especificaciones: false
+  });
+  const toggleCollapse = (section) => {
+    setCollapsed(prev => ({ ...prev, [section]: !prev[section] }));
+  };
 
   // Modals
   const [showModalUbicacion, setShowModalUbicacion] = useState(false);
@@ -396,12 +405,27 @@ export default function Dashboard() {
   const canSave = (hasDbChanges || monitorsChanged) && hasPendingChanges;
 
   return (
-    <div className="min-h-screen bg-[#F5F5F5] text-[#333333] flex flex-col">
+    <div className="h-screen bg-[#F5F5F5] text-[#333333] flex flex-col overflow-hidden">
       {/* Navbar */}
       <header className="bg-[#006241] px-6 py-4 flex items-center justify-between shadow-md z-10">
-        <div className="flex items-center gap-3">
-          <Server className="text-white w-6 h-6" />
-          <h1 className="text-xl font-bold tracking-wide text-white">Gestor Activos HW</h1>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <Server className="text-white w-6 h-6" />
+            <h1 className="text-xl font-bold tracking-wide text-white">Gestor Activos HW</h1>
+          </div>
+          {dbInfo && dbInfo.id_bien && (
+            <div className="flex items-center gap-2 bg-[#008F59]/30 border border-[#008F59]/50 px-2.5 py-0.5 rounded-full">
+              <span className="text-xs font-bold text-green-300 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
+                Sincronizado
+              </span>
+              {dbInfo.fecha_actualizacion && (
+                <span className="text-[10px] text-white/70 italic border-l border-white/20 pl-2">
+                  Act: {dbInfo.fecha_actualizacion.split(',')[0]}
+                </span>
+              )}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-6">
           <div className="flex items-center bg-white/10 rounded-xl px-2 py-1 border border-white/20 focus-within:bg-white/20 transition-colors">
@@ -448,167 +472,196 @@ export default function Dashboard() {
         </aside>
 
         {/* Main Form */}
-        <main className="flex-1 p-8 overflow-y-auto custom-scrollbar relative">
+        <main className="flex-1 p-6 overflow-y-auto custom-scrollbar relative">
 
-          <div className="max-w-6xl mx-auto space-y-8">
+          <div className="max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-            {/* Sección 1: Generales */}
-            <section className="bg-white border border-[#E0E0E0] border-t-4 border-t-[#006241] rounded-3xl p-8 shadow-sm relative">
-              <div className="flex justify-between items-center mb-8">
-                <h2 className="text-xl font-bold flex items-center gap-3 text-[#333333]">
-                  <HardDrive className="w-6 h-6 text-[#006241]" /> Datos Generales
-                </h2>
-                {dbInfo && dbInfo.id_bien && (
-                  <div className="flex items-center gap-4">
-                    {dbInfo.fecha_actualizacion && (
-                      <span className="text-xs text-gray-400 font-medium italic">
-                        Última actualización: {dbInfo.fecha_actualizacion}
-                      </span>
+            {/* Columna Izquierda: Generales y Seguridad */}
+            <div className="lg:col-span-5 space-y-6">
+
+              {/* Sección 1: Generales */}
+              <section className="bg-white border border-[#E0E0E0] border-t-4 border-t-[#006241] rounded-2xl p-5 shadow-sm relative">
+                <div 
+                  className="flex justify-between items-center mb-4 cursor-pointer select-none"
+                  onClick={() => toggleCollapse('generales')}
+                >
+                  <h2 className="text-lg font-bold flex items-center gap-2 text-[#333333]">
+                    <HardDrive className="w-5 h-5 text-[#006241]" /> Datos Generales
+                  </h2>
+                  {collapsed.generales ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronUp className="w-5 h-5 text-gray-400" />}
+                </div>
+
+                {!collapsed.generales && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <FieldInput label="No. Serie" val={formState.num_serie} onChange={v => updateForm('num_serie', v)} color={getBorderColor('num_serie')} readOnly={true} />
+                    <FieldInput label="No. Inventario" val={formState.num_inv} onChange={v => updateForm('num_inv', v)} color={getBorderColor('num_inv')} />
+
+                    <div className="w-full sm:col-span-2">
+                      <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block mb-1">Estatus Operativo</label>
+                      <select
+                        value={formState.estatus_operativo}
+                        onChange={e => updateForm('estatus_operativo', e.target.value)}
+                        className={clsx("w-full bg-white text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]", getBorderColor('estatus_operativo'))}
+                      >
+                        <option value="ACTIVO">Activo</option>
+                        <option value="INACTIVO">Inactivo</option>
+                        <option value="EN REPARACION">En Reparación</option>
+                        <option value="BAJA">Baja</option>
+                      </select>
+                    </div>
+
+                    <div className="col-span-full border-t border-[#E0E0E0] my-1"></div>
+
+                    <div className="w-full sm:col-span-2">
+                      <SearchableSelect label="Inmueble Físico" options={catInmuebles} value={formState.clave_unidad_ref} onChange={v => updateForm('clave_unidad_ref', v)} />
+                    </div>
+
+                    <div className="w-full sm:col-span-2">
+                      <SearchableSelect label="Unidad Operativa" options={catUnidades} value={formState.id_segmento} onChange={v => updateForm('id_segmento', v)} />
+                    </div>
+
+                    <div className="w-full sm:col-span-2">
+                      <SearchableSelect label="Ubicación Específica" options={catUbicaciones} value={formState.id_ubicacion} onChange={v => updateForm('id_ubicacion', v)} disabled={!formState.clave_unidad_ref} placeholder={formState.clave_unidad_ref ? "Buscar ubicación..." : "Seleccione unidad primero"} />
+                    </div>
+
+                    <div className="w-full sm:col-span-2">
+                      <SearchableSelect label="Modelo (PC)" options={catModelos} value={formState.clave_modelo} onChange={v => updateForm('clave_modelo', v)} />
+                    </div>
+
+                    <div className="w-full sm:col-span-2">
+                      <SearchableSelect
+                        label="Usuario a Resguardo"
+                        options={formState.id_usuario_resguardo ? [{ value: formState.id_usuario_resguardo, label: formState.nombre_usuario_resguardo || `Usuario ID: ${formState.id_usuario_resguardo}` }] : []}
+                        asyncSearch={searchUsuarios}
+                        value={formState.id_usuario_resguardo}
+                        onChange={(v, opt) => {
+                          updateForm('id_usuario_resguardo', v);
+                          let nameToSave = opt?.label || '';
+                          if (nameToSave.includes('(')) {
+                            nameToSave = nameToSave.split(' (')[0].trim();
+                          }
+                          updateForm('nombre_usuario_resguardo', nameToSave);
+                        }}
+                      />
+                    </div>
+
+                    <div className="w-full sm:col-span-2">
+                      <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block mb-1">Fecha Adquisición</label>
+                      <input type="date" value={formState.fecha_adquisicion} disabled className={clsx("w-full bg-gray-50 text-gray-500 cursor-not-allowed rounded-xl py-2 px-3 border shadow-sm focus:outline-none", getBorderColor('fecha_adquisicion'))} />
+                    </div>
+                  </div>
+                )}
+              </section>
+
+              {/* Sección 3: Seguridad y Usuario */}
+              <section className="bg-white border border-[#E0E0E0] border-t-4 border-t-[#004f34] rounded-2xl p-5 shadow-sm relative">
+                <div 
+                  className="flex justify-between items-center mb-4 cursor-pointer select-none"
+                  onClick={() => toggleCollapse('seguridad')}
+                >
+                  <h2 className="text-lg font-bold flex items-center gap-2 text-[#333333]">
+                    <Activity className="w-5 h-5 text-[#004f34]" /> Seguridad y Usuario de PC
+                  </h2>
+                  {collapsed.seguridad ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronUp className="w-5 h-5 text-gray-400" />}
+                </div>
+
+                {!collapsed.seguridad && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <FieldInput label="Última Act. Antivirus" val={formState.fecha_act_antivirus} color={getBorderColor('fecha_act_antivirus')} readOnly={true} />
+                    <FieldInput label="Usuario de la PC" val={formState.usuario_pc} color={getBorderColor('usuario_pc')} readOnly={true} />
+                    
+                    <div className="sm:col-span-2">
+                      <FieldInput label="Tipo de Usuario" val={formState.tipo_usuario_pc} color={getBorderColor('tipo_usuario_pc')} readOnly={true} />
+                    </div>
+
+                    <div className="w-full sm:col-span-2">
+                      <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block mb-1">Correo Electrónico (Windows)</label>
+                      {formState.correos_usuario && formState.correos_usuario.length > 1 ? (
+                        <select
+                          value={formState.correo_usuario || ''}
+                          onChange={e => updateForm('correo_usuario', e.target.value)}
+                          className={clsx("w-full bg-white text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]", getBorderColor('correo_usuario'))}
+                        >
+                          <option value="">-- Seleccione un correo --</option>
+                          {formState.correos_usuario.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          value={formState.correo_usuario || (formState.correos_usuario && formState.correos_usuario[0]) || ''}
+                          onChange={e => updateForm('correo_usuario', e.target.value)}
+                          className={clsx("w-full bg-white text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]", getBorderColor('correo_usuario'))}
+                        />
+                      )}
+                    </div>
+                  </div>
+                )}
+              </section>
+
+            </div>
+
+            {/* Columna Derecha: Especificaciones de Hardware & Red */}
+            <div className="lg:col-span-7 space-y-6">
+
+              {/* Sección 2: Especificaciones */}
+              <section className="bg-white border border-[#E0E0E0] border-t-4 border-t-[#008F59] rounded-2xl p-5 shadow-sm relative">
+                <div 
+                  className="flex justify-between items-center mb-4 cursor-pointer select-none"
+                  onClick={() => toggleCollapse('especificaciones')}
+                >
+                  <h2 className="text-lg font-bold flex items-center gap-2 text-[#333333]">
+                    <Cpu className="w-5 h-5 text-[#008F59]" /> Especificaciones de Hardware & Red
+                  </h2>
+                  {collapsed.especificaciones ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronUp className="w-5 h-5 text-gray-400" />}
+                </div>
+
+                {!collapsed.especificaciones && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <FieldInput label="Nombre de Host (PC)" val={formState.nombre_host} onChange={v => updateForm('nombre_host', v)} color={getBorderColor('nombre_host')} readOnly={true} />
+                    <FieldInput label="Serial SO (Windows)" val={formState.windows_serial} onChange={v => updateForm('windows_serial', v)} color={getBorderColor('windows_serial')} readOnly={true} />
+                    <FieldInput label="Sistema Operativo" val={formState.modelo_so} onChange={v => updateForm('modelo_so', v)} color={getBorderColor('modelo_so')} readOnly={true} />
+                    
+                    <div className="sm:col-span-2">
+                      <FieldInput label="Procesador (CPU)" val={formState.cpu_info} onChange={v => updateForm('cpu_info', v)} color={getBorderColor('cpu_info')} readOnly={true} />
+                    </div>
+                    
+                    <FieldInput label="Memoria RAM (GB)" val={formState.ram_gb} onChange={v => updateForm('ram_gb', v)} color={getBorderColor('ram_gb')} type="number" readOnly={true} />
+                    <FieldInput label="Almacenamiento (GB)" val={formState.almacenamiento_gb} onChange={v => updateForm('almacenamiento_gb', v)} color={getBorderColor('almacenamiento_gb')} type="number" readOnly={true} />
+                    <FieldInput label="Dirección IPv4" val={formState.dir_ip} onChange={v => updateForm('dir_ip', v)} color={getBorderColor('dir_ip')} readOnly={true} />
+                    <FieldInput label="Dirección MAC" val={formState.mac_address} onChange={v => updateForm('mac_address', v)} color={getBorderColor('mac_address')} readOnly={true} />
+                    <FieldInput label="Puerto / Nodo Red" val={formState.puerto_red} onChange={v => updateForm('puerto_red', v)} color={getBorderColor('puerto_red')} />
+                    <FieldInput label="Switch Conectado" val={formState.switch_red} onChange={v => updateForm('switch_red', v)} color={getBorderColor('switch_red')} />
+
+                    <div className="col-span-full border-t border-[#E0E0E0] my-2"></div>
+
+                    <div className="col-span-full flex justify-between items-center">
+                      <h3 className="text-sm font-bold text-[#333333]">Monitores Físicos Conectados</h3>
+                      {formState.tipo_equipo && (
+                        <span className="text-[10px] font-bold bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded-full border border-blue-200">
+                          Detectado: {formState.tipo_equipo}
+                        </span>
+                      )}
+                    </div>
+
+                    {(!formState.monitores || formState.monitores.length === 0) && (
+                      <div className="col-span-full text-xs text-gray-500 italic p-3 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-center">
+                        No se detectaron monitores externos.
+                      </div>
                     )}
-                    <span className="text-xs font-bold bg-green-50 text-green-700 px-3 py-1 rounded-full border border-green-200">
-                      Sincronizado con BD
-                    </span>
+
+                    {formState.monitores && formState.monitores.map((mon, idx) => (
+                      <div key={idx} className="col-span-full grid grid-cols-1 sm:grid-cols-3 gap-3 bg-gray-50 p-3 rounded-xl border border-gray-200">
+                        <FieldInput label={`Monitor ${idx + 1} - Marca`} val={mon.marca} readOnly={true} />
+                        <FieldInput label={`Monitor ${idx + 1} - Modelo`} val={mon.modelo} readOnly={true} />
+                        <FieldInput label={`Monitor ${idx + 1} - No. Serie`} val={mon.num_serie} readOnly={true} />
+                      </div>
+                    ))}
                   </div>
                 )}
-              </div>
+              </section>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <FieldInput label="No. Serie" val={formState.num_serie} onChange={v => updateForm('num_serie', v)} color={getBorderColor('num_serie')} readOnly={true} />
-                <FieldInput label="No. Inventario" val={formState.num_inv} onChange={v => updateForm('num_inv', v)} color={getBorderColor('num_inv')} />
+            </div>
 
-                <div className="w-full">
-                  <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block mb-1">Estatus Operativo</label>
-                  <select
-                    value={formState.estatus_operativo}
-                    onChange={e => updateForm('estatus_operativo', e.target.value)}
-                    className={clsx("w-full bg-white text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]", getBorderColor('estatus_operativo'))}
-                  >
-                    <option value="ACTIVO">Activo</option>
-                    <option value="INACTIVO">Inactivo</option>
-                    <option value="EN REPARACION">En Reparación</option>
-                    <option value="BAJA">Baja</option>
-                  </select>
-                </div>
-
-                <div className="col-span-full border-t border-[#E0E0E0] my-2"></div>
-
-                <div className="w-full">
-                  <SearchableSelect label="Inmueble Físico" options={catInmuebles} value={formState.clave_unidad_ref} onChange={v => updateForm('clave_unidad_ref', v)} />
-                </div>
-
-                <div className="w-full">
-                  <SearchableSelect label="Unidad Operativa" options={catUnidades} value={formState.id_segmento} onChange={v => updateForm('id_segmento', v)} />
-                </div>
-
-                <div className="w-full">
-                  <SearchableSelect label="Ubicación Específica" options={catUbicaciones} value={formState.id_ubicacion} onChange={v => updateForm('id_ubicacion', v)} disabled={!formState.clave_unidad_ref} placeholder={formState.clave_unidad_ref ? "Buscar ubicación..." : "Seleccione unidad primero"} />
-                </div>
-
-                <div className="w-full">
-                  <SearchableSelect label="Modelo (PC)" options={catModelos} value={formState.clave_modelo} onChange={v => updateForm('clave_modelo', v)} />
-                </div>
-
-                <div className="w-full">
-                  <SearchableSelect
-                    label="Usuario a Resguardo"
-                    options={formState.id_usuario_resguardo ? [{ value: formState.id_usuario_resguardo, label: formState.nombre_usuario_resguardo || `Usuario ID: ${formState.id_usuario_resguardo}` }] : []}
-                    asyncSearch={searchUsuarios}
-                    value={formState.id_usuario_resguardo}
-                    onChange={(v, opt) => {
-                      updateForm('id_usuario_resguardo', v);
-                      // Handle the case where the selected option label might be "Name (ID)"
-                      let nameToSave = opt?.label || '';
-                      if (nameToSave.includes('(')) {
-                        nameToSave = nameToSave.split(' (')[0].trim();
-                      }
-                      updateForm('nombre_usuario_resguardo', nameToSave);
-                    }}
-                  />
-                </div>
-
-                <div className="w-full">
-                  <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block mb-1">Fecha Adquisición</label>
-                  <input type="date" value={formState.fecha_adquisicion} disabled className={clsx("w-full bg-gray-50 text-gray-500 cursor-not-allowed rounded-xl py-2 px-3 border shadow-sm focus:outline-none", getBorderColor('fecha_adquisicion'))} />
-                </div>
-              </div>
-            </section>
-
-            {/* Sección 2: Especificaciones */}
-            <section className="bg-white border border-[#E0E0E0] border-t-4 border-t-[#008F59] rounded-3xl p-8 shadow-sm relative">
-              <h2 className="text-xl font-bold mb-8 flex items-center gap-3 text-[#333333]">
-                <Cpu className="w-6 h-6 text-[#008F59]" /> Especificaciones de Hardware & Red
-              </h2>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <FieldInput label="Nombre de Host (PC)" val={formState.nombre_host} onChange={v => updateForm('nombre_host', v)} color={getBorderColor('nombre_host')} readOnly={true} />
-                <FieldInput label="Serial SO (Windows)" val={formState.windows_serial} onChange={v => updateForm('windows_serial', v)} color={getBorderColor('windows_serial')} readOnly={true} />
-                <FieldInput label="Sistema Operativo" val={formState.modelo_so} onChange={v => updateForm('modelo_so', v)} color={getBorderColor('modelo_so')} readOnly={true} />
-                <FieldInput label="Procesador (CPU)" val={formState.cpu_info} onChange={v => updateForm('cpu_info', v)} color={getBorderColor('cpu_info')} readOnly={true} />
-                <FieldInput label="Memoria RAM (GB)" val={formState.ram_gb} onChange={v => updateForm('ram_gb', v)} color={getBorderColor('ram_gb')} type="number" readOnly={true} />
-                <FieldInput label="Almacenamiento (GB)" val={formState.almacenamiento_gb} onChange={v => updateForm('almacenamiento_gb', v)} color={getBorderColor('almacenamiento_gb')} type="number" readOnly={true} />
-                <FieldInput label="Dirección IPv4" val={formState.dir_ip} onChange={v => updateForm('dir_ip', v)} color={getBorderColor('dir_ip')} readOnly={true} />
-                <FieldInput label="Dirección MAC" val={formState.mac_address} onChange={v => updateForm('mac_address', v)} color={getBorderColor('mac_address')} readOnly={true} />
-                <FieldInput label="Puerto / Nodo Red" val={formState.puerto_red} onChange={v => updateForm('puerto_red', v)} color={getBorderColor('puerto_red')} />
-                <FieldInput label="Switch Conectado" val={formState.switch_red} onChange={v => updateForm('switch_red', v)} color={getBorderColor('switch_red')} />
-
-                <div className="col-span-full border-t border-[#E0E0E0] my-4"></div>
-
-                <div className="col-span-full flex justify-between items-center">
-                  <h3 className="text-md font-bold text-[#333333]">Monitores Físicos Conectados</h3>
-                  {formState.tipo_equipo && (
-                    <span className="text-xs font-bold bg-blue-50 text-blue-700 px-3 py-1 rounded-full border border-blue-200">
-                      Equipo detectado: {formState.tipo_equipo}
-                    </span>
-                  )}
-                </div>
-
-                {(!formState.monitores || formState.monitores.length === 0) && (
-                  <div className="col-span-full text-sm text-gray-500 italic">No se detectaron monitores externos.</div>
-                )}
-
-                {formState.monitores && formState.monitores.map((mon, idx) => (
-                  <div key={idx} className="col-span-full grid grid-cols-1 md:grid-cols-3 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-200">
-                    <FieldInput label={`Monitor ${idx + 1} - Marca`} val={mon.marca} readOnly={true} />
-                    <FieldInput label={`Monitor ${idx + 1} - Modelo`} val={mon.modelo} readOnly={true} />
-                    <FieldInput label={`Monitor ${idx + 1} - No. Serie`} val={mon.num_serie} readOnly={true} />
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {/* Sección 3: Seguridad y Usuario */}
-            <section className="bg-white border border-[#E0E0E0] border-t-4 border-t-[#004f34] rounded-3xl p-8 shadow-sm relative">
-              <h2 className="text-xl font-bold mb-8 flex items-center gap-3 text-[#333333]">
-                <Activity className="w-6 h-6 text-[#004f34]" /> Seguridad y Usuario de PC
-              </h2>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <FieldInput label="Última Act. Antivirus" val={formState.fecha_act_antivirus} color={getBorderColor('fecha_act_antivirus')} readOnly={true} />
-                <FieldInput label="Usuario de la PC" val={formState.usuario_pc} color={getBorderColor('usuario_pc')} readOnly={true} />
-                <FieldInput label="Tipo de Usuario" val={formState.tipo_usuario_pc} color={getBorderColor('tipo_usuario_pc')} readOnly={true} />
-
-                <div className="w-full md:col-span-2 lg:col-span-3">
-                  <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block mb-1">Correo Electrónico (Windows)</label>
-                  {formState.correos_usuario && formState.correos_usuario.length > 1 ? (
-                    <select
-                      value={formState.correo_usuario || ''}
-                      onChange={e => updateForm('correo_usuario', e.target.value)}
-                      className={clsx("w-full bg-white text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]", getBorderColor('correo_usuario'))}
-                    >
-                      <option value="">-- Seleccione un correo --</option>
-                      {formState.correos_usuario.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      value={formState.correo_usuario || (formState.correos_usuario && formState.correos_usuario[0]) || ''}
-                      onChange={e => updateForm('correo_usuario', e.target.value)}
-                      className={clsx("w-full bg-white text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]", getBorderColor('correo_usuario'))}
-                    />
-                  )}
-                </div>
-              </div>
-            </section>
           </div>
         </main>
       </div>
