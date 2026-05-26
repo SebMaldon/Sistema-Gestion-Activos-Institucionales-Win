@@ -406,13 +406,18 @@ export default function Dashboard() {
 
   return (
     <div className="h-screen bg-[#F5F5F5] text-[#333333] flex flex-col overflow-hidden">
+      {/* Custom TitleBar for Electron Window Control Overlay */}
+      <div
+        className="bg-[#006241] h-10 w-full flex items-center px-4 select-none text-white text-xs font-semibold border-b border-[#004f34]/30"
+        style={{ WebkitAppRegion: 'drag' }}
+      >
+        <img src="/IMSS_Logosímbolo_Blanco.png" alt="IMSS" className="h-5 w-5 object-contain mr-2" />
+        <span>Gestor de Activos — IMSS</span>
+      </div>
+
       {/* Navbar */}
       <header className="bg-[#006241] px-6 py-4 flex items-center justify-between shadow-md z-10">
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-3">
-            <img src="/IMSS_Logosímbolo_Blanco.png" alt="IMSS" className="h-8 object-contain" />
-            <h1 className="text-xl font-bold tracking-wide text-white border-l border-white/20 pl-3">Gestor Activos HW</h1>
-          </div>
           {dbInfo && dbInfo.id_bien && (
             <div className="flex items-center gap-2 bg-[#008F59]/30 border border-[#008F59]/50 px-2.5 py-0.5 rounded-full">
               <span className="text-xs font-bold text-green-300 flex items-center gap-1">

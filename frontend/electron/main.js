@@ -13,8 +13,16 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
+    minWidth: 1200,
+    minHeight: 800,
     title: 'Gestor Activos - IMSS',
     icon: path.join(__dirname, '../public/IMSS_Logosímbolo_Blanco.png'),
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: '#006241',
+      symbolColor: '#ffffff',
+      height: 40
+    },
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false
