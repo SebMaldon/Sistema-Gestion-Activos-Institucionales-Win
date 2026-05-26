@@ -14,6 +14,7 @@ function createWindow() {
     width: 1400,
     height: 900,
     title: 'Gestor Activos - IMSS',
+    icon: path.join(__dirname, '../public/IMSS_Logosímbolo_Blanco.png'),
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false
@@ -24,7 +25,7 @@ function createWindow() {
 
   // In development, load from Vite dev server. In production, load the static build.
   const isDev = !app.isPackaged;
-  
+
   if (isDev) {
     mainWindow.loadURL('http://localhost:5200');
     mainWindow.webContents.openDevTools();
@@ -35,7 +36,7 @@ function createWindow() {
 
 function startBackend() {
   const isDev = !app.isPackaged;
-  
+
   // The path to the C# exe
   let exePath;
   if (isDev) {
@@ -46,7 +47,7 @@ function startBackend() {
   }
 
   console.log('Iniciando Backend en:', exePath);
-  
+
   backendProcess = spawn(exePath, [], { detached: false });
 
   backendProcess.stdout.on('data', (data) => {

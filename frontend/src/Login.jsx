@@ -37,9 +37,7 @@ export default function Login() {
       
       <div className="w-full max-w-md bg-white rounded-3xl p-8 shadow-2xl relative z-10">
         <div className="flex flex-col items-center mb-10">
-          <div className="w-20 h-20 bg-[#F5F5F5] rounded-2xl flex items-center justify-center mb-6 shadow-inner border border-[#E0E0E0]">
-            <MonitorSmartphone className="w-10 h-10 text-[#006241]" />
-          </div>
+          <img src="/IMSS_Logosímbolo.png" alt="IMSS Logo" className="w-24 h-24 object-contain mb-4" />
           <h1 className="text-3xl font-bold text-[#333333] tracking-tight">Gestor de Activos</h1>
           <p className="text-[#757575] mt-2 text-sm uppercase tracking-widest font-medium">Hardware & Red — IMSS</p>
         </div>

@@ -410,8 +410,8 @@ export default function Dashboard() {
       <header className="bg-[#006241] px-6 py-4 flex items-center justify-between shadow-md z-10">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-3">
-            <Server className="text-white w-6 h-6" />
-            <h1 className="text-xl font-bold tracking-wide text-white">Gestor Activos HW</h1>
+            <img src="/IMSS_Logosímbolo_Blanco.png" alt="IMSS" className="h-8 object-contain" />
+            <h1 className="text-xl font-bold tracking-wide text-white border-l border-white/20 pl-3">Gestor Activos HW</h1>
           </div>
           {dbInfo && dbInfo.id_bien && (
             <div className="flex items-center gap-2 bg-[#008F59]/30 border border-[#008F59]/50 px-2.5 py-0.5 rounded-full">
