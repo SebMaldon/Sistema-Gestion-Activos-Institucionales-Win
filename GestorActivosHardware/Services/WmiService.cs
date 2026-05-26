@@ -184,14 +184,32 @@ namespace GestorActivosHardware.Services
                             MonitorInfo mInfo = new MonitorInfo();
 
                             // Extraer la marca del monitor (Fabricante)
+                            string rawMarca = "";
                             if (o["ManufacturerName"] != null)
                             {
                                 ushort[] mfgArray = (ushort[])o["ManufacturerName"];
                                 string mfg = "";
                                 foreach (ushort c in mfgArray)
                                     if (c > 0 && c < 256) mfg += (char)c;
-                                mInfo.marca = mfg.Trim();
+                                rawMarca = mfg.Trim();
                             }
+
+                            // Traducir marca PNP a Comercial
+                            var pnpMarcas = new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase)
+                            {
+                                { "HPN", "HP" },
+                                { "HWP", "HP" },
+                                { "DEL", "Dell" },
+                                { "BNQ", "BenQ" },
+                                { "SAM", "Samsung" },
+                                { "LGD", "LG" },
+                                { "ACR", "Acer" },
+                                { "ASU", "Asus" },
+                                { "LEN", "Lenovo" },
+                                { "APP", "Apple" }
+                            };
+
+                            mInfo.marca = pnpMarcas.TryGetValue(rawMarca, out var marcaComercial) ? marcaComercial : rawMarca;
 
                             // Extraer el modelo del monitor
                             if (o["UserFriendlyName"] != null)
@@ -200,7 +218,14 @@ namespace GestorActivosHardware.Services
                                 string name = "";
                                 foreach (ushort c in nameArray)
                                     if (c > 0 && c < 256) name += (char)c;
-                                mInfo.modelo = name.Trim();
+                                string rawModelo = name.Trim();
+
+                                // Limpiar prefijo PNP en modelo
+                                if (!string.IsNullOrEmpty(rawMarca) && rawModelo.StartsWith(rawMarca, System.StringComparison.OrdinalIgnoreCase))
+                                {
+                                    rawModelo = rawModelo.Substring(rawMarca.Length).Trim();
+                                }
+                                mInfo.modelo = rawModelo;
                             }
 
                             // Extraer el número de serie del monitor
