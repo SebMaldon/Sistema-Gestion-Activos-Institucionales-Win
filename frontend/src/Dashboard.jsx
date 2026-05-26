@@ -9,7 +9,8 @@ import {
   logout,
   searchUsuarios,
   solicitarActualizacionBien,
-  getUserRole
+  getUserRole,
+  procesarMonitoresEquipo
 } from './services/graphqlClient';
 import { LogOut, RefreshCcw, Save, Server, Monitor, HardDrive, Cpu, MapPin, Network, Activity, Plus } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -158,6 +159,17 @@ export default function Dashboard() {
               nombre_host windows_serial cpu_info ram_gb almacenamiento_gb mac_address dir_ip puerto_red switch_red modelo_so
               cuenta_windows correo tipo_user last_scan
             }
+            monitores {
+              monitor {
+                num_serie
+                modelo {
+                  descrip_disp
+                  marca {
+                    marca
+                  }
+                }
+              }
+            }
           }
         }
       `;
@@ -192,7 +204,18 @@ export default function Dashboard() {
           usuario_pc: esp.cuenta_windows || '',
           correo_usuario: esp.correo || '',
           tipo_usuario_pc: esp.tipo_user || '',
-          fecha_act_antivirus: esp.last_scan || ''
+          fecha_act_antivirus: (() => {
+            if (!esp.last_scan) return '';
+            const d = new Date(isNaN(Number(esp.last_scan)) ? esp.last_scan : Number(esp.last_scan));
+            if (isNaN(d.getTime())) return '';
+            const pad = (n) => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+          })(),
+          monitores: (bien.monitores || []).map(bm => ({
+            num_serie: bm.monitor?.num_serie || '',
+            marca: bm.monitor?.modelo?.marca?.marca || '',
+            modelo: bm.monitor?.modelo?.descrip_disp || ''
+          }))
         };
 
         setDbInfo(mergedObj);
@@ -227,21 +250,60 @@ export default function Dashboard() {
       const isNew = !dbInfo || !dbInfo.id_bien;
       const userRole = getUserRole();
 
-      // Rol Maestro (1) → guardado directo
-      if (userRole === 1) {
-        const dataToSave = { ...formState, especificacionTI: formState };
-        await saveAsset(isNew, dataToSave);
+      // Helper: llama procesarMonitoresEquipo con confirm dialog si hay conflictos
+      const _procesarMonitoresFrontend = async (idBien, monitores, forzar) => {
+        const result = await procesarMonitoresEquipo(idBien, monitores, forzar);
+        if (!result.ok && result.conflictos && result.conflictos.length > 0) {
+          // Construir mensaje de conflicto
+          const msgs = result.conflictos.map(c => {
+            const inv = c.num_inv_equipo_anterior ? `No. Inv: ${c.num_inv_equipo_anterior}` : '';
+            return `• Monitor serie ${c.num_serie} ya está vinculado al equipo:\n   No. Serie equipo anterior: ${c.num_serie_equipo_anterior}${inv ? `\n   ${inv}` : ''}`;
+          }).join('\n\n');
+          const confirmar = window.confirm(
+            `⚠️ Conflicto de monitores:\n\n${msgs}\n\n¿Deseas desvincular esos monitores de su equipo anterior y enlazarlos a este equipo?`
+          );
+          if (confirmar) {
+            await procesarMonitoresEquipo(idBien, monitores, true);
+          }
+        }
+      };
+
+      // Roles Admin(1) y Maestro(2) → guardado directo sin solicitud
+      if (userRole === 1 || userRole === 2) {
+        // Si isNew pero el num_serie ya existe en BD, forzar update
+        let effectiveIsNew = isNew;
+        let effectiveDbInfo = dbInfo;
+        if (isNew && formState.num_serie) {
+          const chk = await queryGraphQL(`query { bienByNumSerie(num_serie: "${formState.num_serie}") { id_bien } }`);
+          if (chk?.bienByNumSerie?.id_bien) {
+            effectiveIsNew = false;
+            effectiveDbInfo = { id_bien: chk.bienByNumSerie.id_bien };
+          }
+        }
+
+        const dataToSave = { ...formState, id_bien: effectiveDbInfo?.id_bien, especificacionTI: formState };
+        const finalIdBien = await saveAsset(effectiveIsNew, dataToSave);
         alert('Guardado exitoso.');
         setSearchSerial(formState.num_serie);
         await syncDB();
+
+        // Procesar monitores WMI
+        const monitores = formState.monitores || [];
+        if (monitores.length > 0) {
+          const idBien = typeof finalIdBien === 'string' ? finalIdBien : effectiveDbInfo?.id_bien;
+          if (idBien) {
+            await _procesarMonitoresFrontend(idBien, monitores, false);
+          }
+        }
       } else {
+
         // Roles 2, 3, 4 → solicitud de cambio
         const datosNuevos = {};
 
         if (isNew) {
           // Creación: enviar todos los campos con valor
           Object.keys(formState).forEach(key => {
-            if (['correos_usuario', 'monitores', 'tipo_equipo', 'nombre_usuario_resguardo'].includes(key)) return;
+            if (['correos_usuario', 'tipo_equipo', 'nombre_usuario_resguardo'].includes(key)) return;
             if (formState[key] !== '' && formState[key] !== undefined && formState[key] !== null) {
               datosNuevos[key] = formState[key];
             }
@@ -250,13 +312,17 @@ export default function Dashboard() {
         } else {
           // Actualización: solo campos que cambiaron vs dbInfo
           Object.keys(formState).forEach(key => {
-            if (['id_bien', 'correos_usuario', 'monitores', 'tipo_equipo', 'nombre_usuario_resguardo'].includes(key)) return;
+            if (['id_bien', 'correos_usuario', 'tipo_equipo', 'nombre_usuario_resguardo'].includes(key)) return;
             const current = String(formState[key] ?? '');
             const original = String(dbInfo[key] ?? '');
             if (current !== original) {
               datosNuevos[key] = formState[key];
             }
           });
+          // Siempre incluir monitores en actualización (aunque no hayan cambiado)
+          if (formState.monitores && formState.monitores.length > 0) {
+            datosNuevos.monitores = formState.monitores;
+          }
         }
 
         if (Object.keys(datosNuevos).filter(k => k !== '_esCreacion').length === 0) {
@@ -312,9 +378,22 @@ export default function Dashboard() {
     });
   }
 
+  const monitorsChanged = (() => {
+    const dbMons = dbInfo?.monitores || [];
+    const formMons = formState.monitores || [];
+    if (dbMons.length !== formMons.length) return true;
+    return formMons.some((fm, idx) => {
+      const dbm = dbMons[idx];
+      if (!dbm) return true;
+      return fm.num_serie !== dbm.num_serie ||
+             fm.marca !== dbm.marca ||
+             fm.modelo !== dbm.modelo;
+    });
+  })();
+
   const hasDbChanges = Object.keys(currentDatosNuevos).filter(k => k !== '_esCreacion').length > 0;
   const hasPendingChanges = lastSubmitted !== JSON.stringify(currentDatosNuevos);
-  const canSave = hasDbChanges && hasPendingChanges;
+  const canSave = (hasDbChanges || monitorsChanged) && hasPendingChanges;
 
   return (
     <div className="min-h-screen bg-[#F5F5F5] text-[#333333] flex flex-col">

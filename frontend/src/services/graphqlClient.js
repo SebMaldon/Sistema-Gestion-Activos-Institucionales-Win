@@ -209,3 +209,20 @@ export const getUserRole = () => {
     return null;
   }
 };
+
+export const procesarMonitoresEquipo = async (idBienPc, monitores, forzar = false) => {
+  const query = `
+    mutation($idBienPc: ID!, $monitores: [MonitorWmiInput!]!, $forzar: Boolean) {
+      procesarMonitoresEquipo(id_bien_pc: $idBienPc, monitores: $monitores, forzar: $forzar) {
+        ok
+        conflictos {
+          num_serie
+          num_inv_equipo_anterior
+          num_serie_equipo_anterior
+        }
+      }
+    }
+  `;
+  const data = await queryGraphQL(query, { idBienPc, monitores, forzar });
+  return data?.procesarMonitoresEquipo ?? { ok: false, conflictos: [] };
+};
