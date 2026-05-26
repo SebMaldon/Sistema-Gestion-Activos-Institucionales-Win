@@ -128,7 +128,7 @@ export default function Dashboard() {
       setFormState(prev => {
         const baseState = isDifferentMachine ? initialFormState : prev;
         const newData = { ...baseState, ...data };
-        
+
         if (data.nom_pc) {
           newData.nombre_host = data.nom_pc;
           delete newData.nom_pc;
@@ -395,8 +395,8 @@ export default function Dashboard() {
       const dbm = dbMons[idx];
       if (!dbm) return true;
       return fm.num_serie !== dbm.num_serie ||
-             fm.marca !== dbm.marca ||
-             fm.modelo !== dbm.modelo;
+        fm.marca !== dbm.marca ||
+        fm.modelo !== dbm.modelo;
     });
   })();
 
@@ -481,7 +481,7 @@ export default function Dashboard() {
 
               {/* Sección 1: Generales */}
               <section className="bg-white border border-[#E0E0E0] border-t-4 border-t-[#006241] rounded-2xl p-5 shadow-sm relative">
-                <div 
+                <div
                   className="flex justify-between items-center mb-4 cursor-pointer select-none"
                   onClick={() => toggleCollapse('generales')}
                 >
@@ -555,7 +555,7 @@ export default function Dashboard() {
 
               {/* Sección 3: Seguridad y Usuario */}
               <section className="bg-white border border-[#E0E0E0] border-t-4 border-t-[#004f34] rounded-2xl p-5 shadow-sm relative">
-                <div 
+                <div
                   className="flex justify-between items-center mb-4 cursor-pointer select-none"
                   onClick={() => toggleCollapse('seguridad')}
                 >
@@ -569,7 +569,7 @@ export default function Dashboard() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <FieldInput label="Última Act. Antivirus" val={formState.fecha_act_antivirus} color={getBorderColor('fecha_act_antivirus')} readOnly={true} />
                     <FieldInput label="Usuario de la PC" val={formState.usuario_pc} color={getBorderColor('usuario_pc')} readOnly={true} />
-                    
+
                     <div className="sm:col-span-2">
                       <FieldInput label="Tipo de Usuario" val={formState.tipo_usuario_pc} color={getBorderColor('tipo_usuario_pc')} readOnly={true} />
                     </div>
@@ -605,7 +605,7 @@ export default function Dashboard() {
 
               {/* Sección 2: Especificaciones */}
               <section className="bg-white border border-[#E0E0E0] border-t-4 border-t-[#008F59] rounded-2xl p-5 shadow-sm relative">
-                <div 
+                <div
                   className="flex justify-between items-center mb-4 cursor-pointer select-none"
                   onClick={() => toggleCollapse('especificaciones')}
                 >
@@ -620,11 +620,11 @@ export default function Dashboard() {
                     <FieldInput label="Nombre de Host (PC)" val={formState.nombre_host} onChange={v => updateForm('nombre_host', v)} color={getBorderColor('nombre_host')} readOnly={true} />
                     <FieldInput label="Serial SO (Windows)" val={formState.windows_serial} onChange={v => updateForm('windows_serial', v)} color={getBorderColor('windows_serial')} readOnly={true} />
                     <FieldInput label="Sistema Operativo" val={formState.modelo_so} onChange={v => updateForm('modelo_so', v)} color={getBorderColor('modelo_so')} readOnly={true} />
-                    
+
                     <div className="sm:col-span-2">
                       <FieldInput label="Procesador (CPU)" val={formState.cpu_info} onChange={v => updateForm('cpu_info', v)} color={getBorderColor('cpu_info')} readOnly={true} />
                     </div>
-                    
+
                     <FieldInput label="Memoria RAM (GB)" val={formState.ram_gb} onChange={v => updateForm('ram_gb', v)} color={getBorderColor('ram_gb')} type="number" readOnly={true} />
                     <FieldInput label="Almacenamiento (GB)" val={formState.almacenamiento_gb} onChange={v => updateForm('almacenamiento_gb', v)} color={getBorderColor('almacenamiento_gb')} type="number" readOnly={true} />
                     <FieldInput label="Dirección IPv4" val={formState.dir_ip} onChange={v => updateForm('dir_ip', v)} color={getBorderColor('dir_ip')} readOnly={true} />
