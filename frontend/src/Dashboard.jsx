@@ -29,6 +29,7 @@ const initialFormState = {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const isElectron = typeof window !== 'undefined' && !!window.process?.versions?.electron;
 
   // Catalogs
   const [catUnidades, setCatUnidades] = useState([]);
@@ -162,6 +163,7 @@ export default function Dashboard() {
             id_bien num_inv estatus_operativo clave_unidad_ref clave_modelo 
             id_usuario_resguardo id_segmento id_ubicacion fecha_adquisicion fecha_actualizacion
             usuarioResguardo {
+              matricula
               nombre_completo
             }
             especificacionTI {
@@ -195,7 +197,9 @@ export default function Dashboard() {
           clave_unidad_ref: bien.clave_unidad_ref || '',
           clave_modelo: bien.clave_modelo || '',
           id_usuario_resguardo: bien.id_usuario_resguardo ? String(bien.id_usuario_resguardo) : '',
-          nombre_usuario_resguardo: bien.usuarioResguardo?.nombre_completo || '',
+          nombre_usuario_resguardo: bien.usuarioResguardo 
+            ? `${bien.usuarioResguardo.matricula} - ${bien.usuarioResguardo.nombre_completo}` 
+            : '',
           id_segmento: bien.id_segmento ? String(bien.id_segmento) : '',
           id_ubicacion: bien.id_ubicacion ? String(bien.id_ubicacion) : '',
           fecha_adquisicion: bien.fecha_adquisicion ? bien.fecha_adquisicion.split('T')[0] : '',
@@ -406,66 +410,85 @@ export default function Dashboard() {
 
   return (
     <div className="h-screen bg-[#F5F5F5] text-[#333333] flex flex-col overflow-hidden">
-      {/* Custom TitleBar for Electron Window Control Overlay */}
-      <div
-        className="bg-[#006241] h-10 w-full flex items-center px-4 select-none text-white text-xs font-semibold border-b border-[#004f34]/30"
+      {/* Unified TitleBar/Navbar for Electron Window Control Overlay */}
+      <header
+        className="bg-[#006241] h-11 w-full flex items-center justify-between px-6 select-none text-white shadow-md z-20"
         style={{ WebkitAppRegion: 'drag' }}
       >
-        <img src="/IMSS_Logosímbolo_Blanco.png" alt="IMSS" className="h-5 w-5 object-contain mr-2" />
-        <span>Gestor de Activos — IMSS</span>
-      </div>
-
-      {/* Navbar */}
-      <header className="bg-[#006241] px-6 py-4 flex items-center justify-between shadow-md z-10">
         <div className="flex items-center gap-4">
+          <img src="/IMSS_Logosímbolo_Blanco.png" alt="IMSS" className="h-5 w-5 object-contain" />
+          <span className="text-xs font-semibold tracking-wide">Gestor de Activos — IMSS</span>
           {dbInfo && dbInfo.id_bien && (
-            <div className="flex items-center gap-2 bg-[#008F59]/30 border border-[#008F59]/50 px-2.5 py-0.5 rounded-full">
-              <span className="text-xs font-bold text-green-300 flex items-center gap-1">
+            <div 
+              className="flex items-center gap-2 bg-[#008F59]/30 border border-[#008F59]/50 px-2 py-0.5 rounded-full"
+              style={{ WebkitAppRegion: 'no-drag' }}
+            >
+              <span className="text-[10px] font-bold text-green-300 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
                 Sincronizado
               </span>
               {dbInfo.fecha_actualizacion && (
-                <span className="text-[10px] text-white/70 italic border-l border-white/20 pl-2">
+                <span className="text-[9px] text-white/70 italic border-l border-white/20 pl-2">
                   Act: {dbInfo.fecha_actualizacion.split(',')[0]}
                 </span>
               )}
             </div>
           )}
         </div>
-        <div className="flex items-center gap-6">
-          <div className="flex items-center bg-white/10 rounded-xl px-2 py-1 border border-white/20 focus-within:bg-white/20 transition-colors">
+        <div 
+          className={clsx("flex items-center", isElectron && "pr-[140px]")} 
+          style={{ WebkitAppRegion: 'no-drag' }}
+        >
+          <div className="flex items-center bg-white/10 rounded-xl px-2 py-0.5 border border-white/20 focus-within:bg-white/20 transition-colors">
             <input
               type="text"
               value={searchSerial}
               onChange={(e) => setSearchSerial(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && syncDB()}
-              className="bg-transparent border-none text-white px-2 py-1 w-48 focus:outline-none text-sm placeholder-white/70"
+              className="bg-transparent border-none text-white px-2 py-0.5 w-44 focus:outline-none text-xs placeholder-white/70"
               placeholder="Buscar Serial..."
             />
             <button
               onClick={syncDB}
               disabled={loadingAction}
-              className="p-2 hover:bg-white/20 rounded-lg transition-colors text-white/80 hover:text-white"
+              className="p-1 hover:bg-white/20 rounded-lg transition-colors text-white/80 hover:text-white"
             >
-              <RefreshCcw className={clsx("w-4 h-4", loadingAction && "animate-spin")} />
+              <RefreshCcw className={clsx("w-3.5 h-3.5", loadingAction && "animate-spin")} />
             </button>
           </div>
-          <button onClick={handleLogout} className="flex items-center gap-2 text-red-300/80 hover:text-red-400 transition-colors text-sm font-bold">
-            <LogOut className="w-4 h-4" /> Salir
-          </button>
         </div>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar Actions */}
         <aside className="w-64 bg-white border-r border-[#E0E0E0] p-6 flex flex-col gap-4 shadow-sm z-10">
-          <button onClick={loadWMI} disabled={loadingAction} className="bg-[#006241] hover:bg-[#008F59] text-white py-4 px-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-colors disabled:opacity-50 shadow-sm">
+          <button onClick={loadWMI} disabled={loadingAction} className="bg-[#006241] hover:bg-[#008F59] text-white py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-colors disabled:opacity-50 shadow-sm">
             <Monitor className="w-5 h-5" /> Cargar Datos Locales (WMI)
           </button>
-          <button onClick={handleSave} disabled={loadingAction || !canSave} className="bg-white border-2 border-[#006241] text-[#006241] hover:bg-[#F9FAFB] py-4 px-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-colors disabled:opacity-50 shadow-sm mt-auto">
-            <Save className="w-5 h-5" /> Guardar Cambios
-          </button>
-          <div className="mt-4 p-4 bg-[#F9FAFB] rounded-xl border border-[#E0E0E0]">
+
+          {/* Info. del Sistema */}
+          <div className="p-4 bg-[#F9FAFB] rounded-xl border border-[#E0E0E0] space-y-3">
+            <p className="text-xs text-[#333333] font-bold uppercase tracking-wider border-b border-[#E0E0E0] pb-1.5 flex items-center gap-1.5">
+              <Activity className="w-4 h-4 text-[#006241]" /> Info. del Sistema
+            </p>
+            <div className="space-y-2 text-xs">
+              <div>
+                <span className="text-[#757575] font-semibold block uppercase text-[10px]">Usuario PC</span>
+                <span className="text-[#333333] font-medium block truncate" title={formState.usuario_pc}>{formState.usuario_pc || '—'}</span>
+              </div>
+              <div>
+                <span className="text-[#757575] font-semibold block uppercase text-[10px]">Tipo Usuario</span>
+                <span className="text-[#333333] font-medium block truncate" title={formState.tipo_usuario_pc}>{formState.tipo_usuario_pc || '—'}</span>
+              </div>
+              <div>
+                <span className="text-[#757575] font-semibold block uppercase text-[10px]">Últ. Antivirus</span>
+                <span className="text-[#333333] font-medium block truncate" title={formState.fecha_act_antivirus}>{formState.fecha_act_antivirus || '—'}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Simbología (pushes itself and elements below to the bottom) */}
+          <div className="mt-auto p-4 bg-[#F9FAFB] rounded-xl border border-[#E0E0E0]">
             <p className="text-xs text-[#333333] font-bold uppercase mb-2">Simbología</p>
             <div className="flex items-center gap-2 mb-2">
               <div className="w-3 h-3 rounded-full bg-yellow-500"></div> <span className="text-xs text-[#757575]">Diferente a BD</span>
@@ -474,15 +497,21 @@ export default function Dashboard() {
               <div className="w-3 h-3 rounded-full bg-red-500"></div> <span className="text-xs text-[#757575]">Discrepancia Física</span>
             </div>
           </div>
+
+          <button onClick={handleSave} disabled={loadingAction || !canSave} className="bg-white border-2 border-[#006241] text-[#006241] hover:bg-[#F9FAFB] py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-colors disabled:opacity-50 shadow-sm">
+            <Save className="w-5 h-5" /> Guardar Cambios
+          </button>
+
+          <button onClick={handleLogout} className="border border-red-200 hover:border-red-300 bg-red-50/50 hover:bg-red-50 text-red-600 py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-colors text-sm shadow-sm">
+            <LogOut className="w-4 h-4" /> Cerrar Sesión
+          </button>
         </aside>
 
         {/* Main Form */}
         <main className="flex-1 p-6 overflow-y-auto custom-scrollbar relative">
 
-          <div className="max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
-
-            {/* Columna Izquierda: Generales y Seguridad */}
-            <div className="lg:col-span-5 space-y-6">
+          <div className="max-w-[1400px] mx-auto flex flex-col gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
               {/* Sección 1: Generales */}
               <section className="bg-white border border-[#E0E0E0] border-t-4 border-t-[#006241] rounded-2xl p-5 shadow-sm relative">
@@ -551,35 +580,6 @@ export default function Dashboard() {
                     </div>
 
                     <div className="w-full sm:col-span-2">
-                      <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block mb-1">Fecha Adquisición</label>
-                      <input type="date" value={formState.fecha_adquisicion} disabled className={clsx("w-full bg-gray-50 text-gray-500 cursor-not-allowed rounded-xl py-2 px-3 border shadow-sm focus:outline-none", getBorderColor('fecha_adquisicion'))} />
-                    </div>
-                  </div>
-                )}
-              </section>
-
-              {/* Sección 3: Seguridad y Usuario */}
-              <section className="bg-white border border-[#E0E0E0] border-t-4 border-t-[#004f34] rounded-2xl p-5 shadow-sm relative">
-                <div
-                  className="flex justify-between items-center mb-4 cursor-pointer select-none"
-                  onClick={() => toggleCollapse('seguridad')}
-                >
-                  <h2 className="text-lg font-bold flex items-center gap-2 text-[#333333]">
-                    <Activity className="w-5 h-5 text-[#004f34]" /> Seguridad y Usuario de PC
-                  </h2>
-                  {collapsed.seguridad ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronUp className="w-5 h-5 text-gray-400" />}
-                </div>
-
-                {!collapsed.seguridad && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <FieldInput label="Última Act. Antivirus" val={formState.fecha_act_antivirus} color={getBorderColor('fecha_act_antivirus')} readOnly={true} />
-                    <FieldInput label="Usuario de la PC" val={formState.usuario_pc} color={getBorderColor('usuario_pc')} readOnly={true} />
-
-                    <div className="sm:col-span-2">
-                      <FieldInput label="Tipo de Usuario" val={formState.tipo_usuario_pc} color={getBorderColor('tipo_usuario_pc')} readOnly={true} />
-                    </div>
-
-                    <div className="w-full sm:col-span-2">
                       <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block mb-1">Correo Electrónico (Windows)</label>
                       {formState.correos_usuario && formState.correos_usuario.length > 1 ? (
                         <select
@@ -599,14 +599,14 @@ export default function Dashboard() {
                         />
                       )}
                     </div>
+
+                    <div className="w-full sm:col-span-2">
+                      <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block mb-1">Fecha Adquisición</label>
+                      <input type="date" value={formState.fecha_adquisicion} disabled className={clsx("w-full bg-gray-50 text-gray-500 cursor-not-allowed rounded-xl py-2 px-3 border shadow-sm focus:outline-none", getBorderColor('fecha_adquisicion'))} />
+                    </div>
                   </div>
                 )}
               </section>
-
-            </div>
-
-            {/* Columna Derecha: Especificaciones de Hardware & Red */}
-            <div className="lg:col-span-7 space-y-6">
 
               {/* Sección 2: Especificaciones */}
               <section className="bg-white border border-[#E0E0E0] border-t-4 border-t-[#008F59] rounded-2xl p-5 shadow-sm relative">
@@ -666,7 +666,6 @@ export default function Dashboard() {
               </section>
 
             </div>
-
           </div>
         </main>
       </div>

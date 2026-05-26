@@ -34,7 +34,7 @@ export default function Login() {
     <div className="min-h-screen flex flex-col bg-[#006241] relative overflow-hidden">
       {/* Custom TitleBar for Electron Window Control Overlay */}
       <div
-        className="bg-[#006241] h-10 w-full flex items-center px-4 select-none text-white text-xs font-semibold z-20 border-b border-[#004f34]/20"
+        className="bg-[#006241] h-11 w-full flex items-center px-4 select-none text-white text-xs font-semibold z-20"
         style={{ WebkitAppRegion: 'drag' }}
       >
         <img src="/IMSS_Logosímbolo_Blanco.png" alt="IMSS" className="h-5 w-5 object-contain mr-2" />
@@ -42,9 +42,7 @@ export default function Login() {
       </div>
 
       <div className="flex-1 flex items-center justify-center p-4 relative">
-        {/* Decorative background shapes */}
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#008F59]/30 rounded-full blur-[120px] pointer-events-none"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-[#004f34]/40 rounded-full blur-[120px] pointer-events-none"></div>
+
 
         <div className="w-full max-w-md bg-white rounded-3xl p-8 shadow-2xl relative z-10">
           <div className="flex flex-col items-center mb-10">

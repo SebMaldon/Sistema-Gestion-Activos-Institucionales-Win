@@ -31,16 +31,23 @@ export default function SearchableSelect({
 
   const selectedOption = allOptions.find(o => o.value === value);
 
+  const prevIsOpen = useRef(isOpen);
+
   useEffect(() => {
     if (!isOpen) {
       setSearchTerm(selectedOption ? selectedOption.label : '');
-    } else {
+    }
+  }, [isOpen, selectedOption]);
+
+  useEffect(() => {
+    if (isOpen && !prevIsOpen.current) {
       setSearchTerm('');
-      if (asyncSearch && value) {
+      if (asyncSearch) {
         setAsyncOptions([]);
       }
     }
-  }, [isOpen, selectedOption, value, asyncSearch]);
+    prevIsOpen.current = isOpen;
+  }, [isOpen, asyncSearch]);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -87,13 +94,14 @@ export default function SearchableSelect({
   }, [options, asyncOptions, searchTerm, asyncSearch]);
 
   const handleSelect = (optValue) => {
-    onChange(optValue);
+    const selectedOpt = allOptions.find(o => o.value === optValue);
+    onChange(optValue, selectedOpt);
     setIsOpen(false);
   };
 
   const clearSelection = (e) => {
     e.stopPropagation();
-    onChange(null);
+    onChange(null, null);
     setSearchTerm('');
     setIsOpen(true);
   };
