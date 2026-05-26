@@ -414,11 +414,11 @@ export default function Dashboard() {
                 <div className="col-span-full border-t border-[#E0E0E0] my-2"></div>
 
                 <div className="w-full">
-                  <SearchableSelect label="Inmueble Físico" options={catInmuebles} value={formState.clave_unidad_ref} onChange={v => updateForm('clave_unidad_ref', v)} />
+                  <SearchableSelect label="Unidad Operativa" options={catInmuebles} value={formState.clave_unidad_ref} onChange={v => updateForm('clave_unidad_ref', v)} />
                 </div>
 
                 <div className="w-full">
-                  <SearchableSelect label="Unidad Operativa" options={catUnidades} value={formState.id_segmento} onChange={v => updateForm('id_segmento', v)} />
+                  <SearchableSelect label="Segmento" options={catUnidades} value={formState.id_segmento} onChange={v => updateForm('id_segmento', v)} />
                 </div>
 
                 <div className="w-full">
