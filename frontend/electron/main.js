@@ -27,7 +27,8 @@ function createWindow() {
     },
     webPreferences: {
       nodeIntegration: true,
-      contextIsolation: false
+      contextIsolation: false,
+      webSecurity: false
     }
   });
 
@@ -38,10 +39,10 @@ function createWindow() {
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:5200');
-    mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
+  mainWindow.webContents.openDevTools();
 }
 
 function startBackend() {

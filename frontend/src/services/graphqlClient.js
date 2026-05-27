@@ -1,8 +1,8 @@
-const GRAPHQL_API_URL = import.meta.env.VITE_GQL_URL || 'http://localhost:4000/graphql';
+const GRAPHQL_API_URL = import.meta.env.VITE_GQL_URL || 'http://11.1.19.4:4000/graphql';
 
 export const queryGraphQL = async (query, variables = {}) => {
   const token = localStorage.getItem('jwtToken');
-  const headers = { 
+  const headers = {
     'Content-Type': 'application/json',
     'x-origen': 'win'
   };
@@ -16,6 +16,16 @@ export const queryGraphQL = async (query, variables = {}) => {
 
   const json = await response.json();
   if (json.errors) {
+    const isAuthError = json.errors.some(err => 
+      err.extensions?.code === 'UNAUTHENTICATED' || 
+      err.message?.toLowerCase().includes('auth') || 
+      err.message?.toLowerCase().includes('token')
+    );
+    if (isAuthError) {
+      localStorage.removeItem('jwtToken');
+      window.location.hash = '#/login';
+      window.location.reload();
+    }
     throw new Error(json.errors[0].message || 'GraphQL Error');
   }
   return json.data;
@@ -52,9 +62,10 @@ export const getCatalogs = async () => {
 
 export const searchUsuarios = async (term) => {
   if (!term || term.length < 2) return [];
+  const escaped = term.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
   const query = `
     query {
-      usuarios(pagination: {first: 20}, search: "${term}") {
+      usuarios(pagination: {first: 20}, search: "${escaped}") {
         edges { node { id_usuario matricula nombre_completo } }
       }
     }
@@ -104,9 +115,9 @@ export const createModelo = async (clave_modelo, descrip_disp, clave_marca, tipo
 };
 
 export const saveAsset = async (isNew, assetData) => {
-  const { 
-    id_bien, num_serie, num_inv, estatus_operativo, clave_unidad_ref, 
-    clave_modelo, id_usuario_resguardo, id_segmento, id_ubicacion, fecha_adquisicion 
+  const {
+    id_bien, num_serie, num_inv, estatus_operativo, clave_unidad_ref,
+    clave_modelo, id_usuario_resguardo, id_segmento, id_ubicacion, fecha_adquisicion
   } = assetData;
 
   const N = (v) => v ? `"${v}"` : "null";
