@@ -12,7 +12,7 @@ import {
   getUserRole,
   procesarMonitoresEquipo
 } from './services/graphqlClient';
-import { LogOut, RefreshCcw, Save, Server, Monitor, HardDrive, Cpu, MapPin, Network, Activity, Plus, ChevronDown, ChevronUp } from 'lucide-react';
+import { LogOut, RefreshCcw, Save, Server, Monitor, HardDrive, Cpu, MapPin, Network, Activity, Plus, ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertTriangle, HelpCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 import SearchableSelect from './components/SearchableSelect';
 import { ModalUbicacion, ModalModeloMarca } from './components/Modals';
@@ -30,6 +30,35 @@ const initialFormState = {
 export default function Dashboard() {
   const navigate = useNavigate();
   const isElectron = typeof window !== 'undefined' && !!window.process?.versions?.electron;
+
+  const [alertState, setAlertState] = useState(null); // { type, title, message, onConfirm, onCancel }
+
+  const showAlert = (message, type = 'info', title = '') => {
+    return new Promise((resolve) => {
+      setAlertState({
+        type,
+        title: title || (type === 'success' ? 'Éxito' : type === 'error' ? 'Error' : type === 'confirm' ? 'Confirmación' : 'Información'),
+        message,
+        onConfirm: () => {
+          setAlertState(null);
+          resolve(true);
+        },
+        onCancel: type === 'confirm' ? () => {
+          setAlertState(null);
+          resolve(false);
+        } : null
+      });
+    });
+  };
+
+  useEffect(() => {
+    if (alertState && alertState.type !== 'confirm') {
+      const timer = setTimeout(() => {
+        alertState.onConfirm();
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [alertState]);
 
   // Catalogs
   const [catUnidades, setCatUnidades] = useState([]);
@@ -84,7 +113,7 @@ export default function Dashboard() {
       }
     } catch (err) {
       console.error(err);
-      alert('Error cargando catálogos principales.');
+      showAlert('Error cargando catálogos principales.', 'error');
     }
   };
 
@@ -144,8 +173,40 @@ export default function Dashboard() {
         }
         return newData;
       });
+
+      // Auto-buscar usuario de resguardo en BD
+      try {
+        let foundUsers = [];
+        const userPc = data.usuario_pc;
+        const mail = data.correos_usuario && data.correos_usuario[0];
+
+        if (userPc) {
+          foundUsers = await searchUsuarios(userPc);
+        }
+        if (foundUsers.length === 0 && mail) {
+          foundUsers = await searchUsuarios(mail);
+        }
+        if (foundUsers.length === 0 && userPc && userPc.includes('\\')) {
+          const simpleName = userPc.split('\\').pop();
+          if (simpleName) {
+            foundUsers = await searchUsuarios(simpleName);
+          }
+        }
+
+        if (foundUsers.length > 0) {
+          const matched = foundUsers[0];
+          setFormState(prev => ({
+            ...prev,
+            id_usuario_resguardo: matched.value,
+            nombre_usuario_resguardo: matched.label
+          }));
+        }
+      } catch (searchErr) {
+        console.error('Error auto-buscando usuario resguardo:', searchErr);
+      }
+
     } catch (err) {
-      alert('Error obteniendo WMI del backend C#. Asegúrate de que el backend C# esté corriendo.');
+      showAlert('Error obteniendo WMI del backend C#. Asegúrate de que el backend C# esté corriendo.', 'error');
     } finally {
       setLoadingAction(false);
     }
@@ -153,7 +214,7 @@ export default function Dashboard() {
 
   // Sync DB
   const syncDB = async () => {
-    if (!searchSerial) return alert('Ingresa un número de serie para buscar en la BD.');
+    if (!searchSerial) return showAlert('Ingresa un número de serie para buscar en la BD.', 'warning');
 
     setLoadingAction(true);
     try {
@@ -224,11 +285,19 @@ export default function Dashboard() {
             const pad = (n) => String(n).padStart(2, '0');
             return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
           })(),
-          monitores: (bien.monitores || []).map(bm => ({
-            num_serie: bm.monitor?.num_serie || '',
-            marca: bm.monitor?.modelo?.marca?.marca || '',
-            modelo: bm.monitor?.modelo?.descrip_disp || ''
-          }))
+          monitores: (bien.monitores || []).map(bm => {
+            const desc = bm.monitor?.modelo?.descrip_disp || '';
+            const marca = bm.monitor?.modelo?.marca?.marca || '';
+            let cleanMod = desc;
+            if (marca && desc.toLowerCase().startsWith(marca.toLowerCase())) {
+              cleanMod = desc.substring(marca.length).trim();
+            }
+            return {
+              num_serie: bm.monitor?.num_serie || '',
+              marca: marca,
+              modelo: cleanMod
+            };
+          })
         };
 
         setDbInfo(mergedObj);
@@ -244,19 +313,19 @@ export default function Dashboard() {
           return ns;
         });
       } else {
-        alert('Activo no encontrado en la BD. Rellene los campos para registrar uno nuevo.');
+        showAlert('Activo no encontrado en la BD. Rellene los campos para registrar uno nuevo.', 'info', 'No Encontrado');
         setDbInfo(null);
         setFormState(prev => ({ ...prev, id_bien: undefined }));
       }
     } catch (err) {
-      alert('Error conectando a GraphQL.');
+      showAlert('Error conectando a la base de datos (GraphQL).', 'error');
     } finally {
       setLoadingAction(false);
     }
   };
 
   const handleSave = async () => {
-    if (!formState.num_serie) return alert('El número de serie es obligatorio.');
+    if (!formState.num_serie) return showAlert('El número de serie es obligatorio.', 'warning');
 
     setLoadingAction(true);
     try {
@@ -272,8 +341,10 @@ export default function Dashboard() {
             const inv = c.num_inv_equipo_anterior ? `No. Inv: ${c.num_inv_equipo_anterior}` : '';
             return `• Monitor serie ${c.num_serie} ya está vinculado al equipo:\n   No. Serie equipo anterior: ${c.num_serie_equipo_anterior}${inv ? `\n   ${inv}` : ''}`;
           }).join('\n\n');
-          const confirmar = window.confirm(
-            `⚠️ Conflicto de monitores:\n\n${msgs}\n\n¿Deseas desvincular esos monitores de su equipo anterior y enlazarlos a este equipo?`
+          const confirmar = await showAlert(
+            `Conflicto de monitores:\n\n${msgs}\n\n¿Deseas desvincular esos monitores de su equipo anterior y enlazarlos a este equipo?`,
+            'confirm',
+            'Conflicto de Monitores'
           );
           if (confirmar) {
             await procesarMonitoresEquipo(idBien, monitores, true);
@@ -296,18 +367,17 @@ export default function Dashboard() {
 
         const dataToSave = { ...formState, id_bien: effectiveDbInfo?.id_bien, especificacionTI: formState };
         const finalIdBien = await saveAsset(effectiveIsNew, dataToSave);
-        alert('Guardado exitoso.');
-        setSearchSerial(formState.num_serie);
-        await syncDB();
+        const idBien = typeof finalIdBien === 'string' ? finalIdBien : effectiveDbInfo?.id_bien;
 
         // Procesar monitores WMI
         const monitores = formState.monitores || [];
-        if (monitores.length > 0) {
-          const idBien = typeof finalIdBien === 'string' ? finalIdBien : effectiveDbInfo?.id_bien;
-          if (idBien) {
-            await _procesarMonitoresFrontend(idBien, monitores, false);
-          }
+        if (monitores.length > 0 && idBien) {
+          await _procesarMonitoresFrontend(idBien, monitores, false);
         }
+
+        await showAlert('El activo y sus componentes han sido guardados exitosamente.', 'success', 'Guardado Exitoso');
+        setSearchSerial(formState.num_serie);
+        await syncDB();
       } else {
 
         // Roles 2, 3, 4 → solicitud de cambio
@@ -332,24 +402,24 @@ export default function Dashboard() {
               datosNuevos[key] = formState[key];
             }
           });
-          // Siempre incluir monitores en actualización (aunque no hayan cambiado)
-          if (formState.monitores && formState.monitores.length > 0) {
+          // Incluir monitores en actualización solo si realmente cambiaron
+          if (monitorsChanged) {
             datosNuevos.monitores = formState.monitores;
           }
         }
 
         if (Object.keys(datosNuevos).filter(k => k !== '_esCreacion').length === 0) {
-          alert('No se detectaron cambios para enviar.');
+          await showAlert('No se detectaron cambios en el formulario para enviar a revisión.', 'info', 'Sin Cambios');
           return;
         }
 
         const idBien = isNew ? crypto.randomUUID() : dbInfo.id_bien;
         await solicitarActualizacionBien(idBien, JSON.stringify(datosNuevos));
         setLastSubmitted(JSON.stringify(datosNuevos));
-        alert('Tus cambios han sido enviados a revisión y están pendientes de aprobación.');
+        await showAlert('Tus cambios han sido enviados a revisión y están pendientes de aprobación por parte de un administrador.', 'success', 'Enviado a revisión');
       }
     } catch (err) {
-      alert('Error guardando: ' + err.message);
+      await showAlert('Error al guardar: ' + err.message, 'error');
     } finally {
       setLoadingAction(false);
     }
@@ -416,7 +486,7 @@ export default function Dashboard() {
         style={{ WebkitAppRegion: 'drag' }}
       >
         <div className="flex items-center gap-4">
-          <img src="/IMSS_Logosímbolo_Blanco.png" alt="IMSS" className="h-5 w-5 object-contain" />
+          <img src="IMSS_Logosímbolo_Blanco.png" alt="IMSS" className="h-5 w-5 object-contain" />
           <span className="text-xs font-semibold tracking-wide">Gestor de Activos — IMSS</span>
           {dbInfo && dbInfo.id_bien && (
             <div 
@@ -698,6 +768,70 @@ export default function Dashboard() {
             setShowModalModelo(false);
           }}
         />
+      )}
+
+      {alertState && (
+        <div className="fixed top-14 right-4 z-50 animate-fade-in max-w-xs sm:max-w-sm w-full">
+          <div 
+            onClick={() => alertState.type !== 'confirm' && alertState.onConfirm()}
+            className={clsx(
+              "bg-white rounded-xl p-4 shadow-xl border border-gray-250 relative overflow-hidden transform scale-100 transition-all animate-scale-up select-none",
+              alertState.type !== 'confirm' && "cursor-pointer hover:bg-gray-50/80 active:scale-[0.99]"
+            )}
+          >
+            <div className="flex items-start gap-3">
+              <div className={clsx(
+                "p-2 rounded-full flex-shrink-0",
+                alertState.type === 'success' && "bg-green-50 text-green-600",
+                alertState.type === 'error' && "bg-red-50 text-red-600",
+                alertState.type === 'warning' && "bg-amber-50 text-amber-600",
+                alertState.type === 'confirm' && "bg-emerald-50 text-emerald-600",
+                alertState.type === 'info' && "bg-blue-50 text-blue-600"
+              )}>
+                {alertState.type === 'success' && <CheckCircle2 className="w-5 h-5" />}
+                {alertState.type === 'error' && <XCircle className="w-5 h-5" />}
+                {alertState.type === 'warning' && <AlertTriangle className="w-5 h-5" />}
+                {alertState.type === 'confirm' && <HelpCircle className="w-5 h-5" />}
+                {alertState.type === 'info' && <HelpCircle className="w-5 h-5" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-xs font-bold text-gray-900 mb-0.5">{alertState.title}</h3>
+                <p className="text-[11px] text-gray-600 whitespace-pre-line leading-relaxed">{alertState.message}</p>
+              </div>
+            </div>
+            {alertState.type === 'confirm' && (
+              <div className="mt-3 flex justify-end gap-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    alertState.onCancel();
+                  }}
+                  className="px-3 py-1 text-[10px] font-semibold text-gray-500 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    alertState.onConfirm();
+                  }}
+                  className="px-4 py-1 text-[10px] font-semibold text-white rounded-lg shadow-sm bg-[#006241] hover:bg-[#008F59] transition-colors cursor-pointer"
+                >
+                  Aceptar
+                </button>
+              </div>
+            )}
+            {alertState.type !== 'confirm' && (
+              <div className={clsx(
+                "absolute bottom-0 left-0 h-[3px] animate-shrink-width",
+                alertState.type === 'success' && "bg-green-600",
+                alertState.type === 'error' && "bg-red-600",
+                alertState.type === 'warning' && "bg-amber-600",
+                alertState.type === 'info' && "bg-[#006241]"
+              )} />
+            )}
+          </div>
+        </div>
       )}
 
     </div>

@@ -37,7 +37,7 @@ export default function Login() {
         className="bg-[#006241] h-11 w-full flex items-center px-4 select-none text-white text-xs font-semibold z-20"
         style={{ WebkitAppRegion: 'drag' }}
       >
-        <img src="/IMSS_Logosímbolo_Blanco.png" alt="IMSS" className="h-5 w-5 object-contain mr-2" />
+        <img src="IMSS_Logosímbolo_Blanco.png" alt="IMSS" className="h-5 w-5 object-contain mr-2" />
         <span>Gestor de Activos — IMSS</span>
       </div>
 
@@ -46,7 +46,7 @@ export default function Login() {
 
         <div className="w-full max-w-md bg-white rounded-3xl p-8 shadow-2xl relative z-10">
           <div className="flex flex-col items-center mb-10">
-            <img src="/imssFavicon.png" alt="IMSS Logo" className="w-20 h-20 object-contain mb-4" />
+            <img src="imssFavicon.png" alt="IMSS Logo" className="w-20 h-20 object-contain mb-4" />
             <h1 className="text-3xl font-bold text-[#333333] tracking-tight">Gestor de Activos</h1>
             <p className="text-[#757575] mt-2 text-sm uppercase tracking-widest font-medium">Hardware & Red — IMSS</p>
           </div>

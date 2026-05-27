@@ -45,6 +45,10 @@ namespace GestorActivosHardware.Services
             {
                 using (var identity = System.Security.Principal.WindowsIdentity.GetCurrent())
                 {
+                    if (identity != null && !string.IsNullOrEmpty(identity.Name))
+                    {
+                        info.usuario_pc = identity.Name;
+                    }
                     var principal = new System.Security.Principal.WindowsPrincipal(identity);
                     info.tipo_usuario_pc = principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator) 
                         ? "Administrador" 
@@ -53,33 +57,85 @@ namespace GestorActivosHardware.Services
             }
             catch { }
 
+            // 1. Intentar obtener correo desde Active Directory usando COM ADSystemInfo y ADSI
             try
             {
-                using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\IdentityCRL\UserExtendedProperties"))
+                var psi = new System.Diagnostics.ProcessStartInfo
                 {
-                    if (key != null)
-                    {
-                        info.correos_usuario.AddRange(key.GetSubKeyNames());
-                    }
-                }
-            }
-            catch { }
-
-            try
-            {
-                using (var searcher = new ManagementObjectSearcher(@"root\Microsoft\Windows\Defender", "SELECT AntivirusSignatureLastUpdated FROM MSFT_MpComputerStatus"))
+                    FileName = "powershell.exe",
+                    Arguments = "-NoProfile -Command \"$s = New-Object -ComObject ADSystemInfo; $u = $s.GetType().InvokeMember('UserName', 'GetProperty', $null, $s, $null); ([ADSI]('LDAP://' + $u)).mail\"",
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                using (var process = System.Diagnostics.Process.Start(psi))
                 {
-                    foreach (ManagementObject o in searcher.Get())
+                    if (process != null)
                     {
-                        var dateStr = o["AntivirusSignatureLastUpdated"]?.ToString();
-                        if (!string.IsNullOrEmpty(dateStr))
+                        string output = process.StandardOutput.ReadToEnd().Trim();
+                        if (!string.IsNullOrEmpty(output) && output.Contains("@"))
                         {
-                            info.fecha_act_antivirus = ManagementDateTimeConverter.ToDateTime(dateStr).ToString("yyyy-MM-dd HH:mm:ss");
+                            info.correos_usuario.Add(output);
                         }
                     }
                 }
             }
             catch { }
+
+            // 2. Si no se obtuvo correo de AD, intentar desde el Registro
+            if (info.correos_usuario.Count == 0)
+            {
+                try
+                {
+                    using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\IdentityCRL\UserExtendedProperties"))
+                    {
+                        if (key != null)
+                        {
+                            info.correos_usuario.AddRange(key.GetSubKeyNames());
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            try
+            {
+                using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows Defender\Signature Updates"))
+                {
+                    if (key != null)
+                    {
+                        var binaryData = key.GetValue("SignaturesLastUpdated") as byte[];
+                        if (binaryData != null && binaryData.Length >= 8)
+                        {
+                            long fileTime = BitConverter.ToInt64(binaryData, 0);
+                            if (fileTime > 0)
+                            {
+                                info.fecha_act_antivirus = DateTime.FromFileTime(fileTime).ToString("yyyy-MM-dd HH:mm:ss");
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            if (string.IsNullOrEmpty(info.fecha_act_antivirus))
+            {
+                try
+                {
+                    using (var searcher = new ManagementObjectSearcher(@"root\Microsoft\Windows\Defender", "SELECT AntivirusSignatureLastUpdated FROM MSFT_MpComputerStatus"))
+                    {
+                        foreach (ManagementObject o in searcher.Get())
+                        {
+                            var dateStr = o["AntivirusSignatureLastUpdated"]?.ToString();
+                            if (!string.IsNullOrEmpty(dateStr))
+                            {
+                                info.fecha_act_antivirus = ManagementDateTimeConverter.ToDateTime(dateStr).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
+                            }
+                        }
+                    }
+                }
+                catch { }
+            }
 
             try
             {
@@ -220,8 +276,13 @@ namespace GestorActivosHardware.Services
                                     if (c > 0 && c < 256) name += (char)c;
                                 string rawModelo = name.Trim();
 
-                                // Limpiar prefijo PNP en modelo
-                                if (!string.IsNullOrEmpty(rawMarca) && rawModelo.StartsWith(rawMarca, System.StringComparison.OrdinalIgnoreCase))
+                                // Limpiar prefijo PNP o comercial en modelo
+                                string cleanedMarca = mInfo.marca ?? rawMarca;
+                                if (!string.IsNullOrEmpty(cleanedMarca) && rawModelo.StartsWith(cleanedMarca, System.StringComparison.OrdinalIgnoreCase))
+                                {
+                                    rawModelo = rawModelo.Substring(cleanedMarca.Length).Trim();
+                                }
+                                else if (!string.IsNullOrEmpty(rawMarca) && rawModelo.StartsWith(rawMarca, System.StringComparison.OrdinalIgnoreCase))
                                 {
                                     rawModelo = rawModelo.Substring(rawMarca.Length).Trim();
                                 }
