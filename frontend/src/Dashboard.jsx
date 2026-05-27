@@ -100,14 +100,14 @@ export default function Dashboard() {
       const data = await getCatalogs();
       if (data) {
         if (data.segmentos) {
-          setCatUnidades(data.segmentos.map(s => ({ value: String(s.id_segmento), label: s.nombre })));
+          setCatUnidades(data.segmentos.map(s => ({ value: String(s.id_segmento), label: s.nombre, clave: s.clave })));
         }
         if (data.unidades) {
           setCatInmuebles(data.unidades.map(u => ({ value: u.clave, label: u.desc_corta || u.descripcion })));
         } else {
           setCatInmuebles([]);
         }
-        setCatModelos(data.catModelos.map(m => ({ value: m.clave_modelo, label: m.descrip_disp })));
+        setCatModelos(data.catModelos.filter(m => m.tipo_disp === 3 || m.tipo_disp === 4).map(m => ({ value: m.clave_modelo, label: m.descrip_disp })));
         setCatMarcas(data.marcas.map(m => ({ value: String(m.clave_marca), label: m.marca })));
         setCatTiposDisp(data.tiposDispositivo.map(t => ({ value: String(t.tipo_disp), label: t.nombre_tipo })));
       }
@@ -117,16 +117,23 @@ export default function Dashboard() {
     }
   };
 
-  // Watch Unidad Change -> Fetch Ubicaciones
+  // Watch Unidad Change -> Fetch Ubicaciones & Clear invalid Segmento
   useEffect(() => {
     if (formState.clave_unidad_ref) {
       getUbicacionesPorUnidad(formState.clave_unidad_ref).then(data => {
         setCatUbicaciones(data.map(u => ({ value: String(u.id_ubicacion), label: u.nombre_ubicacion })));
       });
+      if (formState.id_segmento) {
+        const currentSeg = catUnidades.find(s => String(s.value) === String(formState.id_segmento));
+        if (currentSeg && currentSeg.clave !== formState.clave_unidad_ref) {
+          updateForm('id_segmento', '');
+        }
+      }
     } else {
       setCatUbicaciones([]);
+      updateForm('id_segmento', '');
     }
-  }, [formState.clave_unidad_ref]);
+  }, [formState.clave_unidad_ref, catUnidades]);
 
   const updateForm = (key, value) => {
     setFormState(prev => ({ ...prev, [key]: value }));
@@ -440,6 +447,10 @@ export default function Dashboard() {
     return 'border-[#E0E0E0]';
   };
 
+  const filteredSegmentos = formState.clave_unidad_ref
+    ? catUnidades.filter(s => s.clave === formState.clave_unidad_ref)
+    : [];
+
   const isNew = !dbInfo || !dbInfo.id_bien;
   let currentDatosNuevos = {};
   if (isNew) {
@@ -610,6 +621,7 @@ export default function Dashboard() {
                         <option value="ACTIVO">Activo</option>
                         <option value="INACTIVO">Inactivo</option>
                         <option value="EN REPARACION">En Reparación</option>
+                        <option value="PRESTAMO">Préstamo</option>
                         <option value="BAJA">Baja</option>
                       </select>
                     </div>
@@ -617,11 +629,18 @@ export default function Dashboard() {
                     <div className="col-span-full border-t border-[#E0E0E0] my-1"></div>
 
                     <div className="w-full sm:col-span-2">
-                      <SearchableSelect label="Inmueble Físico" options={catInmuebles} value={formState.clave_unidad_ref} onChange={v => updateForm('clave_unidad_ref', v)} />
+                      <SearchableSelect label="Unidad" options={catInmuebles} value={formState.clave_unidad_ref} onChange={v => updateForm('clave_unidad_ref', v)} />
                     </div>
 
                     <div className="w-full sm:col-span-2">
-                      <SearchableSelect label="Unidad Operativa" options={catUnidades} value={formState.id_segmento} onChange={v => updateForm('id_segmento', v)} />
+                      <SearchableSelect 
+                        label="Segmento" 
+                        options={filteredSegmentos} 
+                        value={formState.id_segmento} 
+                        onChange={v => updateForm('id_segmento', v)} 
+                        disabled={!formState.clave_unidad_ref}
+                        placeholder={formState.clave_unidad_ref ? "Buscar segmento..." : "Seleccione unidad primero"}
+                      />
                     </div>
 
                     <div className="w-full sm:col-span-2">

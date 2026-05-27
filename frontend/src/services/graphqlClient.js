@@ -40,11 +40,11 @@ export const logout = () => localStorage.removeItem('jwtToken');
 export const getCatalogs = async () => {
   const query = `
     query {
-      catModelos { clave_modelo descrip_disp }
+      catModelos { clave_modelo descrip_disp tipo_disp }
       marcas { clave_marca marca }
       tiposDispositivo { tipo_disp nombre_tipo }
       unidades: catUnidades { clave descripcion desc_corta }
-      segmentos: catSegmentos { id_segmento nombre }
+      segmentos: catSegmentos { id_segmento nombre clave }
     }
   `;
   return await queryGraphQL(query);
