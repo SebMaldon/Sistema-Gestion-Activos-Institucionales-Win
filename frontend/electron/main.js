@@ -16,8 +16,8 @@ function createWindow() {
     minWidth: 1200,
     minHeight: 800,
     title: 'Gestor Activos - IMSS',
-    icon: !app.isPackaged 
-      ? path.join(__dirname, '../public/IMSS_Logosímbolo_Blanco.png') 
+    icon: !app.isPackaged
+      ? path.join(__dirname, '../public/IMSS_Logosímbolo_Blanco.png')
       : path.join(__dirname, '../dist/IMSS_Logosímbolo_Blanco.png'),
     titleBarStyle: 'hidden',
     titleBarOverlay: {

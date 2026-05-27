@@ -10,9 +10,11 @@ import {
   searchUsuarios,
   solicitarActualizacionBien,
   getUserRole,
-  procesarMonitoresEquipo
+  procesarMonitoresEquipo,
+  getNotasBien,
+  createNotaBien
 } from './services/graphqlClient';
-import { LogOut, RefreshCcw, Save, Server, Monitor, HardDrive, Cpu, MapPin, Network, Activity, Plus, ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertTriangle, HelpCircle, Search } from 'lucide-react';
+import { LogOut, RefreshCcw, Save, Server, Monitor, HardDrive, Cpu, MapPin, Network, Activity, Plus, ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertTriangle, HelpCircle, Search, MessageSquare } from 'lucide-react';
 import { clsx } from 'clsx';
 import SearchableSelect from './components/SearchableSelect';
 import { ModalUbicacion, ModalModeloMarca } from './components/Modals';
@@ -90,6 +92,11 @@ export default function Dashboard() {
   const [showModalUbicacion, setShowModalUbicacion] = useState(false);
   const [showModalModelo, setShowModalModelo] = useState(false);
 
+  // Notes state
+  const [notas, setNotas] = useState([]);
+  const [nuevaNota, setNuevaNota] = useState('');
+  const [loadingNotas, setLoadingNotas] = useState(false);
+
   // Load Catalogs on Mount
   useEffect(() => {
     loadAllCatalogs();
@@ -166,6 +173,7 @@ export default function Dashboard() {
       if (isDifferentMachine) {
         setSearchSerial(scannedSerial);
         setDbInfo(null);
+        setNotas([]);
       } else if (scannedSerial && !searchSerial) {
         setSearchSerial(scannedSerial);
       }
@@ -231,6 +239,37 @@ export default function Dashboard() {
 
     } catch (err) {
       showAlert('Error obteniendo WMI del backend C#. Asegúrate de que el backend C# esté corriendo.', 'error');
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
+  const fetchNotas = async (idBien) => {
+    try {
+      setLoadingNotas(true);
+      const data = await getNotasBien(idBien);
+      setNotas(data);
+    } catch (err) {
+      console.error('Error al cargar notas:', err);
+    } finally {
+      setLoadingNotas(false);
+    }
+  };
+
+  const handleAddNota = async () => {
+    if (!nuevaNota.trim()) return;
+    if (!formState.id_bien) {
+      showAlert('Guarde o busque el bien primero para poder agregar notas.', 'warning');
+      return;
+    }
+    try {
+      setLoadingAction(true);
+      await createNotaBien(formState.id_bien, nuevaNota.trim());
+      setNuevaNota('');
+      await fetchNotas(formState.id_bien);
+      showAlert('Nota agregada correctamente.', 'success');
+    } catch (err) {
+      showAlert('Error al agregar nota: ' + err.message, 'error');
     } finally {
       setLoadingAction(false);
     }
@@ -327,6 +366,7 @@ export default function Dashboard() {
 
         setDbInfo(mergedObj);
         setLastSubmitted(null);
+        fetchNotas(bien.id_bien);
 
         // Populate form but don't overwrite physical WMI fields if they differ
         setFormState(prev => {
@@ -340,6 +380,7 @@ export default function Dashboard() {
       } else {
         showAlert('Activo no encontrado en la BD. Rellene los campos para registrar uno nuevo.', 'info', 'No Encontrado');
         setDbInfo(null);
+        setNotas([]);
         setFormState(prev => ({ ...prev, id_bien: undefined }));
       }
     } catch (err) {
@@ -625,216 +666,253 @@ export default function Dashboard() {
 
               {/* Sección 1: Generales */}
               <section className="bg-white border border-[#E0E0E0] border-t-4 border-t-[#006241] rounded-2xl p-5 shadow-sm relative">
-                <div
-                  className="flex justify-between items-center mb-4 cursor-pointer select-none"
-                  onClick={() => toggleCollapse('generales')}
-                >
+                <div className="flex justify-between items-center mb-4 select-none">
                   <h2 className="text-lg font-bold flex items-center gap-2 text-[#333333]">
                     <HardDrive className="w-5 h-5 text-[#006241]" /> Datos Generales
                   </h2>
-                  {collapsed.generales ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronUp className="w-5 h-5 text-gray-400" />}
                 </div>
 
-                {!collapsed.generales && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <FieldInput label="No. Serie" val={formState.num_serie} onChange={v => updateForm('num_serie', v)} color={getBorderColor('num_serie')} readOnly={true} />
-                    <FieldInput label="No. Inventario" val={formState.num_inv} onChange={v => updateForm('num_inv', v)} color={getBorderColor('num_inv')} readOnly={true} />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <FieldInput label="No. Serie" val={formState.num_serie} onChange={v => updateForm('num_serie', v)} color={getBorderColor('num_serie')} readOnly={true} />
+                  <FieldInput label="No. Inventario" val={formState.num_inv} onChange={v => updateForm('num_inv', v)} color={getBorderColor('num_inv')} readOnly={true} />
 
-                    <div className="w-full sm:col-span-2">
-                      <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block mb-1">Estatus Operativo</label>
-                      <select
-                        value={formState.estatus_operativo}
-                        onChange={e => updateForm('estatus_operativo', e.target.value)}
-                        className={clsx("w-full bg-white text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]", getBorderColor('estatus_operativo'))}
-                      >
-                        <option value="ACTIVO">Activo</option>
-                        <option value="INACTIVO">Inactivo</option>
-                        <option value="EN REPARACION">En Reparación</option>
-                        <option value="PRESTAMO">Préstamo</option>
-                        <option value="BAJA">Baja</option>
-                      </select>
-                    </div>
-
-                    <div className="col-span-full border-t border-[#E0E0E0] my-1"></div>
-
-                    <div className="w-full sm:col-span-2">
-                      <SearchableSelect label="Unidad" options={catInmuebles} value={formState.clave_unidad_ref} onChange={v => updateForm('clave_unidad_ref', v)} />
-                    </div>
-
-                    <div className="w-full sm:col-span-2">
-                      <SearchableSelect 
-                        label="Segmento" 
-                        options={filteredSegmentos} 
-                        value={formState.id_segmento} 
-                        onChange={v => updateForm('id_segmento', v)} 
-                        disabled={!formState.clave_unidad_ref}
-                        placeholder={formState.clave_unidad_ref ? "Buscar segmento..." : "Seleccione unidad primero"}
-                      />
-                    </div>
-
-                    <div className="w-full sm:col-span-2">
-                      <SearchableSelect label="Ubicación Específica" options={catUbicaciones} value={formState.id_ubicacion} onChange={v => updateForm('id_ubicacion', v)} disabled={!formState.clave_unidad_ref} placeholder={formState.clave_unidad_ref ? "Buscar ubicación..." : "Seleccione unidad primero"} />
-                    </div>
-
-                    <div className="w-full sm:col-span-2">
-                      <SearchableSelect label="Modelo (PC)" options={catModelos} value={formState.clave_modelo} onChange={v => updateForm('clave_modelo', v)} />
-                    </div>
-
-                    <div className="col-span-full border-t border-[#E0E0E0] my-2"></div>
-
-                    <div className="col-span-full flex justify-between items-center">
-                      <h3 className="text-sm font-bold text-[#333333]">Monitores Físicos Conectados</h3>
-                      {formState.tipo_equipo && (
-                        <span className="text-[10px] font-bold bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded-full border border-blue-200">
-                          Detectado: {formState.tipo_equipo}
-                        </span>
-                      )}
-                    </div>
-
-                    {(!formState.monitores || formState.monitores.length === 0) && (
-                      <div className="col-span-full text-xs text-gray-500 italic p-3 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-center">
-                        No se detectaron monitores externos.
-                      </div>
-                    )}
-
-                    {formState.monitores && formState.monitores.map((mon, idx) => (
-                      <div key={idx} className="col-span-full grid grid-cols-1 sm:grid-cols-3 gap-3 bg-gray-50 p-3 rounded-xl border border-gray-200">
-                        <FieldInput label={`Monitor ${idx + 1} - Marca`} val={mon.marca} readOnly={true} />
-                        <FieldInput label={`Monitor ${idx + 1} - Modelo`} val={mon.modelo} readOnly={true} />
-                        <FieldInput label={`Monitor ${idx + 1} - No. Serie`} val={mon.num_serie} readOnly={true} />
-                      </div>
-                    ))}
+                  <div className="w-full sm:col-span-2">
+                    <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block mb-1">Estatus Operativo</label>
+                    <select
+                      value={formState.estatus_operativo}
+                      onChange={e => updateForm('estatus_operativo', e.target.value)}
+                      className={clsx("w-full bg-white text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]", getBorderColor('estatus_operativo'))}
+                    >
+                      <option value="ACTIVO">Activo</option>
+                      <option value="INACTIVO">Inactivo</option>
+                      <option value="EN REPARACION">En Reparación</option>
+                      <option value="PRESTAMO">Préstamo</option>
+                      <option value="BAJA">Baja</option>
+                    </select>
                   </div>
-                )}
+
+                  <div className="col-span-full border-t border-[#E0E0E0] my-1"></div>
+
+                  <div className="w-full sm:col-span-2">
+                    <SearchableSelect label="Unidad" options={catInmuebles} value={formState.clave_unidad_ref} onChange={v => updateForm('clave_unidad_ref', v)} />
+                  </div>
+
+                  <div className="w-full sm:col-span-2">
+                    <SearchableSelect 
+                      label="Segmento" 
+                      options={filteredSegmentos} 
+                      value={formState.id_segmento} 
+                      onChange={v => updateForm('id_segmento', v)} 
+                      disabled={!formState.clave_unidad_ref}
+                      placeholder={formState.clave_unidad_ref ? "Buscar segmento..." : "Seleccione unidad primero"}
+                    />
+                  </div>
+
+                  <div className="w-full sm:col-span-2">
+                    <SearchableSelect label="Ubicación Específica" options={catUbicaciones} value={formState.id_ubicacion} onChange={v => updateForm('id_ubicacion', v)} disabled={!formState.clave_unidad_ref} placeholder={formState.clave_unidad_ref ? "Buscar ubicación..." : "Seleccione unidad primero"} />
+                  </div>
+
+                  <div className="w-full sm:col-span-2">
+                    <SearchableSelect label="Modelo (PC)" options={catModelos} value={formState.clave_modelo} onChange={v => updateForm('clave_modelo', v)} />
+                  </div>
+
+                  <div className="col-span-full border-t border-[#E0E0E0] my-2"></div>
+
+                  <div className="col-span-full flex justify-between items-center">
+                    <h3 className="text-sm font-bold text-[#333333]">Monitores Físicos Conectados</h3>
+                    {formState.tipo_equipo && (
+                      <span className="text-[10px] font-bold bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded-full border border-blue-200">
+                        Detectado: {formState.tipo_equipo}
+                      </span>
+                    )}
+                  </div>
+
+                  {(!formState.monitores || formState.monitores.length === 0) && (
+                    <div className="col-span-full text-xs text-gray-500 italic p-3 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-center">
+                      No se detectaron monitores externos.
+                    </div>
+                  )}
+
+                  {formState.monitores && formState.monitores.map((mon, idx) => (
+                    <div key={idx} className="col-span-full grid grid-cols-1 sm:grid-cols-3 gap-3 bg-gray-50 p-3 rounded-xl border border-gray-200">
+                      <FieldInput label={`Monitor ${idx + 1} - Marca`} val={mon.marca} readOnly={true} />
+                      <FieldInput label={`Monitor ${idx + 1} - Modelo`} val={mon.modelo} readOnly={true} />
+                      <FieldInput label={`Monitor ${idx + 1} - No. Serie`} val={mon.num_serie} readOnly={true} />
+                    </div>
+                  ))}
+                </div>
               </section>
 
               {/* Sección 2: Especificaciones */}
               <section className="bg-white border border-[#E0E0E0] border-t-4 border-t-[#008F59] rounded-2xl p-5 shadow-sm relative">
-                <div
-                  className="flex justify-between items-center mb-4 cursor-pointer select-none"
-                  onClick={() => toggleCollapse('especificaciones')}
-                >
+                <div className="flex justify-between items-center mb-4 select-none">
                   <h2 className="text-lg font-bold flex items-center gap-2 text-[#333333]">
                     <Cpu className="w-5 h-5 text-[#008F59]" /> Especificaciones de Hardware & Red
                   </h2>
-                  {collapsed.especificaciones ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronUp className="w-5 h-5 text-gray-400" />}
                 </div>
 
-                {!collapsed.especificaciones && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <FieldInput label="Nombre de Host (PC)" val={formState.nombre_host} onChange={v => updateForm('nombre_host', v)} color={getBorderColor('nombre_host')} readOnly={true} />
-                    <FieldInput label="Serial SO (Windows)" val={formState.windows_serial} onChange={v => updateForm('windows_serial', v)} color={getBorderColor('windows_serial')} readOnly={true} />
-                    <FieldInput label="Sistema Operativo" val={formState.modelo_so} onChange={v => updateForm('modelo_so', v)} color={getBorderColor('modelo_so')} readOnly={true} />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <FieldInput label="Nombre de Host (PC)" val={formState.nombre_host} onChange={v => updateForm('nombre_host', v)} color={getBorderColor('nombre_host')} readOnly={true} />
+                  <FieldInput label="Serial SO (Windows)" val={formState.windows_serial} onChange={v => updateForm('windows_serial', v)} color={getBorderColor('windows_serial')} readOnly={true} />
+                  <FieldInput label="Sistema Operativo" val={formState.modelo_so} onChange={v => updateForm('modelo_so', v)} color={getBorderColor('modelo_so')} readOnly={true} />
 
-                    <div className="sm:col-span-2">
-                      <FieldInput label="Procesador (CPU)" val={formState.cpu_info} onChange={v => updateForm('cpu_info', v)} color={getBorderColor('cpu_info')} readOnly={true} />
-                    </div>
+                  <div className="sm:col-span-2">
+                    <FieldInput label="Procesador (CPU)" val={formState.cpu_info} onChange={v => updateForm('cpu_info', v)} color={getBorderColor('cpu_info')} readOnly={true} />
+                  </div>
 
-                    <FieldInput label="Memoria RAM (GB)" val={formState.ram_gb} onChange={v => updateForm('ram_gb', v)} color={getBorderColor('ram_gb')} type="number" readOnly={true} />
-                    <FieldInput label="Almacenamiento (GB)" val={formState.almacenamiento_gb} onChange={v => updateForm('almacenamiento_gb', v)} color={getBorderColor('almacenamiento_gb')} type="number" readOnly={true} />
-                    
-                    <div className="w-full flex flex-col">
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block">
-                          Dirección IPv4
-                        </label>
-                        {((formState.dir_ip_list?.length > 0) ? formState.dir_ip_list : [{ ip: '' }]).length < 3 && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const arr = ((formState.dir_ip_list?.length > 0) ? formState.dir_ip_list : [{ ip: '' }]);
-                              updateForm('dir_ip_list', [...arr, { ip: '' }]);
-                            }}
-                            className="flex items-center gap-1 text-[10px] text-[#006241] font-bold hover:underline"
-                          >
-                            <Plus className="w-3 h-3" /> Agregar
-                          </button>
-                        )}
-                      </div>
-                      <datalist id="wmi-adapters-list">
-                        {(wmiInfo?.adaptadores_red || []).map((a, i) => (
-                          <option key={i} value={a.ip}>{a.descripcion}</option>
-                        ))}
-                      </datalist>
-                      <div className="space-y-2">
-                        {((formState.dir_ip_list?.length > 0) ? formState.dir_ip_list : [{ ip: '' }]).map((item, idx, arr) => (
-                          <div key={idx} className="flex items-center gap-2 w-full">
-                            <input
-                              type="text"
-                              list="wmi-adapters-list"
-                              value={item.ip}
-                              onChange={(e) => {
-                                const newList = [...((formState.dir_ip_list?.length > 0) ? formState.dir_ip_list : [{ ip: '' }])];
-                                newList[idx].ip = e.target.value;
-                                updateForm('dir_ip_list', newList);
-                              }}
-                              className={clsx("flex-1 min-w-0 bg-white text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]", getBorderColor('dir_ip'))}
-                              placeholder="Ej. 192.168.1.5"
-                            />
-                            {arr.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const newList = arr.filter((_, i) => i !== idx);
-                                  updateForm('dir_ip_list', newList);
-                                }}
-                                className="flex-shrink-0 w-9 h-9 flex items-center justify-center border border-red-200 rounded-xl hover:bg-red-50 text-red-500 bg-white shadow-sm transition-colors"
-                              >
-                                <XCircle className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    <FieldInput label="Dirección MAC" val={formState.mac_address} onChange={v => updateForm('mac_address', v)} color={getBorderColor('mac_address')} readOnly={true} />
-                    <FieldInput label="Puerto / Nodo Red" val={formState.puerto_red} onChange={v => updateForm('puerto_red', v)} color={getBorderColor('puerto_red')} />
-                    <FieldInput label="Switch Conectado" val={formState.switch_red} onChange={v => updateForm('switch_red', v)} color={getBorderColor('switch_red')} />
-
-                    <div className="col-span-full border-t border-[#E0E0E0] my-2"></div>
-
-                    <div className="w-full sm:col-span-2">
-                      <SearchableSelect
-                        label="Usuario a Resguardo"
-                        options={formState.id_usuario_resguardo ? [{ value: formState.id_usuario_resguardo, label: formState.nombre_usuario_resguardo || `Usuario ID: ${formState.id_usuario_resguardo}` }] : []}
-                        asyncSearch={searchUsuarios}
-                        value={formState.id_usuario_resguardo}
-                        onChange={(v, opt) => {
-                          updateForm('id_usuario_resguardo', v);
-                          let nameToSave = opt?.label || '';
-                          if (nameToSave.includes('(')) {
-                            nameToSave = nameToSave.split(' (')[0].trim();
-                          }
-                          updateForm('nombre_usuario_resguardo', nameToSave);
-                        }}
-                      />
-                    </div>
-
-                    <div className="w-full sm:col-span-2">
-                      <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block mb-1">Correo Electrónico (Windows)</label>
-                      {formState.correos_usuario && formState.correos_usuario.length > 1 ? (
-                        <select
-                          value={formState.correo_usuario || ''}
-                          onChange={e => updateForm('correo_usuario', e.target.value)}
-                          className={clsx("w-full bg-white text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]", getBorderColor('correo_usuario'))}
+                  <FieldInput label="Memoria RAM (GB)" val={formState.ram_gb} onChange={v => updateForm('ram_gb', v)} color={getBorderColor('ram_gb')} type="number" readOnly={true} />
+                  <FieldInput label="Almacenamiento (GB)" val={formState.almacenamiento_gb} onChange={v => updateForm('almacenamiento_gb', v)} color={getBorderColor('almacenamiento_gb')} type="number" readOnly={true} />
+                  
+                  <div className="w-full flex flex-col">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block">
+                        Dirección IPv4
+                      </label>
+                      {((formState.dir_ip_list?.length > 0) ? formState.dir_ip_list : [{ ip: '' }]).length < 3 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const arr = ((formState.dir_ip_list?.length > 0) ? formState.dir_ip_list : [{ ip: '' }]);
+                            updateForm('dir_ip_list', [...arr, { ip: '' }]);
+                          }}
+                          className="flex items-center gap-1 text-[10px] text-[#006241] font-bold hover:underline"
                         >
-                          <option value="">-- Seleccione un correo --</option>
-                          {formState.correos_usuario.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                      ) : (
-                        <input
-                          type="text"
-                          value={formState.correo_usuario || (formState.correos_usuario && formState.correos_usuario[0]) || ''}
-                          onChange={e => updateForm('correo_usuario', e.target.value)}
-                          className={clsx("w-full bg-white text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]", getBorderColor('correo_usuario'))}
-                        />
+                          <Plus className="w-3 h-3" /> Agregar
+                        </button>
                       )}
                     </div>
-
+                    <datalist id="wmi-adapters-list">
+                      {(wmiInfo?.adaptadores_red || []).map((a, i) => (
+                        <option key={i} value={a.ip}>{a.descripcion}</option>
+                      ))}
+                    </datalist>
+                    <div className="space-y-2">
+                      {((formState.dir_ip_list?.length > 0) ? formState.dir_ip_list : [{ ip: '' }]).map((item, idx, arr) => (
+                        <div key={idx} className="flex items-center gap-2 w-full">
+                          <input
+                            type="text"
+                            list="wmi-adapters-list"
+                            value={item.ip}
+                            onChange={(e) => {
+                              const newList = [...((formState.dir_ip_list?.length > 0) ? formState.dir_ip_list : [{ ip: '' }])];
+                              newList[idx].ip = e.target.value;
+                              updateForm('dir_ip_list', newList);
+                            }}
+                            className={clsx("flex-1 min-w-0 bg-white text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]", getBorderColor('dir_ip'))}
+                            placeholder="Ej. 192.168.1.5"
+                          />
+                          {arr.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newList = arr.filter((_, i) => i !== idx);
+                                updateForm('dir_ip_list', newList);
+                              }}
+                              className="flex-shrink-0 w-9 h-9 flex items-center justify-center border border-red-200 rounded-xl hover:bg-red-50 text-red-500 bg-white shadow-sm transition-colors"
+                            >
+                              <XCircle className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                )}
+                  
+                  <FieldInput label="Dirección MAC" val={formState.mac_address} onChange={v => updateForm('mac_address', v)} color={getBorderColor('mac_address')} readOnly={true} />
+                  <FieldInput label="Puerto / Nodo Red" val={formState.puerto_red} onChange={v => updateForm('puerto_red', v)} color={getBorderColor('puerto_red')} />
+                  <FieldInput label="Switch Conectado" val={formState.switch_red} onChange={v => updateForm('switch_red', v)} color={getBorderColor('switch_red')} />
+
+                  <div className="col-span-full border-t border-[#E0E0E0] my-2"></div>
+
+                  <div className="w-full sm:col-span-2">
+                    <SearchableSelect
+                      label="Usuario a Resguardo"
+                      options={formState.id_usuario_resguardo ? [{ value: formState.id_usuario_resguardo, label: formState.nombre_usuario_resguardo || `Usuario ID: ${formState.id_usuario_resguardo}` }] : []}
+                      asyncSearch={searchUsuarios}
+                      value={formState.id_usuario_resguardo}
+                      onChange={(v, opt) => {
+                        updateForm('id_usuario_resguardo', v);
+                        let nameToSave = opt?.label || '';
+                        if (nameToSave.includes('(')) {
+                          nameToSave = nameToSave.split(' (')[0].trim();
+                        }
+                        updateForm('nombre_usuario_resguardo', nameToSave);
+                      }}
+                    />
+                  </div>
+
+                  <div className="w-full sm:col-span-2">
+                    <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block mb-1">Correo Electrónico (Windows)</label>
+                    {formState.correos_usuario && formState.correos_usuario.length > 1 ? (
+                      <select
+                        value={formState.correo_usuario || ''}
+                        onChange={e => updateForm('correo_usuario', e.target.value)}
+                        className={clsx("w-full bg-white text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]", getBorderColor('correo_usuario'))}
+                      >
+                        <option value="">-- Seleccione un correo --</option>
+                        {formState.correos_usuario.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={formState.correo_usuario || (formState.correos_usuario && formState.correos_usuario[0]) || ''}
+                        onChange={e => updateForm('correo_usuario', e.target.value)}
+                        className={clsx("w-full bg-white text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]", getBorderColor('correo_usuario'))}
+                      />
+                    )}
+                  </div>
+
+                </div>
               </section>
+
+              {/* Sección 3: Notas de Seguimiento */}
+              {formState.id_bien && (
+                <section className="lg:col-span-2 bg-white border border-[#E0E0E0] border-t-4 border-t-[#006241] rounded-2xl p-5 shadow-sm">
+                  <h2 className="text-lg font-bold flex items-center gap-2 text-[#333333] mb-4">
+                    <MessageSquare className="w-5 h-5 text-[#006241]" /> Notas de Seguimiento
+                  </h2>
+                  
+                  {/* Formulario para nueva nota */}
+                  <div className="flex flex-col sm:flex-row gap-3 mb-5">
+                    <input
+                      type="text"
+                      value={nuevaNota}
+                      onChange={e => setNuevaNota(e.target.value)}
+                      placeholder="Escribe una nueva nota sobre este bien..."
+                      className="flex-1 bg-white text-[#333333] rounded-xl py-2 px-3 border border-[#E0E0E0] shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-600 text-sm"
+                      onKeyDown={e => e.key === 'Enter' && handleAddNota()}
+                    />
+                    <button
+                      onClick={handleAddNota}
+                      disabled={loadingAction || !nuevaNota.trim()}
+                      className="bg-[#006241] hover:bg-[#008F59] text-white font-bold py-2.5 px-5 rounded-xl flex items-center justify-center gap-2 transition-colors disabled:opacity-50 text-sm shadow-sm"
+                    >
+                      <Plus className="w-4 h-4" /> Agregar Nota
+                    </button>
+                  </div>
+
+                  {/* Lista de notas */}
+                  {loadingNotas ? (
+                    <div className="text-center py-4 text-sm text-gray-500 animate-pulse">Cargando notas...</div>
+                  ) : notas.length === 0 ? (
+                    <div className="text-center py-6 text-xs text-gray-500 italic bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                      No hay notas registradas para este bien.
+                    </div>
+                  ) : (
+                    <div className="space-y-3 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
+                      {notas.map(nota => (
+                        <div key={nota.id_nota} className="bg-gray-50 border border-gray-200 p-3 rounded-xl flex flex-col gap-1.5 hover:bg-gray-100/50 transition-colors">
+                          <div className="flex justify-between items-center text-[10px] text-gray-500 font-semibold">
+                            <span className="text-[#006241]">{nota.usuarioAutor ? `${nota.usuarioAutor.matricula} - ${nota.usuarioAutor.nombre_completo}` : 'Usuario desconocido'}</span>
+                            <span>{new Date(isNaN(Number(nota.fecha_creacion)) ? nota.fecha_creacion : Number(nota.fecha_creacion)).toLocaleString()}</span>
+                          </div>
+                          <p className="text-xs text-gray-800 whitespace-pre-line font-medium">{nota.contenido_nota}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
 
             </div>
           </div>

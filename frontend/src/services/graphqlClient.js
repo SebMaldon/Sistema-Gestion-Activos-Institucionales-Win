@@ -237,3 +237,40 @@ export const procesarMonitoresEquipo = async (idBienPc, monitores, forzar = fals
   const data = await queryGraphQL(query, { idBienPc, monitores, forzar });
   return data?.procesarMonitoresEquipo ?? { ok: false, conflictos: [] };
 };
+
+export const getNotasBien = async (idBien) => {
+  const query = `
+    query($idBien: ID!) {
+      notasBien(id_bien: $idBien) {
+        id_nota
+        contenido_nota
+        fecha_creacion
+        usuarioAutor {
+          nombre_completo
+          matricula
+        }
+      }
+    }
+  `;
+  const data = await queryGraphQL(query, { idBien });
+  return data?.notasBien || [];
+};
+
+export const createNotaBien = async (idBien, contenidoNota) => {
+  const query = `
+    mutation($idBien: ID!, $contenidoNota: String!) {
+      createNotaBien(id_bien: $idBien, contenido_nota: $contenidoNota) {
+        id_nota
+        contenido_nota
+        fecha_creacion
+        usuarioAutor {
+          nombre_completo
+          matricula
+        }
+      }
+    }
+  `;
+  const data = await queryGraphQL(query, { idBien, contenido_nota: contenidoNota });
+  return data?.createNotaBien;
+};
+
