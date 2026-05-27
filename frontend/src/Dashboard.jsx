@@ -12,7 +12,7 @@ import {
   getUserRole,
   procesarMonitoresEquipo
 } from './services/graphqlClient';
-import { LogOut, RefreshCcw, Save, Server, Monitor, HardDrive, Cpu, MapPin, Network, Activity, Plus, ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertTriangle, HelpCircle } from 'lucide-react';
+import { LogOut, RefreshCcw, Save, Server, Monitor, HardDrive, Cpu, MapPin, Network, Activity, Plus, ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertTriangle, HelpCircle, Search } from 'lucide-react';
 import { clsx } from 'clsx';
 import SearchableSelect from './components/SearchableSelect';
 import { ModalUbicacion, ModalModeloMarca } from './components/Modals';
@@ -22,7 +22,7 @@ const initialFormState = {
   clave_unidad_ref: '', clave_modelo: '', id_usuario_resguardo: '',
   id_segmento: '', id_ubicacion: '', fecha_adquisicion: '',
   nombre_host: '', windows_serial: '', cpu_info: '', ram_gb: '', almacenamiento_gb: '',
-  mac_address: '', dir_ip: '', puerto_red: '', switch_red: '', modelo_so: '',
+  mac_address: '', dir_ip: '', dir_ip_list: [], puerto_red: '', switch_red: '', modelo_so: '',
   fecha_act_antivirus: '', correo_usuario: '', correos_usuario: [], usuario_pc: '', tipo_usuario_pc: '', fecha_actualizacion: '',
   tipo_equipo: '', monitores: []
 };
@@ -93,6 +93,15 @@ export default function Dashboard() {
   // Load Catalogs on Mount
   useEffect(() => {
     loadAllCatalogs();
+
+    // Fetch local serial quietly on startup to populate search bar
+    fetchHardwareInfo()
+      .then(data => {
+        if (data && data.num_serie) {
+          setSearchSerial(prev => prev || data.num_serie);
+        }
+      })
+      .catch(err => console.log('Silent WMI fetch failed on startup', err));
   }, []);
 
   const loadAllCatalogs = async () => {
@@ -178,6 +187,14 @@ export default function Dashboard() {
         } else {
           newData.correo_usuario = baseState.correo_usuario;
         }
+
+        if (data.adaptadores_red && data.adaptadores_red.length > 0) {
+          newData.dir_ip_list = data.adaptadores_red.slice(0, 3).map(a => ({ ip: a.ip, adapter: a.descripcion }));
+          newData.dir_ip = newData.dir_ip_list.map(a => a.ip).join('/');
+        } else if (data.dir_ip) {
+          newData.dir_ip_list = [{ ip: data.dir_ip, adapter: 'WMI' }];
+        }
+
         return newData;
       });
 
@@ -279,6 +296,7 @@ export default function Dashboard() {
           almacenamiento_gb: esp.almacenamiento_gb ? String(esp.almacenamiento_gb) : '',
           mac_address: esp.mac_address || '',
           dir_ip: esp.dir_ip || '',
+          dir_ip_list: (esp.dir_ip || '').split('/').filter(Boolean).map(ip => ({ ip, adapter: 'BD' })),
           puerto_red: esp.puerto_red || '',
           switch_red: esp.switch_red || '',
           modelo_so: esp.modelo_so || '',
@@ -372,7 +390,8 @@ export default function Dashboard() {
           }
         }
 
-        const dataToSave = { ...formState, id_bien: effectiveDbInfo?.id_bien, especificacionTI: formState };
+        const dirIpString = (formState.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean).join('/');
+        const dataToSave = { ...formState, id_bien: effectiveDbInfo?.id_bien, dir_ip: dirIpString, especificacionTI: { ...formState, dir_ip: dirIpString } };
         const finalIdBien = await saveAsset(effectiveIsNew, dataToSave);
         const idBien = typeof finalIdBien === 'string' ? finalIdBien : effectiveDbInfo?.id_bien;
 
@@ -413,6 +432,11 @@ export default function Dashboard() {
           if (monitorsChanged) {
             datosNuevos.monitores = formState.monitores;
           }
+        }
+
+        if (datosNuevos.dir_ip_list) {
+            datosNuevos.dir_ip = (formState.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean).join('/');
+            delete datosNuevos.dir_ip_list;
         }
 
         if (Object.keys(datosNuevos).filter(k => k !== '_esCreacion').length === 0) {
@@ -516,33 +540,34 @@ export default function Dashboard() {
             </div>
           )}
         </div>
-        <div 
-          className={clsx("flex items-center", isElectron && "pr-[140px]")} 
-          style={{ WebkitAppRegion: 'no-drag' }}
-        >
-          <div className="flex items-center bg-white/10 rounded-xl px-2 py-0.5 border border-white/20 focus-within:bg-white/20 transition-colors">
-            <input
-              type="text"
-              value={searchSerial}
-              onChange={(e) => setSearchSerial(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && syncDB()}
-              className="bg-transparent border-none text-white px-2 py-0.5 w-44 focus:outline-none text-xs placeholder-white/70"
-              placeholder="Buscar Serial..."
-            />
-            <button
-              onClick={syncDB}
-              disabled={loadingAction}
-              className="p-1 hover:bg-white/20 rounded-lg transition-colors text-white/80 hover:text-white"
-            >
-              <RefreshCcw className={clsx("w-3.5 h-3.5", loadingAction && "animate-spin")} />
-            </button>
-          </div>
-        </div>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar Actions */}
         <aside className="w-64 bg-white border-r border-[#E0E0E0] p-6 flex flex-col gap-4 shadow-sm z-10">
+          
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-bold text-[#757575] uppercase tracking-wider">Buscar Equipo (N/S)</label>
+            <div className="flex items-center bg-[#F9FAFB] rounded-xl px-2 py-1.5 border border-[#E0E0E0] focus-within:border-[#006241] focus-within:ring-1 focus-within:ring-[#006241] transition-all">
+              <input
+                type="text"
+                value={searchSerial}
+                onChange={(e) => setSearchSerial(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && syncDB()}
+                className="bg-transparent border-none text-[#333333] px-2 py-1 w-full focus:outline-none text-sm placeholder-gray-400"
+                placeholder="Buscar Serial..."
+              />
+              <button
+                onClick={syncDB}
+                disabled={loadingAction}
+                title="Buscar en Base de Datos"
+                className="p-1.5 hover:bg-[#E0E0E0] rounded-lg transition-colors text-[#757575] hover:text-[#006241]"
+              >
+                <Search className={clsx("w-4 h-4", loadingAction && "animate-pulse text-[#006241]")} />
+              </button>
+            </div>
+          </div>
+
           <button onClick={loadWMI} disabled={loadingAction} className="bg-[#006241] hover:bg-[#008F59] text-white py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-colors disabled:opacity-50 shadow-sm">
             <Monitor className="w-5 h-5" /> Cargar Datos Locales (WMI)
           </button>
@@ -564,6 +589,10 @@ export default function Dashboard() {
               <div>
                 <span className="text-[#757575] font-semibold block uppercase text-[10px]">Últ. Antivirus</span>
                 <span className="text-[#333333] font-medium block truncate" title={formState.fecha_act_antivirus}>{formState.fecha_act_antivirus || '—'}</span>
+              </div>
+              <div>
+                <span className="text-[#757575] font-semibold block uppercase text-[10px]">Fecha Adquisición</span>
+                <span className="text-[#333333] font-medium block truncate" title={formState.fecha_adquisicion}>{formState.fecha_adquisicion || '—'}</span>
               </div>
             </div>
           </div>
@@ -609,7 +638,7 @@ export default function Dashboard() {
                 {!collapsed.generales && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <FieldInput label="No. Serie" val={formState.num_serie} onChange={v => updateForm('num_serie', v)} color={getBorderColor('num_serie')} readOnly={true} />
-                    <FieldInput label="No. Inventario" val={formState.num_inv} onChange={v => updateForm('num_inv', v)} color={getBorderColor('num_inv')} />
+                    <FieldInput label="No. Inventario" val={formState.num_inv} onChange={v => updateForm('num_inv', v)} color={getBorderColor('num_inv')} readOnly={true} />
 
                     <div className="w-full sm:col-span-2">
                       <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block mb-1">Estatus Operativo</label>
@@ -651,6 +680,120 @@ export default function Dashboard() {
                       <SearchableSelect label="Modelo (PC)" options={catModelos} value={formState.clave_modelo} onChange={v => updateForm('clave_modelo', v)} />
                     </div>
 
+                    <div className="col-span-full border-t border-[#E0E0E0] my-2"></div>
+
+                    <div className="col-span-full flex justify-between items-center">
+                      <h3 className="text-sm font-bold text-[#333333]">Monitores Físicos Conectados</h3>
+                      {formState.tipo_equipo && (
+                        <span className="text-[10px] font-bold bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded-full border border-blue-200">
+                          Detectado: {formState.tipo_equipo}
+                        </span>
+                      )}
+                    </div>
+
+                    {(!formState.monitores || formState.monitores.length === 0) && (
+                      <div className="col-span-full text-xs text-gray-500 italic p-3 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-center">
+                        No se detectaron monitores externos.
+                      </div>
+                    )}
+
+                    {formState.monitores && formState.monitores.map((mon, idx) => (
+                      <div key={idx} className="col-span-full grid grid-cols-1 sm:grid-cols-3 gap-3 bg-gray-50 p-3 rounded-xl border border-gray-200">
+                        <FieldInput label={`Monitor ${idx + 1} - Marca`} val={mon.marca} readOnly={true} />
+                        <FieldInput label={`Monitor ${idx + 1} - Modelo`} val={mon.modelo} readOnly={true} />
+                        <FieldInput label={`Monitor ${idx + 1} - No. Serie`} val={mon.num_serie} readOnly={true} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              {/* Sección 2: Especificaciones */}
+              <section className="bg-white border border-[#E0E0E0] border-t-4 border-t-[#008F59] rounded-2xl p-5 shadow-sm relative">
+                <div
+                  className="flex justify-between items-center mb-4 cursor-pointer select-none"
+                  onClick={() => toggleCollapse('especificaciones')}
+                >
+                  <h2 className="text-lg font-bold flex items-center gap-2 text-[#333333]">
+                    <Cpu className="w-5 h-5 text-[#008F59]" /> Especificaciones de Hardware & Red
+                  </h2>
+                  {collapsed.especificaciones ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronUp className="w-5 h-5 text-gray-400" />}
+                </div>
+
+                {!collapsed.especificaciones && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <FieldInput label="Nombre de Host (PC)" val={formState.nombre_host} onChange={v => updateForm('nombre_host', v)} color={getBorderColor('nombre_host')} readOnly={true} />
+                    <FieldInput label="Serial SO (Windows)" val={formState.windows_serial} onChange={v => updateForm('windows_serial', v)} color={getBorderColor('windows_serial')} readOnly={true} />
+                    <FieldInput label="Sistema Operativo" val={formState.modelo_so} onChange={v => updateForm('modelo_so', v)} color={getBorderColor('modelo_so')} readOnly={true} />
+
+                    <div className="sm:col-span-2">
+                      <FieldInput label="Procesador (CPU)" val={formState.cpu_info} onChange={v => updateForm('cpu_info', v)} color={getBorderColor('cpu_info')} readOnly={true} />
+                    </div>
+
+                    <FieldInput label="Memoria RAM (GB)" val={formState.ram_gb} onChange={v => updateForm('ram_gb', v)} color={getBorderColor('ram_gb')} type="number" readOnly={true} />
+                    <FieldInput label="Almacenamiento (GB)" val={formState.almacenamiento_gb} onChange={v => updateForm('almacenamiento_gb', v)} color={getBorderColor('almacenamiento_gb')} type="number" readOnly={true} />
+                    
+                    <div className="w-full flex flex-col">
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block">
+                          Dirección IPv4
+                        </label>
+                        {((formState.dir_ip_list?.length > 0) ? formState.dir_ip_list : [{ ip: '' }]).length < 3 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const arr = ((formState.dir_ip_list?.length > 0) ? formState.dir_ip_list : [{ ip: '' }]);
+                              updateForm('dir_ip_list', [...arr, { ip: '' }]);
+                            }}
+                            className="flex items-center gap-1 text-[10px] text-[#006241] font-bold hover:underline"
+                          >
+                            <Plus className="w-3 h-3" /> Agregar
+                          </button>
+                        )}
+                      </div>
+                      <datalist id="wmi-adapters-list">
+                        {(wmiInfo?.adaptadores_red || []).map((a, i) => (
+                          <option key={i} value={a.ip}>{a.descripcion}</option>
+                        ))}
+                      </datalist>
+                      <div className="space-y-2">
+                        {((formState.dir_ip_list?.length > 0) ? formState.dir_ip_list : [{ ip: '' }]).map((item, idx, arr) => (
+                          <div key={idx} className="flex items-center gap-2 w-full">
+                            <input
+                              type="text"
+                              list="wmi-adapters-list"
+                              value={item.ip}
+                              onChange={(e) => {
+                                const newList = [...((formState.dir_ip_list?.length > 0) ? formState.dir_ip_list : [{ ip: '' }])];
+                                newList[idx].ip = e.target.value;
+                                updateForm('dir_ip_list', newList);
+                              }}
+                              className={clsx("flex-1 min-w-0 bg-white text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]", getBorderColor('dir_ip'))}
+                              placeholder="Ej. 192.168.1.5"
+                            />
+                            {arr.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newList = arr.filter((_, i) => i !== idx);
+                                  updateForm('dir_ip_list', newList);
+                                }}
+                                className="flex-shrink-0 w-9 h-9 flex items-center justify-center border border-red-200 rounded-xl hover:bg-red-50 text-red-500 bg-white shadow-sm transition-colors"
+                              >
+                                <XCircle className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    <FieldInput label="Dirección MAC" val={formState.mac_address} onChange={v => updateForm('mac_address', v)} color={getBorderColor('mac_address')} readOnly={true} />
+                    <FieldInput label="Puerto / Nodo Red" val={formState.puerto_red} onChange={v => updateForm('puerto_red', v)} color={getBorderColor('puerto_red')} />
+                    <FieldInput label="Switch Conectado" val={formState.switch_red} onChange={v => updateForm('switch_red', v)} color={getBorderColor('switch_red')} />
+
+                    <div className="col-span-full border-t border-[#E0E0E0] my-2"></div>
+
                     <div className="w-full sm:col-span-2">
                       <SearchableSelect
                         label="Usuario a Resguardo"
@@ -689,67 +832,6 @@ export default function Dashboard() {
                       )}
                     </div>
 
-                    <div className="w-full sm:col-span-2">
-                      <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block mb-1">Fecha Adquisición</label>
-                      <input type="date" value={formState.fecha_adquisicion} disabled className={clsx("w-full bg-gray-50 text-gray-500 cursor-not-allowed rounded-xl py-2 px-3 border shadow-sm focus:outline-none", getBorderColor('fecha_adquisicion'))} />
-                    </div>
-                  </div>
-                )}
-              </section>
-
-              {/* Sección 2: Especificaciones */}
-              <section className="bg-white border border-[#E0E0E0] border-t-4 border-t-[#008F59] rounded-2xl p-5 shadow-sm relative">
-                <div
-                  className="flex justify-between items-center mb-4 cursor-pointer select-none"
-                  onClick={() => toggleCollapse('especificaciones')}
-                >
-                  <h2 className="text-lg font-bold flex items-center gap-2 text-[#333333]">
-                    <Cpu className="w-5 h-5 text-[#008F59]" /> Especificaciones de Hardware & Red
-                  </h2>
-                  {collapsed.especificaciones ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronUp className="w-5 h-5 text-gray-400" />}
-                </div>
-
-                {!collapsed.especificaciones && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <FieldInput label="Nombre de Host (PC)" val={formState.nombre_host} onChange={v => updateForm('nombre_host', v)} color={getBorderColor('nombre_host')} readOnly={true} />
-                    <FieldInput label="Serial SO (Windows)" val={formState.windows_serial} onChange={v => updateForm('windows_serial', v)} color={getBorderColor('windows_serial')} readOnly={true} />
-                    <FieldInput label="Sistema Operativo" val={formState.modelo_so} onChange={v => updateForm('modelo_so', v)} color={getBorderColor('modelo_so')} readOnly={true} />
-
-                    <div className="sm:col-span-2">
-                      <FieldInput label="Procesador (CPU)" val={formState.cpu_info} onChange={v => updateForm('cpu_info', v)} color={getBorderColor('cpu_info')} readOnly={true} />
-                    </div>
-
-                    <FieldInput label="Memoria RAM (GB)" val={formState.ram_gb} onChange={v => updateForm('ram_gb', v)} color={getBorderColor('ram_gb')} type="number" readOnly={true} />
-                    <FieldInput label="Almacenamiento (GB)" val={formState.almacenamiento_gb} onChange={v => updateForm('almacenamiento_gb', v)} color={getBorderColor('almacenamiento_gb')} type="number" readOnly={true} />
-                    <FieldInput label="Dirección IPv4" val={formState.dir_ip} onChange={v => updateForm('dir_ip', v)} color={getBorderColor('dir_ip')} readOnly={true} />
-                    <FieldInput label="Dirección MAC" val={formState.mac_address} onChange={v => updateForm('mac_address', v)} color={getBorderColor('mac_address')} readOnly={true} />
-                    <FieldInput label="Puerto / Nodo Red" val={formState.puerto_red} onChange={v => updateForm('puerto_red', v)} color={getBorderColor('puerto_red')} />
-                    <FieldInput label="Switch Conectado" val={formState.switch_red} onChange={v => updateForm('switch_red', v)} color={getBorderColor('switch_red')} />
-
-                    <div className="col-span-full border-t border-[#E0E0E0] my-2"></div>
-
-                    <div className="col-span-full flex justify-between items-center">
-                      <h3 className="text-sm font-bold text-[#333333]">Monitores Físicos Conectados</h3>
-                      {formState.tipo_equipo && (
-                        <span className="text-[10px] font-bold bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded-full border border-blue-200">
-                          Detectado: {formState.tipo_equipo}
-                        </span>
-                      )}
-                    </div>
-
-                    {(!formState.monitores || formState.monitores.length === 0) && (
-                      <div className="col-span-full text-xs text-gray-500 italic p-3 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-center">
-                        No se detectaron monitores externos.
-                      </div>
-                    )}
-
-                    {formState.monitores && formState.monitores.map((mon, idx) => (
-                      <div key={idx} className="col-span-full grid grid-cols-1 sm:grid-cols-3 gap-3 bg-gray-50 p-3 rounded-xl border border-gray-200">
-                        <FieldInput label={`Monitor ${idx + 1} - Marca`} val={mon.marca} readOnly={true} />
-                        <FieldInput label={`Monitor ${idx + 1} - Modelo`} val={mon.modelo} readOnly={true} />
-                        <FieldInput label={`Monitor ${idx + 1} - No. Serie`} val={mon.num_serie} readOnly={true} />
-                      </div>
-                    ))}
                   </div>
                 )}
               </section>
