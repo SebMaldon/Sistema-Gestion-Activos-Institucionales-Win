@@ -10,6 +10,12 @@ namespace GestorActivosHardware.Services
         public string num_serie { get; set; } = "";
     }
 
+    public class NetworkAdapterInfo
+    {
+        public string descripcion { get; set; } = "";
+        public string ip { get; set; } = "";
+    }
+
     public class HardwareInfo
     {
         public string nom_pc { get; set; } = "";
@@ -29,6 +35,7 @@ namespace GestorActivosHardware.Services
         
         public string tipo_equipo { get; set; } = "";
         public System.Collections.Generic.List<MonitorInfo> monitores { get; set; } = new System.Collections.Generic.List<MonitorInfo>();
+        public System.Collections.Generic.List<NetworkAdapterInfo> adaptadores_red { get; set; } = new System.Collections.Generic.List<NetworkAdapterInfo>();
     }
 
     public static class WmiService
@@ -143,11 +150,22 @@ namespace GestorActivosHardware.Services
                     foreach (ManagementObject o in searcher.Get())
                         info.num_serie = o["SerialNumber"]?.ToString()?.Trim() ?? "";
 
-                using (var searcher = new ManagementObjectSearcher("SELECT IPAddress,MACAddress FROM Win32_NetworkAdapterConfiguration WHERE IPEnabled='TRUE'"))
+                using (var searcher = new ManagementObjectSearcher("SELECT Description, IPAddress, MACAddress FROM Win32_NetworkAdapterConfiguration WHERE IPEnabled='TRUE'"))
                     foreach (ManagementObject o in searcher.Get())
                     {
-                        if (o["IPAddress"] is string[] ips && ips.Length > 0 && string.IsNullOrEmpty(info.dir_ip))
-                            info.dir_ip = ips[0];
+                        if (o["IPAddress"] is string[] ips && ips.Length > 0)
+                        {
+                            string desc = o["Description"]?.ToString() ?? "";
+                            foreach (var ip in ips)
+                            {
+                                if (System.Net.IPAddress.TryParse(ip, out var parsedIp) && parsedIp.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                                {
+                                    info.adaptadores_red.Add(new NetworkAdapterInfo { descripcion = desc, ip = ip });
+                                }
+                            }
+                            if (string.IsNullOrEmpty(info.dir_ip))
+                                info.dir_ip = ips[0];
+                        }
                         if (string.IsNullOrEmpty(info.mac_address))
                             info.mac_address = o["MACAddress"]?.ToString() ?? "";
                     }
