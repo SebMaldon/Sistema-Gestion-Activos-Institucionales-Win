@@ -206,36 +206,7 @@ export default function Dashboard() {
         return newData;
       });
 
-      // Auto-buscar usuario de resguardo en BD
-      try {
-        let foundUsers = [];
-        const userPc = data.usuario_pc;
-        const mail = data.correos_usuario && data.correos_usuario[0];
 
-        if (userPc) {
-          foundUsers = await searchUsuarios(userPc);
-        }
-        if (foundUsers.length === 0 && mail) {
-          foundUsers = await searchUsuarios(mail);
-        }
-        if (foundUsers.length === 0 && userPc && userPc.includes('\\')) {
-          const simpleName = userPc.split('\\').pop();
-          if (simpleName) {
-            foundUsers = await searchUsuarios(simpleName);
-          }
-        }
-
-        if (foundUsers.length > 0) {
-          const matched = foundUsers[0];
-          setFormState(prev => ({
-            ...prev,
-            id_usuario_resguardo: matched.value,
-            nombre_usuario_resguardo: matched.label
-          }));
-        }
-      } catch (searchErr) {
-        console.error('Error auto-buscando usuario resguardo:', searchErr);
-      }
 
     } catch (err) {
       showAlert('Error obteniendo WMI del backend C#. Asegúrate de que el backend C# esté corriendo.', 'error');
