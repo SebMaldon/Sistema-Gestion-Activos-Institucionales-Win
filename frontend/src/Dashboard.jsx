@@ -25,8 +25,8 @@ const initialFormState = {
   id_segmento: '', id_ubicacion: '', fecha_adquisicion: '',
   nombre_host: '', windows_serial: '', cpu_info: '', ram_gb: '', almacenamiento_gb: '',
   mac_address: '', dir_ip: '', dir_ip_list: [], puerto_red: '', switch_red: '', modelo_so: '',
-  fecha_act_antivirus: '', correo_usuario: '', correos_usuario: [], usuario_pc: '', tipo_usuario_pc: '', fecha_actualizacion: '',
-  tipo_equipo: '', monitores: []
+  fecha_act_antivirus: '', fecha_actualizacion: '',
+  tipo_equipo: '', monitores: [], cuentasList: []
 };
 
 export default function Dashboard() {
@@ -78,6 +78,7 @@ export default function Dashboard() {
 
   const [searchSerial, setSearchSerial] = useState('');
   const [loadingAction, setLoadingAction] = useState(false);
+  const [selectedCuentaIdx, setSelectedCuentaIdx] = useState(0);
 
   const [collapsed, setCollapsed] = useState({
     generales: false,
@@ -183,17 +184,26 @@ export default function Dashboard() {
         const baseState = isDifferentMachine ? initialFormState : prev;
         const newData = { ...baseState, ...data };
 
-        if (data.nom_pc) {
-          newData.nombre_host = data.nom_pc;
-          delete newData.nom_pc;
-        }
         if (data.windows_serial || data.serial_number) {
           newData.windows_serial = data.windows_serial || data.serial_number;
         }
-        if (data.correos_usuario && data.correos_usuario.length > 0) {
-          newData.correo_usuario = data.correos_usuario[0];
-        } else {
-          newData.correo_usuario = baseState.correo_usuario;
+
+        if (data.nom_pc) {
+          newData.nombre_host = data.nom_pc;
+        }
+
+        // Cuentas PC desde WMI
+        if (data.usuario_pc || data.tipo_usuario_pc || (data.correos_usuario && data.correos_usuario.length > 0)) {
+          // Checar si ya hay una cuenta para no duplicarla
+          const isExisting = (newData.cuentasList || []).find(c => c.cuenta_windows === data.usuario_pc);
+          if (!isExisting) {
+            newData.cuentasList = [...(newData.cuentasList || []), {
+              _new: true, _editing: false,
+              cuenta_windows: data.usuario_pc || '',
+              correo: (data.correos_usuario && data.correos_usuario.length > 0) ? data.correos_usuario[0] : '',
+              tipo_user: data.tipo_usuario_pc || ''
+            }];
+          }
         }
 
         if (data.adaptadores_red && data.adaptadores_red.length > 0) {
@@ -255,7 +265,7 @@ export default function Dashboard() {
       const query = `
         query {
           bienByTermino(termino: "${searchSerial}") {
-            id_bien num_inv estatus_operativo clave_unidad_ref clave_modelo 
+            id_bien num_serie num_inv estatus_operativo clave_unidad_ref clave_modelo 
             id_usuario_resguardo id_segmento id_ubicacion fecha_adquisicion fecha_actualizacion
             usuarioResguardo {
               matricula
@@ -263,7 +273,10 @@ export default function Dashboard() {
             }
             especificacionTI {
               nombre_host windows_serial cpu_info ram_gb almacenamiento_gb mac_address dir_ip puerto_red switch_red modelo_so
-              cuenta_windows correo tipo_user last_scan
+              last_scan
+            }
+            cuentasPC {
+              id_cuenta cuenta_windows correo tipo_user
             }
             monitores {
               monitor {
@@ -286,7 +299,7 @@ export default function Dashboard() {
 
         const mergedObj = {
           id_bien: bien.id_bien,
-          num_serie: searchSerial,
+          num_serie: bien.num_serie || searchSerial,
           num_inv: bien.num_inv || '',
           estatus_operativo: bien.estatus_operativo || 'ACTIVO',
           clave_unidad_ref: bien.clave_unidad_ref || '',
@@ -310,9 +323,13 @@ export default function Dashboard() {
           puerto_red: esp.puerto_red || '',
           switch_red: esp.switch_red || '',
           modelo_so: esp.modelo_so || '',
-          usuario_pc: esp.cuenta_windows || '',
-          correo_usuario: esp.correo || '',
-          tipo_usuario_pc: esp.tipo_user || '',
+          cuentasList: (bien.cuentasPC || []).map(c => ({
+            id_cuenta: c.id_cuenta,
+            cuenta_windows: c.cuenta_windows || '',
+            correo: c.correo || '',
+            tipo_user: c.tipo_user || '',
+            _editing: false
+          })),
           fecha_act_antivirus: (() => {
             if (!esp.last_scan) return '';
             const d = new Date(isNaN(Number(esp.last_scan)) ? esp.last_scan : Number(esp.last_scan));
@@ -591,14 +608,6 @@ export default function Dashboard() {
             </p>
             <div className="space-y-2 text-xs">
               <div>
-                <span className="text-[#757575] font-semibold block uppercase text-[10px]">Usuario PC</span>
-                <span className="text-[#333333] font-medium block truncate" title={formState.usuario_pc}>{formState.usuario_pc || '—'}</span>
-              </div>
-              <div>
-                <span className="text-[#757575] font-semibold block uppercase text-[10px]">Tipo Usuario</span>
-                <span className="text-[#333333] font-medium block truncate" title={formState.tipo_usuario_pc}>{formState.tipo_usuario_pc || '—'}</span>
-              </div>
-              <div>
                 <span className="text-[#757575] font-semibold block uppercase text-[10px]">Últ. Antivirus</span>
                 <span className="text-[#333333] font-medium block truncate" title={formState.fecha_act_antivirus}>{formState.fecha_act_antivirus || '—'}</span>
               </div>
@@ -608,6 +617,43 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+
+          {/* Cuentas PC (Tarjetas) */}
+          {formState.cuentasList && formState.cuentasList.length > 0 && (
+            <div className="space-y-2">
+              {formState.cuentasList.map((c, i) => {
+                const isExpanded = selectedCuentaIdx === i;
+                return (
+                  <div key={i} className="border border-[#E0E0E0] rounded-xl overflow-hidden bg-[#F9FAFB] shadow-sm">
+                    <button 
+                      onClick={() => setSelectedCuentaIdx(isExpanded ? -1 : i)}
+                      className="w-full text-left px-3 py-2 hover:bg-gray-100 flex items-center justify-between"
+                    >
+                      <div className="overflow-hidden">
+                        <span className="text-[#006241] font-bold block uppercase text-[9px] leading-tight">Cuenta de Usuario PC {i > 0 ? i+1 : ''}</span>
+                        <span className="text-[#333333] font-bold block truncate text-xs mt-0.5">{c.cuenta_windows || '—'}</span>
+                      </div>
+                      {isExpanded ? <ChevronUp className="w-4 h-4 text-[#757575] flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-[#757575] flex-shrink-0" />}
+                    </button>
+                    {isExpanded && (
+                      <div className="p-3 bg-white border-t border-[#E0E0E0] space-y-2.5">
+                        <div>
+                          <span className="text-[#757575] font-semibold block uppercase text-[9px] leading-tight">Tipo Usuario</span>
+                          <span className="text-[#333333] font-medium block truncate text-[11px] mt-0.5" title={c.tipo_user}>{c.tipo_user || '—'}</span>
+                        </div>
+                        {c.correo && (
+                          <div>
+                            <span className="text-[#757575] font-semibold block uppercase text-[9px] leading-tight">Correo</span>
+                            <span className="text-[#333333] font-medium block text-[11px] mt-0.5 break-all" title={c.correo}>{c.correo}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Simbología (pushes itself and elements below to the bottom) */}
           <div className="mt-auto p-4 bg-[#F9FAFB] rounded-xl border border-[#E0E0E0]">
@@ -814,28 +860,6 @@ export default function Dashboard() {
                       }}
                     />
                   </div>
-
-                  <div className="w-full sm:col-span-2">
-                    <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block mb-1">Correo Electrónico (Windows)</label>
-                    {formState.correos_usuario && formState.correos_usuario.length > 1 ? (
-                      <select
-                        value={formState.correo_usuario || ''}
-                        onChange={e => updateForm('correo_usuario', e.target.value)}
-                        className={clsx("w-full bg-white text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]", getBorderColor('correo_usuario'))}
-                      >
-                        <option value="">-- Seleccione un correo --</option>
-                        {formState.correos_usuario.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    ) : (
-                      <input
-                        type="text"
-                        value={formState.correo_usuario || (formState.correos_usuario && formState.correos_usuario[0]) || ''}
-                        onChange={e => updateForm('correo_usuario', e.target.value)}
-                        className={clsx("w-full bg-white text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]", getBorderColor('correo_usuario'))}
-                      />
-                    )}
-                  </div>
-
                 </div>
               </section>
 

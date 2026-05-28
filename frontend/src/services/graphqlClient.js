@@ -153,25 +153,6 @@ export const saveAsset = async (isNew, assetData) => {
     ) { id_bien } }
   `;
 
-  const mutSpec = `
-    mutation { upsertEspecificacionTI(
-      id_bien: "${id_bien}"
-      cpu_info: ${N(assetData.cpu_info)}
-      ram_gb: ${I(assetData.ram_gb)}
-      almacenamiento_gb: ${I(assetData.almacenamiento_gb)}
-      mac_address: ${N(assetData.mac_address)}
-      dir_ip: ${N(assetData.dir_ip)}
-      puerto_red: ${N(assetData.puerto_red)}
-      switch_red: ${N(assetData.switch_red)}
-      modelo_so: ${N(assetData.modelo_so)}
-      cuenta_windows: ${N(assetData.usuario_pc)}
-      correo: ${N(assetData.correo_usuario)}
-      tipo_user: ${N(assetData.tipo_usuario_pc)}
-      last_scan: ${N(assetData.fecha_act_antivirus)}
-      nombre_host: ${N(assetData.nombre_host)}
-      windows_serial: ${N(assetData.windows_serial)}
-    ) { id_bien } }
-  `;
 
   const finalIdBien = isNew ? (await queryGraphQL(mutCreate)).createBien.id_bien : (await queryGraphQL(mutUpdate)).updateBien.id_bien;
 
@@ -187,16 +168,51 @@ export const saveAsset = async (isNew, assetData) => {
         puerto_red: ${N(assetData.puerto_red)}
         switch_red: ${N(assetData.switch_red)}
         modelo_so: ${N(assetData.modelo_so)}
-        cuenta_windows: ${N(assetData.usuario_pc)}
-        correo: ${N(assetData.correo_usuario)}
-        tipo_user: ${N(assetData.tipo_usuario_pc)}
         last_scan: ${N(assetData.fecha_act_antivirus)}
-        nombre_host: ${N(assetData.nombre_host)}
         windows_serial: ${N(assetData.windows_serial)}
+        nombre_host: ${N(assetData.nombre_host)}
       ) { id_bien } }
     `);
   }
+
+  // Guardar Cuentas PC (1:N)
+  if (assetData.cuentasList && assetData.cuentasList.length > 0) {
+    for (const c of assetData.cuentasList) {
+      if (c.id_cuenta && !c._new) {
+        await queryGraphQL(`
+          mutation {
+            updateCuentaPC(
+              id_cuenta: "${c.id_cuenta}"
+              data: {
+                cuenta_windows: ${N(c.cuenta_windows)}
+                correo: ${N(c.correo)}
+                tipo_user: ${N(c.tipo_user)}
+              }
+            ) { id_cuenta }
+          }
+        `);
+      } else {
+        await queryGraphQL(`
+          mutation {
+            createCuentaPC(
+              id_bien: "${finalIdBien}"
+              data: {
+                cuenta_windows: ${N(c.cuenta_windows)}
+                correo: ${N(c.correo)}
+                tipo_user: ${N(c.tipo_user)}
+              }
+            ) { id_cuenta }
+          }
+        `);
+      }
+    }
+  }
+
   return finalIdBien;
+};
+
+export const deleteCuentaPC = async (id_cuenta) => {
+  return await queryGraphQL(`mutation { deleteCuentaPC(id_cuenta: "${id_cuenta}") }`);
 };
 
 export const solicitarActualizacionBien = async (idBien, datosNuevosJSON) => {
