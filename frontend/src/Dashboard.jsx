@@ -254,7 +254,7 @@ export default function Dashboard() {
     try {
       const query = `
         query {
-          bienByNumSerie(num_serie: "${searchSerial}") {
+          bienByTermino(termino: "${searchSerial}") {
             id_bien num_inv estatus_operativo clave_unidad_ref clave_modelo 
             id_usuario_resguardo id_segmento id_ubicacion fecha_adquisicion fecha_actualizacion
             usuarioResguardo {
@@ -280,8 +280,8 @@ export default function Dashboard() {
         }
       `;
       const data = await queryGraphQL(query);
-      if (data && data.bienByNumSerie) {
-        const bien = data.bienByNumSerie;
+      if (data && data.bienByTermino) {
+        const bien = data.bienByTermino;
         const esp = bien.especificacionTI || {};
 
         const mergedObj = {
@@ -705,10 +705,13 @@ export default function Dashboard() {
                   )}
 
                   {formState.monitores && formState.monitores.map((mon, idx) => (
-                    <div key={idx} className="col-span-full grid grid-cols-1 sm:grid-cols-3 gap-3 bg-gray-50 p-3 rounded-xl border border-gray-200">
-                      <FieldInput label={`Monitor ${idx + 1} - Marca`} val={mon.marca} readOnly={true} />
-                      <FieldInput label={`Monitor ${idx + 1} - Modelo`} val={mon.modelo} readOnly={true} />
-                      <FieldInput label={`Monitor ${idx + 1} - No. Serie`} val={mon.num_serie} readOnly={true} />
+                    <div key={idx} className="col-span-full bg-gray-50 p-4 rounded-xl border border-gray-200 flex flex-col gap-3">
+                      <h4 className="text-xs font-bold text-[#006241] uppercase tracking-widest border-b border-gray-200 pb-1">Monitor {idx + 1}</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <FieldInput label="Marca" val={mon.marca} readOnly={true} />
+                        <FieldInput label="Modelo" val={mon.modelo} readOnly={true} />
+                        <FieldInput label="No. Serie" val={mon.num_serie} readOnly={true} />
+                      </div>
                     </div>
                   ))}
                 </div>
