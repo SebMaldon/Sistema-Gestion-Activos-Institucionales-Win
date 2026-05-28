@@ -270,7 +270,7 @@ export const createNotaBien = async (idBien, contenidoNota) => {
       }
     }
   `;
-  const data = await queryGraphQL(query, { idBien, contenido_nota: contenidoNota });
+  const data = await queryGraphQL(query, { idBien, contenidoNota });
   return data?.createNotaBien;
 };
 
