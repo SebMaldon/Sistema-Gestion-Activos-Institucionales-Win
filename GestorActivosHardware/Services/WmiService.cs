@@ -16,6 +16,13 @@ namespace GestorActivosHardware.Services
         public string ip { get; set; } = "";
     }
 
+    public class CuentaInfo
+    {
+        public string cuenta_windows { get; set; } = "";
+        public string tipo_user { get; set; } = "";
+        public string correo { get; set; } = "";
+    }
+
     public class HardwareInfo
     {
         public string nom_pc { get; set; } = "";
@@ -36,6 +43,7 @@ namespace GestorActivosHardware.Services
         public string tipo_equipo { get; set; } = "";
         public System.Collections.Generic.List<MonitorInfo> monitores { get; set; } = new System.Collections.Generic.List<MonitorInfo>();
         public System.Collections.Generic.List<NetworkAdapterInfo> adaptadores_red { get; set; } = new System.Collections.Generic.List<NetworkAdapterInfo>();
+        public System.Collections.Generic.List<CuentaInfo> cuentasList { get; set; } = new System.Collections.Generic.List<CuentaInfo>();
     }
 
     public static class WmiService
@@ -325,6 +333,56 @@ namespace GestorActivosHardware.Services
                 {
                     Console.WriteLine($"Error retrieving Monitor info: {ex.Message}");
                 }
+
+                // Obtener todas las cuentas locales
+                System.Collections.Generic.HashSet<string> admins = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+                try {
+                    using (var searcher = new ManagementObjectSearcher("SELECT PartComponent FROM Win32_GroupUser WHERE GroupComponent = \"Win32_Group.Domain='" + Environment.MachineName + "',Name='Administradores'\" OR GroupComponent = \"Win32_Group.Domain='" + Environment.MachineName + "',Name='Administrators'\""))
+                    {
+                        foreach (ManagementObject o in searcher.Get())
+                        {
+                            string part = o["PartComponent"]?.ToString() ?? "";
+                            int nameIndex = part.IndexOf("Name=\"");
+                            if (nameIndex >= 0)
+                            {
+                                int endIndex = part.IndexOf("\"", nameIndex + 6);
+                                if (endIndex >= 0)
+                                {
+                                    string name = part.Substring(nameIndex + 6, endIndex - nameIndex - 6);
+                                    admins.Add(name);
+                                }
+                            }
+                        }
+                    }
+                } catch {}
+
+                try {
+                    using (var searcher = new ManagementObjectSearcher("SELECT Name, Domain FROM Win32_UserAccount WHERE LocalAccount=True"))
+                    {
+                        foreach (ManagementObject o in searcher.Get())
+                        {
+                            string name = o["Name"]?.ToString() ?? "";
+                            string domain = o["Domain"]?.ToString() ?? "";
+                            if (!string.IsNullOrEmpty(name))
+                            {
+                                string fullName = domain + "\\\\" + name;
+                                string tipo = admins.Contains(name) ? "Administrador" : "Avanzado";
+                                
+                                string correo = "";
+                                if (name.Equals(Environment.UserName, StringComparison.OrdinalIgnoreCase) && info.correos_usuario.Count > 0)
+                                {
+                                    correo = info.correos_usuario[0];
+                                }
+
+                                info.cuentasList.Add(new CuentaInfo {
+                                    cuenta_windows = fullName,
+                                    tipo_user = tipo,
+                                    correo = correo
+                                });
+                            }
+                        }
+                    }
+                } catch {}
 
             }
             catch (Exception ex)

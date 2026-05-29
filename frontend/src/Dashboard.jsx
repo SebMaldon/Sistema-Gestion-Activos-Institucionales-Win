@@ -193,8 +193,30 @@ export default function Dashboard() {
         }
 
         // Cuentas PC desde WMI
-        if (data.usuario_pc || data.tipo_usuario_pc || (data.correos_usuario && data.correos_usuario.length > 0)) {
-          // Checar si ya hay una cuenta para no duplicarla
+        if (data.cuentasList && data.cuentasList.length > 0) {
+          const currentCuentas = [...(newData.cuentasList || [])];
+          
+          data.cuentasList.forEach(wmiCuenta => {
+            let existingIdx = currentCuentas.findIndex(c => c.cuenta_windows === wmiCuenta.cuenta_windows);
+            if (existingIdx === -1) {
+              currentCuentas.push({
+                _new: true, _editing: false,
+                cuenta_windows: wmiCuenta.cuenta_windows || '',
+                correo: wmiCuenta.correo || '',
+                tipo_user: wmiCuenta.tipo_user || ''
+              });
+            } else {
+              if (!currentCuentas[existingIdx].correo && wmiCuenta.correo) {
+                currentCuentas[existingIdx].correo = wmiCuenta.correo;
+              }
+              if (!currentCuentas[existingIdx].tipo_user && wmiCuenta.tipo_user) {
+                currentCuentas[existingIdx].tipo_user = wmiCuenta.tipo_user;
+              }
+            }
+          });
+          newData.cuentasList = currentCuentas;
+        } else if (data.usuario_pc || data.tipo_usuario_pc || (data.correos_usuario && data.correos_usuario.length > 0)) {
+          // Fallback por si la nueva propiedad cuentasList no está
           let existingIdx = (newData.cuentasList || []).findIndex(c => c.cuenta_windows === data.usuario_pc);
           
           if (existingIdx === -1) {
@@ -205,7 +227,6 @@ export default function Dashboard() {
               tipo_user: data.tipo_usuario_pc || ''
             }];
           } else {
-            // Actualizar cuenta existente si le faltan datos
             const updatedCuentas = [...newData.cuentasList];
             let changed = false;
             if (!updatedCuentas[existingIdx].correo && data.correos_usuario && data.correos_usuario.length > 0) {
