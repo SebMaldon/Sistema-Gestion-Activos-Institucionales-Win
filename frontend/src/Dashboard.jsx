@@ -195,14 +195,28 @@ export default function Dashboard() {
         // Cuentas PC desde WMI
         if (data.usuario_pc || data.tipo_usuario_pc || (data.correos_usuario && data.correos_usuario.length > 0)) {
           // Checar si ya hay una cuenta para no duplicarla
-          const isExisting = (newData.cuentasList || []).find(c => c.cuenta_windows === data.usuario_pc);
-          if (!isExisting) {
+          let existingIdx = (newData.cuentasList || []).findIndex(c => c.cuenta_windows === data.usuario_pc);
+          
+          if (existingIdx === -1) {
             newData.cuentasList = [...(newData.cuentasList || []), {
               _new: true, _editing: false,
               cuenta_windows: data.usuario_pc || '',
               correo: (data.correos_usuario && data.correos_usuario.length > 0) ? data.correos_usuario[0] : '',
               tipo_user: data.tipo_usuario_pc || ''
             }];
+          } else {
+            // Actualizar cuenta existente si le faltan datos
+            const updatedCuentas = [...newData.cuentasList];
+            let changed = false;
+            if (!updatedCuentas[existingIdx].correo && data.correos_usuario && data.correos_usuario.length > 0) {
+              updatedCuentas[existingIdx].correo = data.correos_usuario[0];
+              changed = true;
+            }
+            if (!updatedCuentas[existingIdx].tipo_user && data.tipo_usuario_pc) {
+              updatedCuentas[existingIdx].tipo_user = data.tipo_usuario_pc;
+              changed = true;
+            }
+            if (changed) newData.cuentasList = updatedCuentas;
           }
         }
 
@@ -440,7 +454,7 @@ export default function Dashboard() {
 
         if (isNew) {
           // Creación: enviar todos los campos con valor
-          Object.keys(formState).forEach(key => {
+          Object.keys(initialFormState).forEach(key => {
             if (['correos_usuario', 'tipo_equipo', 'nombre_usuario_resguardo'].includes(key)) return;
             if (formState[key] !== '' && formState[key] !== undefined && formState[key] !== null) {
               datosNuevos[key] = formState[key];
@@ -449,12 +463,31 @@ export default function Dashboard() {
           datosNuevos._esCreacion = true;
         } else {
           // Actualización: solo campos que cambiaron vs dbInfo
-          Object.keys(formState).forEach(key => {
-            if (['id_bien', 'correos_usuario', 'tipo_equipo', 'nombre_usuario_resguardo'].includes(key)) return;
-            const current = String(formState[key] ?? '');
-            const original = String(dbInfo[key] ?? '');
-            if (current !== original) {
-              datosNuevos[key] = formState[key];
+          Object.keys(initialFormState).forEach(key => {
+            if (['id_bien', 'correos_usuario', 'tipo_equipo', 'nombre_usuario_resguardo', 'monitores'].includes(key)) return;
+            
+            if (key === 'dir_ip_list') {
+              const cIp = (formState.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean).join('/');
+              const oIp = (dbInfo.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean).join('/');
+              if (cIp !== oIp) datosNuevos.dir_ip_list = formState.dir_ip_list;
+              return;
+            }
+            if (key === 'cuentasList') {
+              const cStr = JSON.stringify((formState.cuentasList || []).map(c => ({ w: c.cuenta_windows, m: c.correo, t: c.tipo_user })));
+              const oStr = JSON.stringify((dbInfo.cuentasList || []).map(c => ({ w: c.cuenta_windows, m: c.correo, t: c.tipo_user })));
+              if (cStr !== oStr) datosNuevos.cuentasList = formState.cuentasList;
+              return;
+            }
+            if (Array.isArray(formState[key])) {
+              if (JSON.stringify(formState[key]) !== JSON.stringify(dbInfo[key])) {
+                datosNuevos[key] = formState[key];
+              }
+            } else {
+              const current = String(formState[key] ?? '');
+              const original = String(dbInfo[key] ?? '');
+              if (current !== original) {
+                datosNuevos[key] = formState[key] === '' ? null : formState[key];
+              }
             }
           });
           // Incluir monitores en actualización solo si realmente cambiaron
@@ -507,7 +540,7 @@ export default function Dashboard() {
   const isNew = !dbInfo || !dbInfo.id_bien;
   let currentDatosNuevos = {};
   if (isNew) {
-    Object.keys(formState).forEach(key => {
+    Object.keys(initialFormState).forEach(key => {
       if (['correos_usuario', 'monitores', 'tipo_equipo', 'nombre_usuario_resguardo'].includes(key)) return;
       if (formState[key] !== '' && formState[key] !== undefined && formState[key] !== null) {
         currentDatosNuevos[key] = formState[key];
@@ -515,12 +548,31 @@ export default function Dashboard() {
     });
     currentDatosNuevos._esCreacion = true;
   } else {
-    Object.keys(formState).forEach(key => {
+    Object.keys(initialFormState).forEach(key => {
       if (['id_bien', 'correos_usuario', 'monitores', 'tipo_equipo', 'nombre_usuario_resguardo'].includes(key)) return;
-      const current = String(formState[key] ?? '');
-      const original = String(dbInfo[key] ?? '');
-      if (current !== original) {
-        currentDatosNuevos[key] = formState[key];
+      
+      if (key === 'dir_ip_list') {
+        const cIp = (formState.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean).join('/');
+        const oIp = (dbInfo.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean).join('/');
+        if (cIp !== oIp) currentDatosNuevos.dir_ip_list = formState.dir_ip_list;
+        return;
+      }
+      if (key === 'cuentasList') {
+        const cStr = JSON.stringify((formState.cuentasList || []).map(c => ({ w: c.cuenta_windows, m: c.correo, t: c.tipo_user })));
+        const oStr = JSON.stringify((dbInfo.cuentasList || []).map(c => ({ w: c.cuenta_windows, m: c.correo, t: c.tipo_user })));
+        if (cStr !== oStr) currentDatosNuevos.cuentasList = formState.cuentasList;
+        return;
+      }
+      if (Array.isArray(formState[key])) {
+        if (JSON.stringify(formState[key]) !== JSON.stringify(dbInfo[key])) {
+          currentDatosNuevos[key] = formState[key];
+        }
+      } else {
+        const current = String(formState[key] ?? '');
+        const original = String(dbInfo[key] ?? '');
+        if (current !== original) {
+          currentDatosNuevos[key] = formState[key] === '' ? null : formState[key];
+        }
       }
     });
   }
