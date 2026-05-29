@@ -14,7 +14,7 @@ import {
   getNotasBien,
   createNotaBien
 } from './services/graphqlClient';
-import { LogOut, RefreshCcw, Save, Server, Monitor, HardDrive, Cpu, MapPin, Network, Activity, Plus, ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertTriangle, HelpCircle, Search, MessageSquare } from 'lucide-react';
+import { LogOut, RefreshCcw, Save, Server, Monitor, HardDrive, Cpu, MapPin, Network, Activity, Plus, ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertTriangle, HelpCircle, Search, MessageSquare, Trash2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import SearchableSelect from './components/SearchableSelect';
 import { ModalUbicacion, ModalModeloMarca } from './components/Modals';
@@ -698,18 +698,40 @@ export default function Dashboard() {
                 const isExpanded = selectedCuentaIdx === i;
                 return (
                   <div key={i} className="border border-[#E0E0E0] rounded-xl overflow-hidden bg-[#F9FAFB] shadow-sm">
-                    <button 
-                      onClick={() => setSelectedCuentaIdx(isExpanded ? -1 : i)}
-                      className="w-full text-left px-3 py-2 hover:bg-gray-100 flex items-center justify-between"
-                    >
-                      <div className="overflow-hidden">
-                        <span className="text-[#006241] font-bold block uppercase text-[9px] leading-tight">Cuenta de Usuario PC {i > 0 ? i+1 : ''}</span>
-                        <span className="text-[#333333] font-bold block truncate text-xs mt-0.5">{c.cuenta_windows || '—'}</span>
-                      </div>
-                      {isExpanded ? <ChevronUp className="w-4 h-4 text-[#757575] flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-[#757575] flex-shrink-0" />}
-                    </button>
+                    <div className="flex items-center justify-between px-3 py-2 hover:bg-gray-100">
+                      <button 
+                        onClick={() => setSelectedCuentaIdx(isExpanded ? -1 : i)}
+                        className="text-left flex-grow flex items-center justify-between min-w-0"
+                      >
+                        <div className="overflow-hidden min-w-0 flex-grow">
+                          <span className="text-[#006241] font-bold block uppercase text-[9px] leading-tight truncate">Cuenta de Usuario PC {i > 0 ? i+1 : ''}</span>
+                          <span className="text-[#333333] font-bold block truncate text-xs mt-0.5">{c.cuenta_windows || '—'}</span>
+                        </div>
+                        <div className="mx-2 flex-shrink-0">
+                          {isExpanded ? <ChevronUp className="w-4 h-4 text-[#757575] flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-[#757575] flex-shrink-0" />}
+                        </div>
+                      </button>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFormState(prev => ({
+                            ...prev,
+                            cuentasList: prev.cuentasList.filter((_, idx) => idx !== i)
+                          }));
+                          if (isExpanded) setSelectedCuentaIdx(-1);
+                        }}
+                        className="p-1.5 text-red-500 hover:bg-red-100 rounded-md transition-colors ml-1"
+                        title="Eliminar esta cuenta"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                     {isExpanded && (
                       <div className="p-3 bg-white border-t border-[#E0E0E0] space-y-2.5">
+                        <div>
+                          <span className="text-[#757575] font-semibold block uppercase text-[9px] leading-tight">Nombre de Cuenta Completo</span>
+                          <span className="text-[#333333] font-medium block text-[11px] mt-0.5 break-all">{c.cuenta_windows || '—'}</span>
+                        </div>
                         <div>
                           <span className="text-[#757575] font-semibold block uppercase text-[9px] leading-tight">Tipo Usuario</span>
                           <span className="text-[#333333] font-medium block truncate text-[11px] mt-0.5" title={c.tipo_user}>{c.tipo_user || '—'}</span>
