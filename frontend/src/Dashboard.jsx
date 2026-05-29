@@ -711,20 +711,6 @@ export default function Dashboard() {
                           {isExpanded ? <ChevronUp className="w-4 h-4 text-[#757575] flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-[#757575] flex-shrink-0" />}
                         </div>
                       </button>
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setFormState(prev => ({
-                            ...prev,
-                            cuentasList: prev.cuentasList.filter((_, idx) => idx !== i)
-                          }));
-                          if (isExpanded) setSelectedCuentaIdx(-1);
-                        }}
-                        className="p-1.5 text-red-500 hover:bg-red-100 rounded-md transition-colors ml-1"
-                        title="Eliminar esta cuenta"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
                     </div>
                     {isExpanded && (
                       <div className="p-3 bg-white border-t border-[#E0E0E0] space-y-2.5">
