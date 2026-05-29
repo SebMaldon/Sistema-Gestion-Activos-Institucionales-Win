@@ -243,7 +243,7 @@ export default function Dashboard() {
 
         if (data.adaptadores_red && data.adaptadores_red.length > 0) {
           newData.dir_ip_list = data.adaptadores_red.slice(0, 3).map(a => ({ ip: a.ip, adapter: a.descripcion }));
-          newData.dir_ip = newData.dir_ip_list.map(a => a.ip).join('/');
+          newData.dir_ip = data.dir_ip;
         } else if (data.dir_ip) {
           newData.dir_ip_list = [{ ip: data.dir_ip, adapter: 'WMI' }];
         }
