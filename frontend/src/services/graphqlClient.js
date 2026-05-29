@@ -1,4 +1,4 @@
-const GRAPHQL_API_URL = import.meta.env.VITE_GQL_URL || 'http://11.1.19.4:4000/graphql';
+const GRAPHQL_API_URL = import.meta.env.VITE_GQL_URL || 'http://localhost:4000/graphql';
 
 export const queryGraphQL = async (query, variables = {}) => {
   const token = sessionStorage.getItem('jwtToken');

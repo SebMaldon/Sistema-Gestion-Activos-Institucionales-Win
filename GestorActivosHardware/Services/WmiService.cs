@@ -356,11 +356,27 @@ namespace GestorActivosHardware.Services
                     }
                 } catch {}
 
+                // Obtener perfiles reales (con carpeta en C:\Users)
+                System.Collections.Generic.HashSet<string> validSids = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
                 try {
-                    using (var searcher = new ManagementObjectSearcher("SELECT Name, Domain FROM Win32_UserAccount WHERE LocalAccount=True"))
+                    using (var searcher = new ManagementObjectSearcher("SELECT SID FROM Win32_UserProfile WHERE Special=False"))
                     {
                         foreach (ManagementObject o in searcher.Get())
                         {
+                            string sid = o["SID"]?.ToString() ?? "";
+                            if (!string.IsNullOrEmpty(sid)) validSids.Add(sid);
+                        }
+                    }
+                } catch {}
+
+                try {
+                    using (var searcher = new ManagementObjectSearcher("SELECT Name, Domain, SID FROM Win32_UserAccount WHERE LocalAccount=True"))
+                    {
+                        foreach (ManagementObject o in searcher.Get())
+                        {
+                            string sid = o["SID"]?.ToString() ?? "";
+                            if (!validSids.Contains(sid)) continue; // Filtrar ocultas y de sistema sin carpeta
+
                             string name = o["Name"]?.ToString() ?? "";
                             string domain = o["Domain"]?.ToString() ?? "";
                             if (!string.IsNullOrEmpty(name))
