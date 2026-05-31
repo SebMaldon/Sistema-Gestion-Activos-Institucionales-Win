@@ -107,6 +107,7 @@ export default function Dashboard() {
       .then(data => {
         if (data && data.num_serie) {
           setSearchSerial(prev => prev || data.num_serie);
+          syncDB(data.num_serie, true);
         }
       })
       .catch(err => console.log('Silent WMI fetch failed on startup', err));
@@ -293,14 +294,15 @@ export default function Dashboard() {
   };
 
   // Sync DB
-  const syncDB = async () => {
-    if (!searchSerial) return showAlert('Ingresa un número de serie para buscar en la BD.', 'warning');
+  const syncDB = async (overrideSerial = null, autoLoadWMI = false) => {
+    const serialToSearch = typeof overrideSerial === 'string' ? overrideSerial : searchSerial;
+    if (!serialToSearch) return showAlert('Ingresa un número de serie para buscar en la BD.', 'warning');
 
     setLoadingAction(true);
     try {
       const query = `
         query {
-          bienByTermino(termino: "${searchSerial}") {
+          bienByTermino(termino: "${serialToSearch}") {
             id_bien num_serie num_inv estatus_operativo clave_unidad_ref clave_modelo 
             id_usuario_resguardo id_segmento id_ubicacion fecha_adquisicion fecha_actualizacion
             usuarioResguardo {
@@ -335,7 +337,7 @@ export default function Dashboard() {
 
         const mergedObj = {
           id_bien: bien.id_bien,
-          num_serie: bien.num_serie || searchSerial,
+          num_serie: bien.num_serie || serialToSearch,
           num_inv: bien.num_inv || '',
           estatus_operativo: bien.estatus_operativo || 'ACTIVO',
           clave_unidad_ref: bien.clave_unidad_ref || '',
@@ -406,10 +408,18 @@ export default function Dashboard() {
           return ns;
         });
       } else {
-        showAlert('Activo no encontrado en la BD. Rellene los campos para registrar uno nuevo.', 'info', 'No Encontrado');
-        setDbInfo(null);
-        setNotas([]);
-        setFormState(prev => ({ ...prev, id_bien: undefined }));
+        if (autoLoadWMI) {
+          showAlert('El equipo no se encuentra registrado en la base de datos. Cargando datos locales...', 'info', 'No Encontrado');
+          setDbInfo(null);
+          setNotas([]);
+          setFormState(prev => ({ ...prev, id_bien: undefined }));
+          loadWMI();
+        } else {
+          showAlert('Activo no encontrado en la BD. Rellene los campos para registrar uno nuevo.', 'info', 'No Encontrado');
+          setDbInfo(null);
+          setNotas([]);
+          setFormState(prev => ({ ...prev, id_bien: undefined }));
+        }
       }
     } catch (err) {
       showAlert('Error conectando a la base de datos (GraphQL).', 'error');
@@ -425,6 +435,16 @@ export default function Dashboard() {
     try {
       const isNew = !dbInfo || !dbInfo.id_bien;
       const userRole = getUserRole();
+
+      let effectiveIsNew = isNew;
+      let effectiveDbInfo = dbInfo;
+      if (isNew && formState.num_serie) {
+        const chk = await queryGraphQL(`query { bienByNumSerie(num_serie: "${formState.num_serie}") { id_bien } }`);
+        if (chk?.bienByNumSerie?.id_bien) {
+          effectiveIsNew = false;
+          effectiveDbInfo = { ...dbInfo, id_bien: chk.bienByNumSerie.id_bien };
+        }
+      }
 
       // Helper: llama procesarMonitoresEquipo con confirm dialog si hay conflictos
       const _procesarMonitoresFrontend = async (idBien, monitores, forzar) => {
@@ -448,17 +468,6 @@ export default function Dashboard() {
 
       // Roles Admin(1) y Maestro(2) → guardado directo sin solicitud
       if (userRole === 1 || userRole === 2) {
-        // Si isNew pero el num_serie ya existe en BD, forzar update
-        let effectiveIsNew = isNew;
-        let effectiveDbInfo = dbInfo;
-        if (isNew && formState.num_serie) {
-          const chk = await queryGraphQL(`query { bienByNumSerie(num_serie: "${formState.num_serie}") { id_bien } }`);
-          if (chk?.bienByNumSerie?.id_bien) {
-            effectiveIsNew = false;
-            effectiveDbInfo = { id_bien: chk.bienByNumSerie.id_bien };
-          }
-        }
-
         const dirIpString = (formState.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean).join('/');
         const macString = (formState.dir_ip_list || []).map(x => (x.mac || '').trim()).filter(Boolean).join('/');
         const dataToSave = { ...formState, id_bien: effectiveDbInfo?.id_bien, dir_ip: dirIpString, mac_address: macString, especificacionTI: { ...formState, dir_ip: dirIpString, mac_address: macString } };
@@ -479,7 +488,7 @@ export default function Dashboard() {
         // Roles 2, 3, 4 → solicitud de cambio
         const datosNuevos = {};
 
-        if (isNew) {
+        if (effectiveIsNew) {
           // Creación: enviar todos los campos con valor
           Object.keys(initialFormState).forEach(key => {
             if (['correos_usuario', 'tipo_equipo', 'nombre_usuario_resguardo', 'mac_address', 'dir_ip'].includes(key)) return;
@@ -490,30 +499,31 @@ export default function Dashboard() {
           datosNuevos._esCreacion = true;
         } else {
           // Actualización: solo campos que cambiaron vs dbInfo
+          const safeDbInfo = effectiveDbInfo || {};
           Object.keys(initialFormState).forEach(key => {
             if (['id_bien', 'correos_usuario', 'tipo_equipo', 'nombre_usuario_resguardo', 'monitores', 'mac_address', 'dir_ip'].includes(key)) return;
             
             if (key === 'dir_ip_list') {
               const cIp = (formState.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean).join('/');
-              const oIp = (dbInfo.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean).join('/');
+              const oIp = (safeDbInfo.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean).join('/');
               const cMac = (formState.dir_ip_list || []).map(x => (x.mac || '').trim()).filter(Boolean).join('/');
-              const oMac = (dbInfo.dir_ip_list || []).map(x => (x.mac || '').trim()).filter(Boolean).join('/');
+              const oMac = (safeDbInfo.dir_ip_list || []).map(x => (x.mac || '').trim()).filter(Boolean).join('/');
               if (cIp !== oIp || cMac !== oMac) datosNuevos.dir_ip_list = formState.dir_ip_list;
               return;
             }
             if (key === 'cuentasList') {
               const cStr = JSON.stringify((formState.cuentasList || []).map(c => ({ w: c.cuenta_windows, m: c.correo, t: c.tipo_user })));
-              const oStr = JSON.stringify((dbInfo.cuentasList || []).map(c => ({ w: c.cuenta_windows, m: c.correo, t: c.tipo_user })));
+              const oStr = JSON.stringify((safeDbInfo.cuentasList || []).map(c => ({ w: c.cuenta_windows, m: c.correo, t: c.tipo_user })));
               if (cStr !== oStr) datosNuevos.cuentasList = formState.cuentasList;
               return;
             }
             if (Array.isArray(formState[key])) {
-              if (JSON.stringify(formState[key]) !== JSON.stringify(dbInfo[key])) {
+              if (JSON.stringify(formState[key]) !== JSON.stringify(safeDbInfo[key])) {
                 datosNuevos[key] = formState[key];
               }
             } else {
               const current = String(formState[key] ?? '').trim();
-              const original = String(dbInfo[key] ?? '').trim();
+              const original = String(safeDbInfo[key] ?? '').trim();
               if (current !== original) {
                 datosNuevos[key] = formState[key] === '' ? null : formState[key];
               }
@@ -536,7 +546,7 @@ export default function Dashboard() {
           return;
         }
 
-        const idBien = isNew ? crypto.randomUUID() : dbInfo.id_bien;
+        const idBien = effectiveIsNew ? crypto.randomUUID() : effectiveDbInfo.id_bien;
         await solicitarActualizacionBien(idBien, JSON.stringify(datosNuevos));
         setLastSubmitted(JSON.stringify(datosNuevos));
         await showAlert('Tus cambios han sido enviados a revisión y están pendientes de aprobación por parte de un administrador.', 'success', 'Enviado a revisión');
