@@ -14,6 +14,7 @@ namespace GestorActivosHardware.Services
     {
         public string descripcion { get; set; } = "";
         public string ip { get; set; } = "";
+        public string mac { get; set; } = "";
     }
 
     public class CuentaInfo
@@ -164,11 +165,12 @@ namespace GestorActivosHardware.Services
                         if (o["IPAddress"] is string[] ips && ips.Length > 0)
                         {
                             string desc = o["Description"]?.ToString() ?? "";
+                            string macAddr = o["MACAddress"]?.ToString() ?? "";
                             foreach (var ip in ips)
                             {
                                 if (System.Net.IPAddress.TryParse(ip, out var parsedIp) && parsedIp.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
                                 {
-                                    info.adaptadores_red.Add(new NetworkAdapterInfo { descripcion = desc, ip = ip });
+                                    info.adaptadores_red.Add(new NetworkAdapterInfo { descripcion = desc, ip = ip, mac = macAddr });
                                 }
                             }
                             if (string.IsNullOrEmpty(info.dir_ip))
@@ -197,10 +199,12 @@ namespace GestorActivosHardware.Services
                             
                 info.almacenamiento_gb = diskBytes > 0 ? (diskBytes / (1024L * 1024 * 1024)).ToString() : "256";
 
-                using (var searcher = new ManagementObjectSearcher("SELECT Caption, SerialNumber FROM Win32_OperatingSystem"))
+                using (var searcher = new ManagementObjectSearcher("SELECT Caption, SerialNumber, OSArchitecture FROM Win32_OperatingSystem"))
                     foreach (ManagementObject o in searcher.Get())
                     {
-                        info.modelo_so = o["Caption"]?.ToString()?.Replace("Microsoft ", "")?.Trim() ?? "";
+                        string osName = o["Caption"]?.ToString()?.Replace("Microsoft ", "")?.Trim() ?? "";
+                        string osArch = o["OSArchitecture"]?.ToString()?.Trim() ?? "";
+                        info.modelo_so = string.IsNullOrEmpty(osArch) ? osName : $"{osName} ({osArch})";
                         info.windows_serial = o["SerialNumber"]?.ToString()?.Trim() ?? "";
                     }
 

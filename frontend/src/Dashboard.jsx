@@ -242,10 +242,11 @@ export default function Dashboard() {
         }
 
         if (data.adaptadores_red && data.adaptadores_red.length > 0) {
-          newData.dir_ip_list = data.adaptadores_red.slice(0, 3).map(a => ({ ip: a.ip, adapter: a.descripcion }));
+          newData.dir_ip_list = data.adaptadores_red.slice(0, 3).map(a => ({ ip: a.ip, mac: a.mac, adapter: a.descripcion }));
           newData.dir_ip = data.dir_ip;
+          newData.mac_address = data.mac_address;
         } else if (data.dir_ip) {
-          newData.dir_ip_list = [{ ip: data.dir_ip, adapter: 'WMI' }];
+          newData.dir_ip_list = [{ ip: data.dir_ip, mac: data.mac_address || '', adapter: 'WMI' }];
         }
 
         return newData;
@@ -354,7 +355,11 @@ export default function Dashboard() {
           almacenamiento_gb: esp.almacenamiento_gb ? String(esp.almacenamiento_gb) : '',
           mac_address: esp.mac_address || '',
           dir_ip: esp.dir_ip || '',
-          dir_ip_list: (esp.dir_ip || '').split('/').filter(Boolean).map(ip => ({ ip, adapter: 'BD' })),
+          dir_ip_list: (() => {
+            const ips = (esp.dir_ip || '').split('/').filter(Boolean);
+            const macs = (esp.mac_address || '').split('/').filter(Boolean);
+            return ips.map((ip, i) => ({ ip, mac: macs[i] || '', adapter: 'BD' }));
+          })(),
           puerto_red: esp.puerto_red || '',
           switch_red: esp.switch_red || '',
           modelo_so: esp.modelo_so || '',
@@ -455,7 +460,8 @@ export default function Dashboard() {
         }
 
         const dirIpString = (formState.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean).join('/');
-        const dataToSave = { ...formState, id_bien: effectiveDbInfo?.id_bien, dir_ip: dirIpString, especificacionTI: { ...formState, dir_ip: dirIpString } };
+        const macString = (formState.dir_ip_list || []).map(x => (x.mac || '').trim()).filter(Boolean).join('/');
+        const dataToSave = { ...formState, id_bien: effectiveDbInfo?.id_bien, dir_ip: dirIpString, mac_address: macString, especificacionTI: { ...formState, dir_ip: dirIpString, mac_address: macString } };
         const finalIdBien = await saveAsset(effectiveIsNew, dataToSave);
         const idBien = typeof finalIdBien === 'string' ? finalIdBien : effectiveDbInfo?.id_bien;
 
@@ -476,7 +482,7 @@ export default function Dashboard() {
         if (isNew) {
           // Creación: enviar todos los campos con valor
           Object.keys(initialFormState).forEach(key => {
-            if (['correos_usuario', 'tipo_equipo', 'nombre_usuario_resguardo'].includes(key)) return;
+            if (['correos_usuario', 'tipo_equipo', 'nombre_usuario_resguardo', 'mac_address', 'dir_ip'].includes(key)) return;
             if (formState[key] !== '' && formState[key] !== undefined && formState[key] !== null) {
               datosNuevos[key] = formState[key];
             }
@@ -485,12 +491,14 @@ export default function Dashboard() {
         } else {
           // Actualización: solo campos que cambiaron vs dbInfo
           Object.keys(initialFormState).forEach(key => {
-            if (['id_bien', 'correos_usuario', 'tipo_equipo', 'nombre_usuario_resguardo', 'monitores'].includes(key)) return;
+            if (['id_bien', 'correos_usuario', 'tipo_equipo', 'nombre_usuario_resguardo', 'monitores', 'mac_address', 'dir_ip'].includes(key)) return;
             
             if (key === 'dir_ip_list') {
               const cIp = (formState.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean).join('/');
               const oIp = (dbInfo.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean).join('/');
-              if (cIp !== oIp) datosNuevos.dir_ip_list = formState.dir_ip_list;
+              const cMac = (formState.dir_ip_list || []).map(x => (x.mac || '').trim()).filter(Boolean).join('/');
+              const oMac = (dbInfo.dir_ip_list || []).map(x => (x.mac || '').trim()).filter(Boolean).join('/');
+              if (cIp !== oIp || cMac !== oMac) datosNuevos.dir_ip_list = formState.dir_ip_list;
               return;
             }
             if (key === 'cuentasList') {
@@ -504,8 +512,8 @@ export default function Dashboard() {
                 datosNuevos[key] = formState[key];
               }
             } else {
-              const current = String(formState[key] ?? '');
-              const original = String(dbInfo[key] ?? '');
+              const current = String(formState[key] ?? '').trim();
+              const original = String(dbInfo[key] ?? '').trim();
               if (current !== original) {
                 datosNuevos[key] = formState[key] === '' ? null : formState[key];
               }
@@ -519,6 +527,7 @@ export default function Dashboard() {
 
         if (datosNuevos.dir_ip_list) {
             datosNuevos.dir_ip = (formState.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean).join('/');
+            datosNuevos.mac_address = (formState.dir_ip_list || []).map(x => (x.mac || '').trim()).filter(Boolean).join('/');
             delete datosNuevos.dir_ip_list;
         }
 
@@ -562,7 +571,7 @@ export default function Dashboard() {
   let currentDatosNuevos = {};
   if (isNew) {
     Object.keys(initialFormState).forEach(key => {
-      if (['correos_usuario', 'monitores', 'tipo_equipo', 'nombre_usuario_resguardo'].includes(key)) return;
+      if (['correos_usuario', 'monitores', 'tipo_equipo', 'nombre_usuario_resguardo', 'mac_address', 'dir_ip'].includes(key)) return;
       if (formState[key] !== '' && formState[key] !== undefined && formState[key] !== null) {
         currentDatosNuevos[key] = formState[key];
       }
@@ -570,12 +579,14 @@ export default function Dashboard() {
     currentDatosNuevos._esCreacion = true;
   } else {
     Object.keys(initialFormState).forEach(key => {
-      if (['id_bien', 'correos_usuario', 'monitores', 'tipo_equipo', 'nombre_usuario_resguardo'].includes(key)) return;
+      if (['id_bien', 'correos_usuario', 'monitores', 'tipo_equipo', 'nombre_usuario_resguardo', 'mac_address', 'dir_ip'].includes(key)) return;
       
       if (key === 'dir_ip_list') {
         const cIp = (formState.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean).join('/');
         const oIp = (dbInfo.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean).join('/');
-        if (cIp !== oIp) currentDatosNuevos.dir_ip_list = formState.dir_ip_list;
+        const cMac = (formState.dir_ip_list || []).map(x => (x.mac || '').trim()).filter(Boolean).join('/');
+        const oMac = (dbInfo.dir_ip_list || []).map(x => (x.mac || '').trim()).filter(Boolean).join('/');
+        if (cIp !== oIp || cMac !== oMac) currentDatosNuevos.dir_ip_list = formState.dir_ip_list;
         return;
       }
       if (key === 'cuentasList') {
@@ -589,8 +600,8 @@ export default function Dashboard() {
           currentDatosNuevos[key] = formState[key];
         }
       } else {
-        const current = String(formState[key] ?? '');
-        const original = String(dbInfo[key] ?? '');
+        const current = String(formState[key] ?? '').trim();
+        const original = String(dbInfo[key] ?? '').trim();
         if (current !== original) {
           currentDatosNuevos[key] = formState[key] === '' ? null : formState[key];
         }
@@ -710,6 +721,17 @@ export default function Dashboard() {
                         <div className="mx-2 flex-shrink-0">
                           {isExpanded ? <ChevronUp className="w-4 h-4 text-[#757575] flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-[#757575] flex-shrink-0" />}
                         </div>
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const newC = formState.cuentasList.filter((_, idx) => idx !== i);
+                          updateForm('cuentasList', newC);
+                        }}
+                        className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg flex-shrink-0 transition-colors ml-1"
+                        title="Eliminar cuenta"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                     {isExpanded && (
@@ -864,17 +886,17 @@ export default function Dashboard() {
                   <FieldInput label="Memoria RAM (GB)" val={formState.ram_gb} onChange={v => updateForm('ram_gb', v)} color={getBorderColor('ram_gb')} type="number" readOnly={true} />
                   <FieldInput label="Almacenamiento (GB)" val={formState.almacenamiento_gb} onChange={v => updateForm('almacenamiento_gb', v)} color={getBorderColor('almacenamiento_gb')} type="number" readOnly={true} />
                   
-                  <div className="w-full flex flex-col">
+                  <div className="w-full sm:col-span-2 flex flex-col">
                     <div className="flex items-center justify-between mb-1">
                       <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block">
-                        Dirección IPv4
+                        Dirección IPv4 y MAC Address
                       </label>
-                      {((formState.dir_ip_list?.length > 0) ? formState.dir_ip_list : [{ ip: '' }]).length < 3 && (
+                      {((formState.dir_ip_list?.length > 0) ? formState.dir_ip_list : [{ ip: '', mac: '' }]).length < 3 && (
                         <button
                           type="button"
                           onClick={() => {
-                            const arr = ((formState.dir_ip_list?.length > 0) ? formState.dir_ip_list : [{ ip: '' }]);
-                            updateForm('dir_ip_list', [...arr, { ip: '' }]);
+                            const arr = ((formState.dir_ip_list?.length > 0) ? formState.dir_ip_list : [{ ip: '', mac: '' }]);
+                            updateForm('dir_ip_list', [...arr, { ip: '', mac: '' }]);
                           }}
                           className="flex items-center gap-1 text-[10px] text-[#006241] font-bold hover:underline"
                         >
@@ -888,19 +910,30 @@ export default function Dashboard() {
                       ))}
                     </datalist>
                     <div className="space-y-2">
-                      {((formState.dir_ip_list?.length > 0) ? formState.dir_ip_list : [{ ip: '' }]).map((item, idx, arr) => (
+                      {((formState.dir_ip_list?.length > 0) ? formState.dir_ip_list : [{ ip: '', mac: '' }]).map((item, idx, arr) => (
                         <div key={idx} className="flex items-center gap-2 w-full">
                           <input
                             type="text"
                             list="wmi-adapters-list"
-                            value={item.ip}
+                            value={item.ip || ''}
                             onChange={(e) => {
-                              const newList = [...((formState.dir_ip_list?.length > 0) ? formState.dir_ip_list : [{ ip: '' }])];
+                              const newList = [...((formState.dir_ip_list?.length > 0) ? formState.dir_ip_list : [{ ip: '', mac: '' }])];
                               newList[idx].ip = e.target.value;
                               updateForm('dir_ip_list', newList);
                             }}
                             className={clsx("flex-1 min-w-0 bg-white text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]", getBorderColor('dir_ip'))}
                             placeholder="Ej. 192.168.1.5"
+                          />
+                          <input
+                            type="text"
+                            value={item.mac || ''}
+                            onChange={(e) => {
+                              const newList = [...((formState.dir_ip_list?.length > 0) ? formState.dir_ip_list : [{ ip: '', mac: '' }])];
+                              newList[idx].mac = e.target.value;
+                              updateForm('dir_ip_list', newList);
+                            }}
+                            className={clsx("flex-1 min-w-0 bg-white text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]", getBorderColor('mac_address'))}
+                            placeholder="MAC Address"
                           />
                           {arr.length > 1 && (
                             <button
@@ -919,7 +952,6 @@ export default function Dashboard() {
                     </div>
                   </div>
                   
-                  <FieldInput label="Dirección MAC" val={formState.mac_address} onChange={v => updateForm('mac_address', v)} color={getBorderColor('mac_address')} readOnly={true} />
                   <FieldInput label="Puerto / Nodo Red" val={formState.puerto_red} onChange={v => updateForm('puerto_red', v)} color={getBorderColor('puerto_red')} />
                   <FieldInput label="Switch Conectado" val={formState.switch_red} onChange={v => updateForm('switch_red', v)} color={getBorderColor('switch_red')} />
 
