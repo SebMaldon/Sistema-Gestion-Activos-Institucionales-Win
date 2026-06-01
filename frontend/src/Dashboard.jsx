@@ -29,6 +29,117 @@ const initialFormState = {
   tipo_equipo: '', monitores: [], cuentasList: []
 };
 
+const NotasBienSection = ({ idBien, title, showAlert }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [notas, setNotas] = useState([]);
+  const [nuevaNota, setNuevaNota] = useState('');
+  const [loadingNotas, setLoadingNotas] = useState(false);
+  const [loadingAction, setLoadingAction] = useState(false);
+
+  useEffect(() => {
+    if (idBien) {
+      loadNotas(idBien);
+    }
+  }, [idBien]);
+
+  const toggleOpen = () => {
+    setIsOpen(!isOpen);
+  };
+
+  const loadNotas = async (id) => {
+    try {
+      setLoadingNotas(true);
+      const data = await getNotasBien(id);
+      setNotas(data);
+    } catch (err) {
+      console.error('Error al cargar notas:', err);
+    } finally {
+      setLoadingNotas(false);
+    }
+  };
+
+  const handleAddNota = async () => {
+    if (!nuevaNota.trim()) return;
+    try {
+      setLoadingAction(true);
+      await createNotaBien(idBien, nuevaNota.trim());
+      setNuevaNota('');
+      await loadNotas(idBien);
+      showAlert('Nota agregada correctamente.', 'success');
+      if (!isOpen) setIsOpen(true);
+    } catch (err) {
+      showAlert('Error al agregar nota: ' + err.message, 'error');
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
+  return (
+    <div className="w-full">
+      {title && (
+        <button 
+          onClick={toggleOpen}
+          className="w-full flex items-center justify-between text-sm font-bold text-[#333333] mb-2 hover:bg-gray-100 p-2 rounded-lg transition-colors focus:outline-none"
+        >
+          <span className="flex items-center gap-2">
+            <MessageSquare className="w-4 h-4 text-[#006241]" /> 
+            {title}
+            {!loadingNotas && (
+              <span className={clsx("ml-2 px-2 py-0.5 rounded-full text-[10px] tracking-wide", notas.length > 0 ? "bg-blue-100 text-blue-700" : "bg-gray-200 text-gray-600")}>
+                {notas.length} {notas.length === 1 ? 'nota' : 'notas'}
+              </span>
+            )}
+            {loadingNotas && <RefreshCcw className="w-3 h-3 text-gray-400 animate-spin ml-2" />}
+          </span>
+          {isOpen ? <ChevronUp className="w-4 h-4 text-[#757575]" /> : <ChevronDown className="w-4 h-4 text-[#757575]" />}
+        </button>
+      )}
+
+      {isOpen && (
+        <div className="animate-fade-in pl-1 mt-1">
+          <div className="flex flex-col sm:flex-row gap-3 mb-3">
+            <input
+              type="text"
+              value={nuevaNota}
+              onChange={e => setNuevaNota(e.target.value)}
+              placeholder="Escribe una nueva nota..."
+              className="flex-1 bg-white text-[#333333] rounded-xl py-2 px-3 border border-[#E0E0E0] shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241] text-sm"
+              onKeyDown={e => e.key === 'Enter' && handleAddNota()}
+            />
+            <button
+              onClick={handleAddNota}
+              disabled={loadingAction || !nuevaNota.trim()}
+              className="bg-[#006241] hover:bg-[#008F59] text-white font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-colors disabled:opacity-50 text-sm shadow-sm"
+            >
+              <Plus className="w-4 h-4" /> Agregar
+            </button>
+          </div>
+
+          {loadingNotas ? (
+            <div className="text-center py-4 text-sm text-gray-500 animate-pulse">Cargando notas...</div>
+          ) : notas.length === 0 ? (
+            <div className="text-center py-4 text-xs text-gray-500 italic bg-white rounded-xl border border-dashed border-gray-200">
+              No hay notas registradas.
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+              {notas.map(nota => (
+                <div key={nota.id_nota} className="bg-white border border-gray-200 p-2.5 rounded-xl flex flex-col gap-1 hover:bg-gray-50 transition-colors">
+                  <div className="flex justify-between items-center text-[10px] text-gray-500 font-semibold">
+                    <span className="text-[#006241]">{nota.usuarioAutor ? `${nota.usuarioAutor.matricula} - ${nota.usuarioAutor.nombre_completo}` : 'Usuario desconocido'}</span>
+                    <span>{new Date(isNaN(Number(nota.fecha_creacion)) ? nota.fecha_creacion : Number(nota.fecha_creacion)).toLocaleString()}</span>
+                  </div>
+                  <p className="text-xs text-gray-800 whitespace-pre-line font-medium">{nota.contenido_nota}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const isElectron = typeof window !== 'undefined' && !!window.process?.versions?.electron;
@@ -71,6 +182,7 @@ export default function Dashboard() {
   const [catUbicaciones, setCatUbicaciones] = useState([]);
 
   // States
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [formState, setFormState] = useState(initialFormState);
   const [dbInfo, setDbInfo] = useState(null); // Reference to check discrepancies
   const [wmiInfo, setWmiInfo] = useState(null); // Reference to check discrepancies with physical HW
@@ -93,24 +205,27 @@ export default function Dashboard() {
   const [showModalUbicacion, setShowModalUbicacion] = useState(false);
   const [showModalModelo, setShowModalModelo] = useState(false);
 
-  // Notes state
-  const [notas, setNotas] = useState([]);
-  const [nuevaNota, setNuevaNota] = useState('');
-  const [loadingNotas, setLoadingNotas] = useState(false);
+  // Notes state (moved to NotasBienSection component)
 
   // Load Catalogs on Mount
   useEffect(() => {
-    loadAllCatalogs();
-
-    // Fetch local serial quietly on startup to populate search bar
-    fetchHardwareInfo()
-      .then(data => {
+    const initDashboard = async () => {
+      setIsInitialLoading(true);
+      await loadAllCatalogs();
+      try {
+        // Fetch local serial quietly on startup to populate search bar
+        const data = await fetchHardwareInfo();
         if (data && data.num_serie) {
           setSearchSerial(prev => prev || data.num_serie);
-          syncDB(data.num_serie, true);
+          await syncDB(data.num_serie, true);
         }
-      })
-      .catch(err => console.log('Silent WMI fetch failed on startup', err));
+      } catch (err) {
+        console.log('Silent WMI fetch failed on startup', err);
+      } finally {
+        setIsInitialLoading(false);
+      }
+    };
+    initDashboard();
   }, []);
 
   const loadAllCatalogs = async () => {
@@ -175,7 +290,6 @@ export default function Dashboard() {
       if (isDifferentMachine) {
         setSearchSerial(scannedSerial);
         setDbInfo(null);
-        setNotas([]);
       } else if (scannedSerial && !searchSerial) {
         setSearchSerial(scannedSerial);
       }
@@ -262,37 +376,6 @@ export default function Dashboard() {
     }
   };
 
-  const fetchNotas = async (idBien) => {
-    try {
-      setLoadingNotas(true);
-      const data = await getNotasBien(idBien);
-      setNotas(data);
-    } catch (err) {
-      console.error('Error al cargar notas:', err);
-    } finally {
-      setLoadingNotas(false);
-    }
-  };
-
-  const handleAddNota = async () => {
-    if (!nuevaNota.trim()) return;
-    if (!formState.id_bien) {
-      showAlert('Guarde o busque el bien primero para poder agregar notas.', 'warning');
-      return;
-    }
-    try {
-      setLoadingAction(true);
-      await createNotaBien(formState.id_bien, nuevaNota.trim());
-      setNuevaNota('');
-      await fetchNotas(formState.id_bien);
-      showAlert('Nota agregada correctamente.', 'success');
-    } catch (err) {
-      showAlert('Error al agregar nota: ' + err.message, 'error');
-    } finally {
-      setLoadingAction(false);
-    }
-  };
-
   // Sync DB
   const syncDB = async (overrideSerial = null, autoLoadWMI = false) => {
     const serialToSearch = typeof overrideSerial === 'string' ? overrideSerial : searchSerial;
@@ -318,6 +401,7 @@ export default function Dashboard() {
             }
             monitores {
               monitor {
+                id_bien
                 num_serie
                 modelo {
                   descrip_disp
@@ -387,6 +471,7 @@ export default function Dashboard() {
               cleanMod = desc.substring(marca.length).trim();
             }
             return {
+              id_bien: bm.monitor?.id_bien || '',
               num_serie: bm.monitor?.num_serie || '',
               marca: marca,
               modelo: cleanMod
@@ -396,7 +481,6 @@ export default function Dashboard() {
 
         setDbInfo(mergedObj);
         setLastSubmitted(null);
-        fetchNotas(bien.id_bien);
 
         // Populate form but don't overwrite physical WMI fields if they differ
         setFormState(prev => {
@@ -411,13 +495,11 @@ export default function Dashboard() {
         if (autoLoadWMI) {
           showAlert('El equipo no se encuentra registrado en la base de datos. Cargando datos locales...', 'info', 'No Encontrado');
           setDbInfo(null);
-          setNotas([]);
           setFormState(prev => ({ ...prev, id_bien: undefined }));
           loadWMI();
         } else {
           showAlert('Activo no encontrado en la BD. Rellene los campos para registrar uno nuevo.', 'info', 'No Encontrado');
           setDbInfo(null);
-          setNotas([]);
           setFormState(prev => ({ ...prev, id_bien: undefined }));
         }
       }
@@ -635,6 +717,27 @@ export default function Dashboard() {
   const hasDbChanges = Object.keys(currentDatosNuevos).filter(k => k !== '_esCreacion').length > 0;
   const hasPendingChanges = lastSubmitted !== JSON.stringify(currentDatosNuevos);
   const canSave = (hasDbChanges || monitorsChanged) && hasPendingChanges;
+
+  if (isInitialLoading) {
+    return (
+      <div className="h-screen bg-[#F5F5F5] flex flex-col items-center justify-center relative">
+        <header
+          className="bg-[#006241] h-11 w-full absolute top-0 left-0 flex items-center justify-between px-6 select-none text-white shadow-md z-20"
+          style={{ WebkitAppRegion: 'drag' }}
+        >
+          <div className="flex items-center gap-4">
+            <img src="IMSS_Logosímbolo_Blanco.png" alt="IMSS" className="h-5 w-5 object-contain" />
+            <span className="text-xs font-semibold tracking-wide">Gestor de Activos — IMSS</span>
+          </div>
+        </header>
+        <div className="flex flex-col items-center gap-4 mt-11">
+          <RefreshCcw className="w-12 h-12 text-[#006241] animate-spin" />
+          <p className="text-lg font-semibold text-[#333333]">Cargando datos del equipo...</p>
+          <p className="text-sm text-[#757575]">Por favor espere un momento mientras se recupera la información.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen bg-[#F5F5F5] text-[#333333] flex flex-col overflow-hidden">
@@ -871,6 +974,11 @@ export default function Dashboard() {
                         <FieldInput label="Modelo" val={mon.modelo} readOnly={true} />
                         <FieldInput label="No. Serie" val={mon.num_serie} readOnly={true} />
                       </div>
+                      {mon.id_bien && (
+                        <div className="mt-2 border-t border-gray-200 pt-3">
+                          <NotasBienSection idBien={mon.id_bien} title={`Notas del Monitor ${mon.num_serie}`} showAlert={showAlert} />
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -989,49 +1097,7 @@ export default function Dashboard() {
               {/* Sección 3: Notas de Seguimiento */}
               {formState.id_bien && (
                 <section className="lg:col-span-2 bg-white border border-[#E0E0E0] border-t-4 border-t-[#006241] rounded-2xl p-5 shadow-sm">
-                  <h2 className="text-lg font-bold flex items-center gap-2 text-[#333333] mb-4">
-                    <MessageSquare className="w-5 h-5 text-[#006241]" /> Notas de Seguimiento
-                  </h2>
-                  
-                  {/* Formulario para nueva nota */}
-                  <div className="flex flex-col sm:flex-row gap-3 mb-5">
-                    <input
-                      type="text"
-                      value={nuevaNota}
-                      onChange={e => setNuevaNota(e.target.value)}
-                      placeholder="Escribe una nueva nota sobre este bien..."
-                      className="flex-1 bg-white text-[#333333] rounded-xl py-2 px-3 border border-[#E0E0E0] shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-600 text-sm"
-                      onKeyDown={e => e.key === 'Enter' && handleAddNota()}
-                    />
-                    <button
-                      onClick={handleAddNota}
-                      disabled={loadingAction || !nuevaNota.trim()}
-                      className="bg-[#006241] hover:bg-[#008F59] text-white font-bold py-2.5 px-5 rounded-xl flex items-center justify-center gap-2 transition-colors disabled:opacity-50 text-sm shadow-sm"
-                    >
-                      <Plus className="w-4 h-4" /> Agregar Nota
-                    </button>
-                  </div>
-
-                  {/* Lista de notas */}
-                  {loadingNotas ? (
-                    <div className="text-center py-4 text-sm text-gray-500 animate-pulse">Cargando notas...</div>
-                  ) : notas.length === 0 ? (
-                    <div className="text-center py-6 text-xs text-gray-500 italic bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                      No hay notas registradas para este bien.
-                    </div>
-                  ) : (
-                    <div className="space-y-3 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
-                      {notas.map(nota => (
-                        <div key={nota.id_nota} className="bg-gray-50 border border-gray-200 p-3 rounded-xl flex flex-col gap-1.5 hover:bg-gray-100/50 transition-colors">
-                          <div className="flex justify-between items-center text-[10px] text-gray-500 font-semibold">
-                            <span className="text-[#006241]">{nota.usuarioAutor ? `${nota.usuarioAutor.matricula} - ${nota.usuarioAutor.nombre_completo}` : 'Usuario desconocido'}</span>
-                            <span>{new Date(isNaN(Number(nota.fecha_creacion)) ? nota.fecha_creacion : Number(nota.fecha_creacion)).toLocaleString()}</span>
-                          </div>
-                          <p className="text-xs text-gray-800 whitespace-pre-line font-medium">{nota.contenido_nota}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <NotasBienSection idBien={formState.id_bien} title="Notas de Seguimiento del Equipo" showAlert={showAlert} />
                 </section>
               )}
 
