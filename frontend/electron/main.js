@@ -1,13 +1,73 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 import { spawn } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const { autoUpdater } = require('electron-updater');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let mainWindow;
 let backendProcess;
+
+function setupAutoUpdater() {
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('checking-for-update', () => {
+    console.log('Buscando actualizaciones...');
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: 'Actualización disponible',
+      message: `Nueva versión ${info.version} disponible.\n¿Deseas descargarla ahora?`,
+      buttons: ['Sí, actualizar', 'Después'],
+      defaultId: 0,
+      cancelId: 1
+    }).then(result => {
+      if (result.response === 0) {
+        autoUpdater.downloadUpdate();
+      }
+    });
+  });
+
+  autoUpdater.on('update-not-available', () => {
+    console.log('La aplicación está actualizada.');
+  });
+
+  autoUpdater.on('download-progress', (progress) => {
+    mainWindow?.webContents.send('update-progress', Math.round(progress.percent));
+  });
+
+  autoUpdater.on('update-downloaded', () => {
+    dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: 'Lista para instalar',
+      message: 'Actualización descargada. Se instalará al cerrar la aplicación.',
+      buttons: ['Reiniciar ahora', 'Después'],
+      defaultId: 0,
+      cancelId: 1
+    }).then(result => {
+      if (result.response === 0) {
+        autoUpdater.quitAndInstall(false, true);
+      }
+    });
+  });
+
+  autoUpdater.on('error', (err) => {
+    console.error('Error en actualización:', err?.message || err);
+  });
+
+  // Verificar al arrancar (solo en producción)
+  if (app.isPackaged) {
+    autoUpdater.checkForUpdates();
+  }
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -34,7 +94,6 @@ function createWindow() {
 
   mainWindow.setMenuBarVisibility(false);
 
-  // In development, load from Vite dev server. In production, load the static build.
   const isDev = !app.isPackaged;
 
   if (isDev) {
@@ -42,18 +101,15 @@ function createWindow() {
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
-  // mainWindow.webContents.openDevTools();
 }
 
 function startBackend() {
   const isDev = !app.isPackaged;
 
-  // The path to the C# exe
   let exePath;
   if (isDev) {
     exePath = path.join(__dirname, '../../GestorActivosHardware/bin/Debug/net10.0-windows/GestorActivosHardware.exe');
   } else {
-    // In production, you would configure electron-builder to copy the backend exe into the resources folder
     exePath = path.join(process.resourcesPath, 'backend', 'GestorActivosHardware.exe');
   }
 
@@ -73,6 +129,7 @@ function startBackend() {
 app.whenReady().then(() => {
   startBackend();
   createWindow();
+  setupAutoUpdater();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <Package
+    Name="Gestor Activos IMSS"
+    Manufacturer="IMSS"
+    Version="1.0.0"
+    UpgradeCode="B7A4C2D1-E5F3-4A8B-9C0D-2E1F7A3B5C6D"
+    Language="1034"
+    Scope="perMachine">
+
+    <MajorUpgrade
+      Schedule="afterInstallInitialize"
+      DowngradeErrorMessage="Ya tienes instalada una versión más reciente de Gestor Activos IMSS." />
+
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <!-- Instalar en C:\Program Files\IMSS\Gestor Activos IMSS -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="IMSSDIR" Name="IMSS">
+        <Directory Id="INSTALLDIR" Name="Gestor Activos IMSS" />
+      </Directory>
+    </StandardDirectory>
+
+    <!-- Acceso directo en Menú Inicio -->
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="AppMenuFolder" Name="IMSS" />
+    </StandardDirectory>
+
+    <Feature Id="MainFeature" Title="Gestor Activos IMSS" Level="1">
+      <ComponentGroupRef Id="AppFiles" />
+      <ComponentRef Id="AppShortcut" />
+    </Feature>
+
+    <!-- Acceso directo en Menú Inicio -->
+    <Component Id="AppShortcut" Directory="AppMenuFolder" Guid="A1B2C3D4-E5F6-7890-ABCD-EF1234567890">
+      <Shortcut
+        Id="ApplicationStartMenuShortcut"
+        Name="Gestor Activos IMSS"
+        Description="Gestor de Activos Institucionales IMSS"
+        Target="[INSTALLDIR]Gestor Activos HW.exe"
+        WorkingDirectory="INSTALLDIR" />
+      <RemoveFolder Id="RemoveAppMenuFolder" Directory="AppMenuFolder" On="uninstall" />
+      <RegistryValue
+        Root="HKCU"
+        Key="Software\IMSS\GestorActivos"
+        Name="installed"
+        Type="integer"
+        Value="1"
+        KeyPath="yes" />
+    </Component>
+
+  </Package>
+</Wix>

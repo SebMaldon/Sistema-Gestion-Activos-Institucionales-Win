@@ -1,0 +1,248 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Fragment>
+    <DirectoryRef Id="INSTALLDIR"><Directory Id="dir_locales" Name="locales" /></DirectoryRef>
+    <DirectoryRef Id="INSTALLDIR"><Directory Id="dir_resources" Name="resources" /></DirectoryRef>
+    <DirectoryRef Id="dir_resources"><Directory Id="dir_resources_backend" Name="backend" /></DirectoryRef>
+
+    <ComponentGroup Id="AppFiles">
+      <Component Id="comp_00001" Directory="INSTALLDIR" Guid="*">
+        <File Id="file_00001" Source="release\win-unpacked\chrome_100_percent.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00002" Directory="INSTALLDIR" Guid="*">
+        <File Id="file_00002" Source="release\win-unpacked\chrome_200_percent.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00003" Directory="INSTALLDIR" Guid="*">
+        <File Id="file_00003" Source="release\win-unpacked\d3dcompiler_47.dll" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00004" Directory="INSTALLDIR" Guid="*">
+        <File Id="file_00004" Source="release\win-unpacked\dxcompiler.dll" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00005" Directory="INSTALLDIR" Guid="*">
+        <File Id="file_00005" Source="release\win-unpacked\dxil.dll" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00006" Directory="INSTALLDIR" Guid="*">
+        <File Id="file_00006" Source="release\win-unpacked\ffmpeg.dll" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00007" Directory="INSTALLDIR" Guid="*">
+        <File Id="file_00007" Source="release\win-unpacked\Gestor Activos HW.exe" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00008" Directory="INSTALLDIR" Guid="*">
+        <File Id="file_00008" Source="release\win-unpacked\icudtl.dat" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00009" Directory="INSTALLDIR" Guid="*">
+        <File Id="file_00009" Source="release\win-unpacked\libEGL.dll" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00010" Directory="INSTALLDIR" Guid="*">
+        <File Id="file_00010" Source="release\win-unpacked\libGLESv2.dll" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00011" Directory="INSTALLDIR" Guid="*">
+        <File Id="file_00011" Source="release\win-unpacked\LICENSE.electron.txt" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00012" Directory="INSTALLDIR" Guid="*">
+        <File Id="file_00012" Source="release\win-unpacked\LICENSES.chromium.html" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00013" Directory="INSTALLDIR" Guid="*">
+        <File Id="file_00013" Source="release\win-unpacked\resources.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00014" Directory="INSTALLDIR" Guid="*">
+        <File Id="file_00014" Source="release\win-unpacked\snapshot_blob.bin" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00015" Directory="INSTALLDIR" Guid="*">
+        <File Id="file_00015" Source="release\win-unpacked\v8_context_snapshot.bin" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00016" Directory="INSTALLDIR" Guid="*">
+        <File Id="file_00016" Source="release\win-unpacked\vk_swiftshader.dll" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00017" Directory="INSTALLDIR" Guid="*">
+        <File Id="file_00017" Source="release\win-unpacked\vk_swiftshader_icd.json" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00018" Directory="INSTALLDIR" Guid="*">
+        <File Id="file_00018" Source="release\win-unpacked\vulkan-1.dll" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00019" Directory="dir_locales" Guid="*">
+        <File Id="file_00019" Source="release\win-unpacked\locales\af.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00020" Directory="dir_locales" Guid="*">
+        <File Id="file_00020" Source="release\win-unpacked\locales\am.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00021" Directory="dir_locales" Guid="*">
+        <File Id="file_00021" Source="release\win-unpacked\locales\ar.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00022" Directory="dir_locales" Guid="*">
+        <File Id="file_00022" Source="release\win-unpacked\locales\bg.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00023" Directory="dir_locales" Guid="*">
+        <File Id="file_00023" Source="release\win-unpacked\locales\bn.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00024" Directory="dir_locales" Guid="*">
+        <File Id="file_00024" Source="release\win-unpacked\locales\ca.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00025" Directory="dir_locales" Guid="*">
+        <File Id="file_00025" Source="release\win-unpacked\locales\cs.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00026" Directory="dir_locales" Guid="*">
+        <File Id="file_00026" Source="release\win-unpacked\locales\da.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00027" Directory="dir_locales" Guid="*">
+        <File Id="file_00027" Source="release\win-unpacked\locales\de.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00028" Directory="dir_locales" Guid="*">
+        <File Id="file_00028" Source="release\win-unpacked\locales\el.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00029" Directory="dir_locales" Guid="*">
+        <File Id="file_00029" Source="release\win-unpacked\locales\en-GB.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00030" Directory="dir_locales" Guid="*">
+        <File Id="file_00030" Source="release\win-unpacked\locales\en-US.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00031" Directory="dir_locales" Guid="*">
+        <File Id="file_00031" Source="release\win-unpacked\locales\es-419.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00032" Directory="dir_locales" Guid="*">
+        <File Id="file_00032" Source="release\win-unpacked\locales\es.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00033" Directory="dir_locales" Guid="*">
+        <File Id="file_00033" Source="release\win-unpacked\locales\et.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00034" Directory="dir_locales" Guid="*">
+        <File Id="file_00034" Source="release\win-unpacked\locales\fa.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00035" Directory="dir_locales" Guid="*">
+        <File Id="file_00035" Source="release\win-unpacked\locales\fi.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00036" Directory="dir_locales" Guid="*">
+        <File Id="file_00036" Source="release\win-unpacked\locales\fil.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00037" Directory="dir_locales" Guid="*">
+        <File Id="file_00037" Source="release\win-unpacked\locales\fr.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00038" Directory="dir_locales" Guid="*">
+        <File Id="file_00038" Source="release\win-unpacked\locales\gu.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00039" Directory="dir_locales" Guid="*">
+        <File Id="file_00039" Source="release\win-unpacked\locales\he.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00040" Directory="dir_locales" Guid="*">
+        <File Id="file_00040" Source="release\win-unpacked\locales\hi.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00041" Directory="dir_locales" Guid="*">
+        <File Id="file_00041" Source="release\win-unpacked\locales\hr.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00042" Directory="dir_locales" Guid="*">
+        <File Id="file_00042" Source="release\win-unpacked\locales\hu.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00043" Directory="dir_locales" Guid="*">
+        <File Id="file_00043" Source="release\win-unpacked\locales\id.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00044" Directory="dir_locales" Guid="*">
+        <File Id="file_00044" Source="release\win-unpacked\locales\it.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00045" Directory="dir_locales" Guid="*">
+        <File Id="file_00045" Source="release\win-unpacked\locales\ja.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00046" Directory="dir_locales" Guid="*">
+        <File Id="file_00046" Source="release\win-unpacked\locales\kn.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00047" Directory="dir_locales" Guid="*">
+        <File Id="file_00047" Source="release\win-unpacked\locales\ko.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00048" Directory="dir_locales" Guid="*">
+        <File Id="file_00048" Source="release\win-unpacked\locales\lt.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00049" Directory="dir_locales" Guid="*">
+        <File Id="file_00049" Source="release\win-unpacked\locales\lv.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00050" Directory="dir_locales" Guid="*">
+        <File Id="file_00050" Source="release\win-unpacked\locales\ml.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00051" Directory="dir_locales" Guid="*">
+        <File Id="file_00051" Source="release\win-unpacked\locales\mr.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00052" Directory="dir_locales" Guid="*">
+        <File Id="file_00052" Source="release\win-unpacked\locales\ms.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00053" Directory="dir_locales" Guid="*">
+        <File Id="file_00053" Source="release\win-unpacked\locales\nb.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00054" Directory="dir_locales" Guid="*">
+        <File Id="file_00054" Source="release\win-unpacked\locales\nl.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00055" Directory="dir_locales" Guid="*">
+        <File Id="file_00055" Source="release\win-unpacked\locales\pl.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00056" Directory="dir_locales" Guid="*">
+        <File Id="file_00056" Source="release\win-unpacked\locales\pt-BR.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00057" Directory="dir_locales" Guid="*">
+        <File Id="file_00057" Source="release\win-unpacked\locales\pt-PT.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00058" Directory="dir_locales" Guid="*">
+        <File Id="file_00058" Source="release\win-unpacked\locales\ro.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00059" Directory="dir_locales" Guid="*">
+        <File Id="file_00059" Source="release\win-unpacked\locales\ru.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00060" Directory="dir_locales" Guid="*">
+        <File Id="file_00060" Source="release\win-unpacked\locales\sk.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00061" Directory="dir_locales" Guid="*">
+        <File Id="file_00061" Source="release\win-unpacked\locales\sl.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00062" Directory="dir_locales" Guid="*">
+        <File Id="file_00062" Source="release\win-unpacked\locales\sr.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00063" Directory="dir_locales" Guid="*">
+        <File Id="file_00063" Source="release\win-unpacked\locales\sv.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00064" Directory="dir_locales" Guid="*">
+        <File Id="file_00064" Source="release\win-unpacked\locales\sw.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00065" Directory="dir_locales" Guid="*">
+        <File Id="file_00065" Source="release\win-unpacked\locales\ta.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00066" Directory="dir_locales" Guid="*">
+        <File Id="file_00066" Source="release\win-unpacked\locales\te.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00067" Directory="dir_locales" Guid="*">
+        <File Id="file_00067" Source="release\win-unpacked\locales\th.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00068" Directory="dir_locales" Guid="*">
+        <File Id="file_00068" Source="release\win-unpacked\locales\tr.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00069" Directory="dir_locales" Guid="*">
+        <File Id="file_00069" Source="release\win-unpacked\locales\uk.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00070" Directory="dir_locales" Guid="*">
+        <File Id="file_00070" Source="release\win-unpacked\locales\ur.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00071" Directory="dir_locales" Guid="*">
+        <File Id="file_00071" Source="release\win-unpacked\locales\vi.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00072" Directory="dir_locales" Guid="*">
+        <File Id="file_00072" Source="release\win-unpacked\locales\zh-CN.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00073" Directory="dir_locales" Guid="*">
+        <File Id="file_00073" Source="release\win-unpacked\locales\zh-TW.pak" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00074" Directory="dir_resources" Guid="*">
+        <File Id="file_00074" Source="release\win-unpacked\resources\app.asar" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00075" Directory="dir_resources_backend" Guid="*">
+        <File Id="file_00075" Source="release\win-unpacked\resources\backend\aspnetcorev2_inprocess.dll" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00076" Directory="dir_resources_backend" Guid="*">
+        <File Id="file_00076" Source="release\win-unpacked\resources\backend\GestorActivosHardware.exe" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00077" Directory="dir_resources_backend" Guid="*">
+        <File Id="file_00077" Source="release\win-unpacked\resources\backend\GestorActivosHardware.pdb" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00078" Directory="dir_resources_backend" Guid="*">
+        <File Id="file_00078" Source="release\win-unpacked\resources\backend\GestorActivosHardware.staticwebassets.endpoints.json" KeyPath="yes" />
+      </Component>
+      <Component Id="comp_00079" Directory="dir_resources_backend" Guid="*">
+        <File Id="file_00079" Source="release\win-unpacked\resources\backend\web.config" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+</Wix>

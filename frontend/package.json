@@ -2,6 +2,8 @@
   "name": "frontend",
   "private": true,
   "version": "1.0.0",
+  "description": "Gestor de Activos Institucionales IMSS",
+  "author": "IMSS",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,10 +11,13 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "electron": "electron .",
-    "dist": "npm run build && electron-builder"
+    "dist": "npm run build && electron-builder --win nsis -p always",
+    "dist:msi": "npm run build && electron-builder --win msi -p always",
+    "dist:all": "npm run build && electron-builder --win nsis msi -p always"
   },
   "dependencies": {
     "clsx": "^2.1.1",
+    "electron-updater": "^6.8.3",
     "lucide-react": "^1.14.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
@@ -38,6 +43,10 @@
   "build": {
     "appId": "com.imss.gestoractivos",
     "productName": "Gestor Activos HW",
+    "publish": {
+      "provider": "generic",
+      "url": "http://11.1.19.4/updates/"
+    },
     "directories": {
       "output": "release"
     },
@@ -54,7 +63,18 @@
     ],
     "win": {
       "target": [
-        "nsis"
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "msi",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "icon": "public/IMSS_Logosímbolo_Blanco.png"
     },
@@ -62,7 +82,16 @@
       "oneClick": true,
       "perMachine": true,
       "createDesktopShortcut": false,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Gestor Activos IMSS",
+      "allowElevation": true,
       "include": "electron/installer.nsh"
+    },
+    "msi": {
+      "perMachine": true,
+      "createDesktopShortcut": false,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Gestor Activos IMSS"
     }
   }
 }
