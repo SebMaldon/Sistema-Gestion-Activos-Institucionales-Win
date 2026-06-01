@@ -24,7 +24,7 @@ const initialFormState = {
   clave_unidad_ref: '', clave_modelo: '', id_usuario_resguardo: '',
   id_segmento: '', id_ubicacion: '', fecha_adquisicion: '',
   nombre_host: '', windows_serial: '', cpu_info: '', ram_gb: '', almacenamiento_gb: '',
-  mac_address: '', dir_ip: '', dir_ip_list: [], puerto_red: '', switch_red: '', modelo_so: '',
+  mac_address: '', dir_ip: '', dir_ip_list: [], puerto_red: '', switch_red: '', modelo_so: '', version_office: '',
   fecha_act_antivirus: '', fecha_actualizacion: '',
   tipo_equipo: '', monitores: [], cuentasList: []
 };
@@ -449,6 +449,7 @@ export default function Dashboard() {
           puerto_red: esp.puerto_red || '',
           switch_red: esp.switch_red || '',
           modelo_so: esp.modelo_so || '',
+          version_office: esp.version_office || '',
           cuentasList: (bien.cuentasPC || []).map(c => ({
             id_cuenta: c.id_cuenta,
             cuenta_windows: c.cuenta_windows || '',
@@ -996,6 +997,7 @@ export default function Dashboard() {
                   <FieldInput label="Nombre de Host (PC)" val={formState.nombre_host} onChange={v => updateForm('nombre_host', v)} color={getBorderColor('nombre_host')} readOnly={true} />
                   <FieldInput label="Serial SO (Windows)" val={formState.windows_serial} onChange={v => updateForm('windows_serial', v)} color={getBorderColor('windows_serial')} readOnly={true} />
                   <FieldInput label="Sistema Operativo" val={formState.modelo_so} onChange={v => updateForm('modelo_so', v)} color={getBorderColor('modelo_so')} readOnly={true} />
+                  <FieldInput label="Versión de Office" val={formState.version_office} onChange={v => updateForm('version_office', v)} color={getBorderColor('version_office')} readOnly={true} />
 
                   <div className="sm:col-span-2">
                     <FieldInput label="Procesador (CPU)" val={formState.cpu_info} onChange={v => updateForm('cpu_info', v)} color={getBorderColor('cpu_info')} readOnly={true} />

@@ -34,6 +34,7 @@ namespace GestorActivosHardware.Services
         public string ram_gb { get; set; } = "";
         public string almacenamiento_gb { get; set; } = "";
         public string modelo_so { get; set; } = "";
+        public string version_office { get; set; } = "";
         
         public string fecha_act_antivirus { get; set; } = "";
         public System.Collections.Generic.List<string> correos_usuario { get; set; } = new System.Collections.Generic.List<string>();
@@ -207,6 +208,50 @@ namespace GestorActivosHardware.Services
                         info.modelo_so = string.IsNullOrEmpty(osArch) ? osName : $"{osName} ({osArch})";
                         info.windows_serial = o["SerialNumber"]?.ToString()?.Trim() ?? "";
                     }
+
+                // Detectar versión de Microsoft Office
+                info.version_office = "No instalado";
+                try
+                {
+                    // Intentar obtener de Click-To-Run (Office 365, 2016, 2019, 2021 modernos)
+                    using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Office\ClickToRun\Configuration"))
+                    {
+                        if (key != null)
+                        {
+                            var prodIds = key.GetValue("ProductReleaseIds")?.ToString() ?? "";
+                            if (!string.IsNullOrEmpty(prodIds))
+                            {
+                                string name = prodIds.Split(',')[0].Replace("Retail", "").Replace("Volume", "");
+                                info.version_office = $"Office {name}";
+                            }
+                        }
+                    }
+
+                    // Fallback a instalaciones tradicionales MSI
+                    if (info.version_office == "No instalado")
+                    {
+                        string[] versions = { "16.0", "15.0", "14.0", "12.0", "11.0" };
+                        foreach (var v in versions)
+                        {
+                            using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey($@"SOFTWARE\Microsoft\Office\{v}\Word\InstallRoot"))
+                            {
+                                if (key != null && !string.IsNullOrEmpty(key.GetValue("Path")?.ToString()))
+                                {
+                                    info.version_office = v switch {
+                                        "16.0" => "Office 2016/2019/365",
+                                        "15.0" => "Office 2013",
+                                        "14.0" => "Office 2010",
+                                        "12.0" => "Office 2007",
+                                        "11.0" => "Office 2003",
+                                        _ => $"Office {v}"
+                                    };
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                catch { }
 
                 // Determinar si es PC o Laptop usando Win32_SystemEnclosure
                 info.tipo_equipo = "Desktop";
