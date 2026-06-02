@@ -171,6 +171,7 @@ export const saveAsset = async (isNew, assetData) => {
         last_scan: ${N(assetData.fecha_act_antivirus)}
         windows_serial: ${N(assetData.windows_serial)}
         nombre_host: ${N(assetData.nombre_host)}
+        version_office: ${N(assetData.version_office)}
       ) { id_bien } }
     `);
   }
@@ -267,10 +268,9 @@ export const saveDirectSpecsAndPrograms = async (id_bien, assetData) => {
 
   if (assetData.monitores && assetData.monitores.length > 0) {
     const monitoresStr = JSON.stringify(assetData.monitores.map(m => ({
-      id_bien: m.id_bien || '',
-      num_serie: m.num_serie || '',
+      marca: m.marca || m.fabricante || '',
       modelo: m.modelo || '',
-      fabricante: m.fabricante || ''
+      num_serie: m.num_serie || ''
     }))).replace(/"([a-zA-Z0-9_]+)":/g, '$1:');
     
     try {
@@ -282,7 +282,6 @@ export const saveDirectSpecsAndPrograms = async (id_bien, assetData) => {
     const progsStr = JSON.stringify(assetData.programas.map(p => ({
       nombre_programa: p.nombre_programa || '',
       version: p.version || '',
-      editor: p.editor || '',
       fecha_instalacion: p.fecha_instalacion || ''
     }))).replace(/"([a-zA-Z0-9_]+)":/g, '$1:');
     

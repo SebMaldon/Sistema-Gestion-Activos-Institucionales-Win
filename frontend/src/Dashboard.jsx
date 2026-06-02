@@ -394,7 +394,7 @@ export default function Dashboard() {
               nombre_completo
             }
             especificacionTI {
-              nombre_host windows_serial cpu_info ram_gb almacenamiento_gb mac_address dir_ip puerto_red switch_red modelo_so
+              nombre_host windows_serial cpu_info ram_gb almacenamiento_gb mac_address dir_ip puerto_red switch_red modelo_so version_office
               last_scan
             }
             cuentasPC {

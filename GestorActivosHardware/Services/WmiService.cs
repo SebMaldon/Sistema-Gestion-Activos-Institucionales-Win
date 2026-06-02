@@ -21,7 +21,6 @@ namespace GestorActivosHardware.Services
     {
         public string nombre_programa { get; set; } = "";
         public string version { get; set; } = "";
-        public string editor { get; set; } = "";
         public string fecha_instalacion { get; set; } = "";
     }
 
@@ -77,13 +76,30 @@ namespace GestorActivosHardware.Services
                                     if (!string.IsNullOrEmpty(name))
                                     {
                                         if (name.Contains("KB") && name.Contains("Update")) continue;
+
+                                        string lowerName = name.ToLower();
+                                        if (lowerName.Contains("microsoft .net") ||
+                                            lowerName.Contains("microsoft visual c++") ||
+                                            lowerName.Contains("redistributable") ||
+                                            lowerName.Contains(" sdk ") || lowerName.EndsWith(" sdk") ||
+                                            lowerName.Contains("runtime") ||
+                                            lowerName.Contains("language pack") ||
+                                            lowerName.Contains("paquete de idioma") ||
+                                            lowerName.Contains("paquete de compatibilidad") ||
+                                            lowerName.Contains("paquete de controladores") ||
+                                            lowerName.StartsWith("windows driver package") ||
+                                            lowerName.StartsWith("windows driver kit") ||
+                                            lowerName.StartsWith("windows app certification kit") ||
+                                            lowerName.Contains("developer tools") ||
+                                            lowerName.Contains("update for ") ||
+                                            lowerName.Contains("security update")) continue;
+
                                         if (!seen.Add(name)) continue;
 
                                         list.Add(new ProgramaInfo
                                         {
                                             nombre_programa = name,
                                             version = subKey.GetValue("DisplayVersion") as string ?? "",
-                                            editor = subKey.GetValue("Publisher") as string ?? "",
                                             fecha_instalacion = subKey.GetValue("InstallDate") as string ?? ""
                                         });
                                     }
@@ -142,20 +158,10 @@ namespace GestorActivosHardware.Services
                                     
                                     if (!seen.Add(cleanName)) continue;
 
-                                    string publisherStr = p.Publisher ?? "";
-                                    int cnIndex = publisherStr.IndexOf("CN=");
-                                    if (cnIndex >= 0)
-                                    {
-                                        int commaIndex = publisherStr.IndexOf(",", cnIndex);
-                                        if (commaIndex > cnIndex) publisherStr = publisherStr.Substring(cnIndex + 3, commaIndex - cnIndex - 3);
-                                        else publisherStr = publisherStr.Substring(cnIndex + 3);
-                                    }
-
                                     list.Add(new ProgramaInfo
                                     {
                                         nombre_programa = cleanName,
                                         version = p.Version ?? "",
-                                        editor = publisherStr,
                                         fecha_instalacion = ""
                                     });
                                 }
