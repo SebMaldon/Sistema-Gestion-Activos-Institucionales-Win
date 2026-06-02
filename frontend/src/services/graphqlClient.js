@@ -1,4 +1,4 @@
-const GRAPHQL_API_URL = import.meta.env.VITE_GQL_URL || 'http://localhost:4000/graphql';
+const GRAPHQL_API_URL = import.meta.env.VITE_GQL_URL || 'http://11.1.19.4:4000/graphql';
 
 export const queryGraphQL = async (query, variables = {}) => {
   const token = sessionStorage.getItem('jwtToken');
@@ -217,14 +217,14 @@ export const saveAsset = async (isNew, assetData) => {
       editor: p.editor || '',
       fecha_instalacion: p.fecha_instalacion || ''
     }))).replace(/"([a-zA-Z0-9_]+)":/g, '$1:');
-    
+
     try {
       await queryGraphQL(`
         mutation {
           syncProgramasPC(id_bien: "${finalIdBien}", programas: ${progsStr})
         }
       `);
-    } catch(err) { console.log("No se pudo guardar programas_pc: ", err); }
+    } catch (err) { console.log("No se pudo guardar programas_pc: ", err); }
   }
 
   return finalIdBien;
@@ -233,7 +233,7 @@ export const saveAsset = async (isNew, assetData) => {
 export const saveDirectSpecsAndPrograms = async (id_bien, assetData) => {
   const N = (v) => v ? JSON.stringify(v) : "null";
   const I = (v) => v ? v : "null";
-  
+
   if (assetData.cpu_info || assetData.ram_gb || assetData.almacenamiento_gb) {
     await queryGraphQL(`
       mutation { upsertEspecificacionTI(
@@ -260,10 +260,10 @@ export const saveDirectSpecsAndPrograms = async (id_bien, assetData) => {
       correo: c.correo || '',
       tipo_user: c.tipo_user || ''
     }))).replace(/"([a-zA-Z0-9_]+)":/g, '$1:');
-    
+
     try {
       await queryGraphQL(`mutation { syncCuentasPC(id_bien: "${id_bien}", cuentas: ${cuentasStr}) }`);
-    } catch(err) { console.log("No se pudo guardar cuentasList en update directo: ", err); }
+    } catch (err) { console.log("No se pudo guardar cuentasList en update directo: ", err); }
   }
 
   if (assetData.monitores && assetData.monitores.length > 0) {
@@ -272,10 +272,10 @@ export const saveDirectSpecsAndPrograms = async (id_bien, assetData) => {
       modelo: m.modelo || '',
       num_serie: m.num_serie || ''
     }))).replace(/"([a-zA-Z0-9_]+)":/g, '$1:');
-    
+
     try {
       await queryGraphQL(`mutation { syncMonitoresPC(id_bien: "${id_bien}", monitores: ${monitoresStr}) }`);
-    } catch(err) { console.log("No se pudo guardar monitores en update directo: ", err); }
+    } catch (err) { console.log("No se pudo guardar monitores en update directo: ", err); }
   }
 
   if (assetData.programas && assetData.programas.length > 0) {
@@ -284,10 +284,10 @@ export const saveDirectSpecsAndPrograms = async (id_bien, assetData) => {
       version: p.version || '',
       fecha_instalacion: p.fecha_instalacion || ''
     }))).replace(/"([a-zA-Z0-9_]+)":/g, '$1:');
-    
+
     try {
       await queryGraphQL(`mutation { syncProgramasPC(id_bien: "${id_bien}", programas: ${progsStr}) }`);
-    } catch(err) { console.log("No se pudo guardar programas_pc en update directo: ", err); }
+    } catch (err) { console.log("No se pudo guardar programas_pc en update directo: ", err); }
   }
 };
 
@@ -388,7 +388,7 @@ export const checkIpUsage = async (ip, excludeIdBien) => {
   `;
   const data = await queryGraphQL(q, { ip });
   if (!data?.bienes?.edges) return false;
-  
+
   const inUse = data.bienes.edges.some(({ node: b }) => {
     if (excludeIdBien && b.id_bien === excludeIdBien) return false;
     const ips = (b.especificacionTI?.dir_ip || '').split('/').map(x => x.trim()).filter(Boolean);
