@@ -304,9 +304,21 @@ namespace GestorActivosHardware.Services
                             info.mac_address = o["MACAddress"]?.ToString() ?? "";
                     }
 
-                using (var searcher = new ManagementObjectSearcher("SELECT Name FROM Win32_Processor"))
+                using (var searcher = new ManagementObjectSearcher("SELECT Name, MaxClockSpeed FROM Win32_Processor"))
                     foreach (ManagementObject o in searcher.Get())
-                        info.cpu_info = o["Name"]?.ToString()?.Trim() ?? "";
+                    {
+                        string name = o["Name"]?.ToString()?.Trim() ?? "";
+                        string speedRaw = o["MaxClockSpeed"]?.ToString() ?? "";
+                        if (!string.IsNullOrEmpty(speedRaw) && double.TryParse(speedRaw, out double mhz))
+                        {
+                            double ghz = Math.Round(mhz / 1000.0, 2);
+                            if (!name.Contains("@"))
+                            {
+                                name += $" @ {ghz} GHz";
+                            }
+                        }
+                        info.cpu_info = name;
+                    }
 
                 long ramBytes = 0;
                 using (var searcher = new ManagementObjectSearcher("SELECT Capacity FROM Win32_PhysicalMemory"))

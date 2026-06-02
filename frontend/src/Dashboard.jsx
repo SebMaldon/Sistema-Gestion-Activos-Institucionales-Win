@@ -13,12 +13,14 @@ import {
   procesarMonitoresEquipo,
   getNotasBien,
   createNotaBien,
-  saveDirectSpecsAndPrograms
+  saveDirectSpecsAndPrograms,
+  checkIpUsage
 } from './services/graphqlClient';
 import { LogOut, RefreshCcw, Save, Server, Monitor, HardDrive, Cpu, MapPin, Network, Activity, Plus, ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertTriangle, HelpCircle, Search, MessageSquare, Trash2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import SearchableSelect from './components/SearchableSelect';
 import { ModalUbicacion, ModalModeloMarca } from './components/Modals';
+import { IpInput, MacInput } from './components/MaskedInputs';
 
 const initialFormState = {
   num_serie: '', num_inv: '', estatus_operativo: 'ACTIVO',
@@ -517,6 +519,16 @@ export default function Dashboard() {
 
     setLoadingAction(true);
     try {
+      const dbIps = (formState.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean);
+      for (const ip of dbIps) {
+        const inUse = await checkIpUsage(ip, dbInfo?.id_bien);
+        if (inUse) {
+          setLoadingAction(false);
+          await showAlert(`La dirección IP ${ip} ya se encuentra registrada en otro activo.`, 'error', 'IP Duplicada');
+          return;
+        }
+      }
+
       const isNew = !dbInfo || !dbInfo.id_bien;
       const userRole = getUserRole();
 
@@ -564,6 +576,7 @@ export default function Dashboard() {
           await _procesarMonitoresFrontend(idBien, monitores, false);
         }
 
+        setLastSubmitted(JSON.stringify(formState));
         await showAlert('El activo y sus componentes han sido guardados exitosamente.', 'success', 'Guardado Exitoso');
         setSearchSerial(formState.num_serie);
         await syncDB();
@@ -651,7 +664,7 @@ export default function Dashboard() {
 
         const finalIdBien = effectiveIsNew ? crypto.randomUUID() : idBienTarget;
         await solicitarActualizacionBien(finalIdBien, JSON.stringify(datosNuevos));
-        setLastSubmitted(JSON.stringify(datosNuevos));
+        setLastSubmitted(JSON.stringify(formState));
         await showAlert('Tus cambios generales han sido enviados a revisión y la información técnica se actualizó directamente.', 'success', 'Enviado a revisión');
       }
     } catch (err) {
@@ -712,17 +725,34 @@ export default function Dashboard() {
     const formMons = formState.monitores || [];
     if (dbMons.length !== formMons.length) return true;
     return formMons.some((fm, idx) => {
-      const dbm = dbMons[idx];
-      if (!dbm) return true;
-      return fm.num_serie !== dbm.num_serie ||
+      const dbm = dbMons[idx] || {};
+      return fm.monitor?.num_serie !== dbm.monitor?.num_serie ||
         fm.marca !== dbm.marca ||
         fm.modelo !== dbm.modelo;
     });
   })();
 
+  const tiFieldsChanged = (() => {
+    if (!dbInfo) return true;
+    const tiKeys = ['dir_ip_list', 'cuentasList', 'programas', 'nombre_host', 'windows_serial', 'cpu_info', 'ram_gb', 'almacenamiento_gb', 'puerto_red', 'switch_red', 'modelo_so', 'version_office'];
+    return tiKeys.some(key => {
+      if (key === 'dir_ip_list') {
+        const cIp = (formState.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean).join('/');
+        const oIp = (dbInfo.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean).join('/');
+        const cMac = (formState.dir_ip_list || []).map(x => (x.mac || '').trim()).filter(Boolean).join('/');
+        const oMac = (dbInfo.dir_ip_list || []).map(x => (x.mac || '').trim()).filter(Boolean).join('/');
+        return cIp !== oIp || cMac !== oMac;
+      }
+      if (Array.isArray(formState[key])) {
+        return JSON.stringify(formState[key]) !== JSON.stringify(dbInfo[key]);
+      }
+      return String(formState[key] ?? '').trim() !== String(dbInfo[key] ?? '').trim();
+    });
+  })();
+
   const hasDbChanges = Object.keys(currentDatosNuevos).filter(k => k !== '_esCreacion').length > 0;
-  const hasPendingChanges = lastSubmitted !== JSON.stringify(currentDatosNuevos);
-  const canSave = (hasDbChanges || monitorsChanged) && hasPendingChanges;
+  const hasPendingChanges = lastSubmitted !== JSON.stringify(formState);
+  const canSave = (hasDbChanges || monitorsChanged || tiFieldsChanged) && hasPendingChanges;
 
   if (isInitialLoading) {
     return (
@@ -1037,29 +1067,29 @@ export default function Dashboard() {
                     <div className="space-y-2">
                       {((formState.dir_ip_list?.length > 0) ? formState.dir_ip_list : [{ ip: '', mac: '' }]).map((item, idx, arr) => (
                         <div key={idx} className="flex items-center gap-2 w-full">
-                          <input
-                            type="text"
-                            list="wmi-adapters-list"
-                            value={item.ip || ''}
-                            onChange={(e) => {
-                              const newList = [...((formState.dir_ip_list?.length > 0) ? formState.dir_ip_list : [{ ip: '', mac: '' }])];
-                              newList[idx].ip = e.target.value;
-                              updateForm('dir_ip_list', newList);
-                            }}
-                            className={clsx("flex-1 min-w-0 bg-white text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]", getBorderColor('dir_ip'))}
-                            placeholder="Ej. 192.168.1.5"
-                          />
-                          <input
-                            type="text"
-                            value={item.mac || ''}
-                            onChange={(e) => {
-                              const newList = [...((formState.dir_ip_list?.length > 0) ? formState.dir_ip_list : [{ ip: '', mac: '' }])];
-                              newList[idx].mac = e.target.value;
-                              updateForm('dir_ip_list', newList);
-                            }}
-                            className={clsx("flex-1 min-w-0 bg-white text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]", getBorderColor('mac_address'))}
-                            placeholder="MAC Address"
-                          />
+                          <div className="flex-1 min-w-0">
+                            <IpInput
+                              value={item.ip || ''}
+                              onChange={(val) => {
+                                const newList = [...((formState.dir_ip_list?.length > 0) ? formState.dir_ip_list : [{ ip: '', mac: '' }])];
+                                newList[idx].ip = val;
+                                updateForm('dir_ip_list', newList);
+                              }}
+                              className={`py-2 px-3 ${getBorderColor('dir_ip').replace('border-', 'border border-').replace('border-gray-200', 'border-gray-300')} focus-within:ring-1 focus-within:ring-[#006241] h-10`}
+                            />
+                          </div>
+                          
+                          <div className="flex-1 min-w-0">
+                            <MacInput
+                              value={item.mac || ''}
+                              onChange={(val) => {
+                                const newList = [...((formState.dir_ip_list?.length > 0) ? formState.dir_ip_list : [{ ip: '', mac: '' }])];
+                                newList[idx].mac = val;
+                                updateForm('dir_ip_list', newList);
+                              }}
+                              className={`py-2 px-3 ${getBorderColor('mac_address').replace('border-', 'border border-').replace('border-gray-200', 'border-gray-300')} focus-within:ring-1 focus-within:ring-[#006241] h-10`}
+                            />
+                          </div>
                           {arr.length > 1 && (
                             <button
                               type="button"

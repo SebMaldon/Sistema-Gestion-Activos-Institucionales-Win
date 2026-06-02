@@ -370,4 +370,31 @@ export const createNotaBien = async (idBien, contenidoNota) => {
   return data?.createNotaBien;
 };
 
+export const checkIpUsage = async (ip, excludeIdBien) => {
+  if (!ip || ip.trim() === '') return false;
+  const q = `
+    query checkIp($ip: String) {
+      bienes(filter: { dir_ip: $ip }) {
+        edges {
+          node {
+            id_bien
+            especificacionTI {
+              dir_ip
+            }
+          }
+        }
+      }
+    }
+  `;
+  const data = await queryGraphQL(q, { ip });
+  if (!data?.bienes?.edges) return false;
+  
+  const inUse = data.bienes.edges.some(({ node: b }) => {
+    if (excludeIdBien && b.id_bien === excludeIdBien) return false;
+    const ips = (b.especificacionTI?.dir_ip || '').split('/').map(x => x.trim()).filter(Boolean);
+    return ips.includes(ip.trim());
+  });
+  return inUse;
+};
+
 
