@@ -17,6 +17,14 @@ namespace GestorActivosHardware.Services
         public string mac { get; set; } = "";
     }
 
+    public class ProgramaInfo
+    {
+        public string nombre_programa { get; set; } = "";
+        public string version { get; set; } = "";
+        public string editor { get; set; } = "";
+        public string fecha_instalacion { get; set; } = "";
+    }
+
     public class CuentaInfo
     {
         public string cuenta_windows { get; set; } = "";
@@ -46,10 +54,119 @@ namespace GestorActivosHardware.Services
         public System.Collections.Generic.List<MonitorInfo> monitores { get; set; } = new System.Collections.Generic.List<MonitorInfo>();
         public System.Collections.Generic.List<NetworkAdapterInfo> adaptadores_red { get; set; } = new System.Collections.Generic.List<NetworkAdapterInfo>();
         public System.Collections.Generic.List<CuentaInfo> cuentasList { get; set; } = new System.Collections.Generic.List<CuentaInfo>();
+        public System.Collections.Generic.List<ProgramaInfo> programas { get; set; } = new System.Collections.Generic.List<ProgramaInfo>();
     }
 
     public static class WmiService
     {
+        private static void GetProgramsFromRegistry(string registryKeyPath, Microsoft.Win32.RegistryKey rootKey, System.Collections.Generic.List<ProgramaInfo> list, System.Collections.Generic.HashSet<string> seen)
+        {
+            try
+            {
+                using (var key = rootKey.OpenSubKey(registryKeyPath))
+                {
+                    if (key != null)
+                    {
+                        foreach (var subKeyName in key.GetSubKeyNames())
+                        {
+                            using (var subKey = key.OpenSubKey(subKeyName))
+                            {
+                                if (subKey != null)
+                                {
+                                    var name = subKey.GetValue("DisplayName") as string;
+                                    if (!string.IsNullOrEmpty(name))
+                                    {
+                                        if (name.Contains("KB") && name.Contains("Update")) continue;
+                                        if (!seen.Add(name)) continue;
+
+                                        list.Add(new ProgramaInfo
+                                        {
+                                            nombre_programa = name,
+                                            version = subKey.GetValue("DisplayVersion") as string ?? "",
+                                            editor = subKey.GetValue("Publisher") as string ?? "",
+                                            fecha_instalacion = subKey.GetValue("InstallDate") as string ?? ""
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        private class AppxPackageInfo 
+        {
+            public string Name { get; set; }
+            public string Version { get; set; }
+            public string Publisher { get; set; }
+        }
+
+        private static void GetAppxPackages(System.Collections.Generic.List<ProgramaInfo> list, System.Collections.Generic.HashSet<string> seen)
+        {
+            try
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "powershell.exe",
+                    Arguments = "-NoProfile -Command \"Get-AppxPackage -AllUsers | Select-Object Name, Version, Publisher | ConvertTo-Json -Compress\"",
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                using (var process = System.Diagnostics.Process.Start(psi))
+                {
+                    if (process != null)
+                    {
+                        string output = process.StandardOutput.ReadToEnd().Trim();
+                        if (!string.IsNullOrEmpty(output) && output.StartsWith("["))
+                        {
+                            var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                            var packages = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.List<AppxPackageInfo>>(output, options);
+                            if (packages != null)
+                            {
+                                foreach (var p in packages)
+                                {
+                                    if (string.IsNullOrEmpty(p.Name)) continue;
+                                    // Ignorar paquetes puramente internos del sistema para no hacer spam, pero dejar apps
+                                    if (p.Name.StartsWith("MicrosoftWindows.") || p.Name.StartsWith("Microsoft.UI.") || p.Name.StartsWith("Microsoft.VCLibs") || p.Name.StartsWith("Microsoft.NET")) continue;
+                                    
+                                    string cleanName = p.Name;
+                                    // Mejorar nombres de algunas apps comunes
+                                    if (cleanName == "Microsoft.WindowsNotepad") cleanName = "Bloc de notas";
+                                    else if (cleanName == "Microsoft.Paint") cleanName = "Paint";
+                                    else if (cleanName == "Microsoft.BingWeather") cleanName = "El Tiempo";
+                                    else if (cleanName == "Microsoft.WindowsCalculator") cleanName = "Calculadora";
+                                    else if (cleanName.StartsWith("Microsoft.")) cleanName = cleanName.Substring(10);
+                                    
+                                    if (!seen.Add(cleanName)) continue;
+
+                                    string publisherStr = p.Publisher ?? "";
+                                    int cnIndex = publisherStr.IndexOf("CN=");
+                                    if (cnIndex >= 0)
+                                    {
+                                        int commaIndex = publisherStr.IndexOf(",", cnIndex);
+                                        if (commaIndex > cnIndex) publisherStr = publisherStr.Substring(cnIndex + 3, commaIndex - cnIndex - 3);
+                                        else publisherStr = publisherStr.Substring(cnIndex + 3);
+                                    }
+
+                                    list.Add(new ProgramaInfo
+                                    {
+                                        nombre_programa = cleanName,
+                                        version = p.Version ?? "",
+                                        editor = publisherStr,
+                                        fecha_instalacion = ""
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+        }
+
         public static HardwareInfo GetHardwareInfo()
         {
             var info = new HardwareInfo
@@ -448,6 +565,15 @@ namespace GestorActivosHardware.Services
                         }
                     }
                 } catch {}
+
+                // Extraer programas instalados
+                System.Collections.Generic.HashSet<string> seenProgs = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+                GetProgramsFromRegistry(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", Microsoft.Win32.Registry.LocalMachine, info.programas, seenProgs);
+                GetProgramsFromRegistry(@"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall", Microsoft.Win32.Registry.LocalMachine, info.programas, seenProgs);
+                GetProgramsFromRegistry(@"Software\Microsoft\Windows\CurrentVersion\Uninstall", Microsoft.Win32.Registry.CurrentUser, info.programas, seenProgs);
+
+                // Obtener aplicaciones modernas (AppX/UWP)
+                GetAppxPackages(info.programas, seenProgs);
 
             }
             catch (Exception ex)

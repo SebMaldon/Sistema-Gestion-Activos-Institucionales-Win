@@ -12,7 +12,8 @@ import {
   getUserRole,
   procesarMonitoresEquipo,
   getNotasBien,
-  createNotaBien
+  createNotaBien,
+  saveDirectSpecsAndPrograms
 } from './services/graphqlClient';
 import { LogOut, RefreshCcw, Save, Server, Monitor, HardDrive, Cpu, MapPin, Network, Activity, Plus, ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertTriangle, HelpCircle, Search, MessageSquare, Trash2 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -26,7 +27,7 @@ const initialFormState = {
   nombre_host: '', windows_serial: '', cpu_info: '', ram_gb: '', almacenamiento_gb: '',
   mac_address: '', dir_ip: '', dir_ip_list: [], puerto_red: '', switch_red: '', modelo_so: '', version_office: '',
   fecha_act_antivirus: '', fecha_actualizacion: '',
-  tipo_equipo: '', monitores: [], cuentasList: []
+  tipo_equipo: '', monitores: [], cuentasList: [], programas: []
 };
 
 const NotasBienSection = ({ idBien, title, showAlert }) => {
@@ -570,21 +571,34 @@ export default function Dashboard() {
 
         // Roles 2, 3, 4 → solicitud de cambio
         const datosNuevos = {};
+        const dirIpString = (formState.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean).join('/');
+        const macString = (formState.dir_ip_list || []).map(x => (x.mac || '').trim()).filter(Boolean).join('/');
+
+        let idBienTarget = effectiveDbInfo?.id_bien;
 
         if (effectiveIsNew) {
           // Creación: enviar todos los campos con valor
           Object.keys(initialFormState).forEach(key => {
-            if (['correos_usuario', 'tipo_equipo', 'nombre_usuario_resguardo', 'mac_address', 'dir_ip'].includes(key)) return;
+            if (['correos_usuario', 'tipo_equipo', 'nombre_usuario_resguardo'].includes(key)) return;
             if (formState[key] !== '' && formState[key] !== undefined && formState[key] !== null) {
               datosNuevos[key] = formState[key];
             }
           });
           datosNuevos._esCreacion = true;
+          // Si es nuevo y es rol menor, la info de TI se enviará como solicitud junto con lo general
         } else {
-          // Actualización: solo campos que cambiaron vs dbInfo
+          // Actualización: Guardado directo de specs y programas aunque sea rol menor
+          try {
+            await saveDirectSpecsAndPrograms(idBienTarget, { ...formState, dir_ip: dirIpString, mac_address: macString });
+          } catch(err) {
+            console.log("Error guardando specs directos:", err);
+          }
+
+          // Actualización: solo campos generales para la solicitud
           const safeDbInfo = effectiveDbInfo || {};
           Object.keys(initialFormState).forEach(key => {
-            if (['id_bien', 'correos_usuario', 'tipo_equipo', 'nombre_usuario_resguardo', 'monitores', 'mac_address', 'dir_ip'].includes(key)) return;
+            // Ignoramos campos de TI porque ya se guardaron directo
+            if (['id_bien', 'correos_usuario', 'tipo_equipo', 'nombre_usuario_resguardo', 'monitores', 'mac_address', 'dir_ip', 'dir_ip_list', 'cuentasList', 'programas', 'nombre_host', 'windows_serial', 'cpu_info', 'ram_gb', 'almacenamiento_gb', 'puerto_red', 'switch_red', 'modelo_so', 'version_office', 'fecha_act_antivirus'].includes(key)) return;
             
             if (key === 'dir_ip_list') {
               const cIp = (formState.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean).join('/');
@@ -625,14 +639,20 @@ export default function Dashboard() {
         }
 
         if (Object.keys(datosNuevos).filter(k => k !== '_esCreacion').length === 0) {
-          await showAlert('No se detectaron cambios en el formulario para enviar a revisión.', 'info', 'Sin Cambios');
+          if (!effectiveIsNew) {
+             await showAlert('La información técnica (HW/SW) ha sido guardada directamente. No hubo cambios adicionales para revisión.', 'success', 'Guardado Técnico');
+             setSearchSerial(formState.num_serie);
+             await syncDB();
+          } else {
+             await showAlert('No se detectaron cambios en el formulario para enviar a revisión.', 'info', 'Sin Cambios');
+          }
           return;
         }
 
-        const idBien = effectiveIsNew ? crypto.randomUUID() : effectiveDbInfo.id_bien;
-        await solicitarActualizacionBien(idBien, JSON.stringify(datosNuevos));
+        const finalIdBien = effectiveIsNew ? crypto.randomUUID() : idBienTarget;
+        await solicitarActualizacionBien(finalIdBien, JSON.stringify(datosNuevos));
         setLastSubmitted(JSON.stringify(datosNuevos));
-        await showAlert('Tus cambios han sido enviados a revisión y están pendientes de aprobación por parte de un administrador.', 'success', 'Enviado a revisión');
+        await showAlert('Tus cambios generales han sido enviados a revisión y la información técnica se actualizó directamente.', 'success', 'Enviado a revisión');
       }
     } catch (err) {
       await showAlert('Error al guardar: ' + err.message, 'error');
@@ -664,7 +684,7 @@ export default function Dashboard() {
   let currentDatosNuevos = {};
   if (isNew) {
     Object.keys(initialFormState).forEach(key => {
-      if (['correos_usuario', 'monitores', 'tipo_equipo', 'nombre_usuario_resguardo', 'mac_address', 'dir_ip'].includes(key)) return;
+      if (['correos_usuario', 'monitores', 'tipo_equipo', 'nombre_usuario_resguardo', 'mac_address', 'dir_ip', 'programas'].includes(key)) return;
       if (formState[key] !== '' && formState[key] !== undefined && formState[key] !== null) {
         currentDatosNuevos[key] = formState[key];
       }
@@ -672,22 +692,7 @@ export default function Dashboard() {
     currentDatosNuevos._esCreacion = true;
   } else {
     Object.keys(initialFormState).forEach(key => {
-      if (['id_bien', 'correos_usuario', 'monitores', 'tipo_equipo', 'nombre_usuario_resguardo', 'mac_address', 'dir_ip'].includes(key)) return;
-      
-      if (key === 'dir_ip_list') {
-        const cIp = (formState.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean).join('/');
-        const oIp = (dbInfo.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean).join('/');
-        const cMac = (formState.dir_ip_list || []).map(x => (x.mac || '').trim()).filter(Boolean).join('/');
-        const oMac = (dbInfo.dir_ip_list || []).map(x => (x.mac || '').trim()).filter(Boolean).join('/');
-        if (cIp !== oIp || cMac !== oMac) currentDatosNuevos.dir_ip_list = formState.dir_ip_list;
-        return;
-      }
-      if (key === 'cuentasList') {
-        const cStr = JSON.stringify((formState.cuentasList || []).map(c => ({ w: c.cuenta_windows, m: c.correo, t: c.tipo_user })));
-        const oStr = JSON.stringify((dbInfo.cuentasList || []).map(c => ({ w: c.cuenta_windows, m: c.correo, t: c.tipo_user })));
-        if (cStr !== oStr) currentDatosNuevos.cuentasList = formState.cuentasList;
-        return;
-      }
+      if (['id_bien', 'correos_usuario', 'monitores', 'tipo_equipo', 'nombre_usuario_resguardo', 'mac_address', 'dir_ip', 'dir_ip_list', 'cuentasList', 'programas', 'nombre_host', 'windows_serial', 'cpu_info', 'ram_gb', 'almacenamiento_gb', 'puerto_red', 'switch_red', 'modelo_so', 'version_office', 'fecha_act_antivirus'].includes(key)) return;
       if (Array.isArray(formState[key])) {
         if (JSON.stringify(formState[key]) !== JSON.stringify(dbInfo[key])) {
           currentDatosNuevos[key] = formState[key];

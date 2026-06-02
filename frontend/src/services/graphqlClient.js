@@ -120,7 +120,7 @@ export const saveAsset = async (isNew, assetData) => {
     clave_modelo, id_usuario_resguardo, id_segmento, id_ubicacion, fecha_adquisicion
   } = assetData;
 
-  const N = (v) => v ? `"${v}"` : "null";
+  const N = (v) => v ? JSON.stringify(v) : "null";
   const I = (v) => v ? v : "null";
 
   const mutCreate = `
@@ -208,7 +208,88 @@ export const saveAsset = async (isNew, assetData) => {
     }
   }
 
+  // Guardar programas PC
+  if (assetData.programas && assetData.programas.length > 0) {
+    const progsStr = JSON.stringify(assetData.programas.map(p => ({
+      nombre_programa: p.nombre_programa || '',
+      version: p.version || '',
+      editor: p.editor || '',
+      fecha_instalacion: p.fecha_instalacion || ''
+    }))).replace(/"([a-zA-Z0-9_]+)":/g, '$1:');
+    
+    try {
+      await queryGraphQL(`
+        mutation {
+          syncProgramasPC(id_bien: "${finalIdBien}", programas: ${progsStr})
+        }
+      `);
+    } catch(err) { console.log("No se pudo guardar programas_pc: ", err); }
+  }
+
   return finalIdBien;
+};
+
+export const saveDirectSpecsAndPrograms = async (id_bien, assetData) => {
+  const N = (v) => v ? JSON.stringify(v) : "null";
+  const I = (v) => v ? v : "null";
+  
+  if (assetData.cpu_info || assetData.ram_gb || assetData.almacenamiento_gb) {
+    await queryGraphQL(`
+      mutation { upsertEspecificacionTI(
+        id_bien: "${id_bien}"
+        cpu_info: ${N(assetData.cpu_info)}
+        ram_gb: ${I(assetData.ram_gb)}
+        almacenamiento_gb: ${I(assetData.almacenamiento_gb)}
+        mac_address: ${N(assetData.mac_address)}
+        dir_ip: ${N(assetData.dir_ip)}
+        puerto_red: ${N(assetData.puerto_red)}
+        switch_red: ${N(assetData.switch_red)}
+        modelo_so: ${N(assetData.modelo_so)}
+        last_scan: ${N(assetData.fecha_act_antivirus)}
+        windows_serial: ${N(assetData.windows_serial)}
+        nombre_host: ${N(assetData.nombre_host)}
+        version_office: ${N(assetData.version_office)}
+      ) { id_bien } }
+    `);
+  }
+
+  if (assetData.cuentasList && assetData.cuentasList.length > 0) {
+    const cuentasStr = JSON.stringify(assetData.cuentasList.map(c => ({
+      cuenta_windows: c.cuenta_windows || '',
+      correo: c.correo || '',
+      tipo_user: c.tipo_user || ''
+    }))).replace(/"([a-zA-Z0-9_]+)":/g, '$1:');
+    
+    try {
+      await queryGraphQL(`mutation { syncCuentasPC(id_bien: "${id_bien}", cuentas: ${cuentasStr}) }`);
+    } catch(err) { console.log("No se pudo guardar cuentasList en update directo: ", err); }
+  }
+
+  if (assetData.monitores && assetData.monitores.length > 0) {
+    const monitoresStr = JSON.stringify(assetData.monitores.map(m => ({
+      id_bien: m.id_bien || '',
+      num_serie: m.num_serie || '',
+      modelo: m.modelo || '',
+      fabricante: m.fabricante || ''
+    }))).replace(/"([a-zA-Z0-9_]+)":/g, '$1:');
+    
+    try {
+      await queryGraphQL(`mutation { syncMonitoresPC(id_bien: "${id_bien}", monitores: ${monitoresStr}) }`);
+    } catch(err) { console.log("No se pudo guardar monitores en update directo: ", err); }
+  }
+
+  if (assetData.programas && assetData.programas.length > 0) {
+    const progsStr = JSON.stringify(assetData.programas.map(p => ({
+      nombre_programa: p.nombre_programa || '',
+      version: p.version || '',
+      editor: p.editor || '',
+      fecha_instalacion: p.fecha_instalacion || ''
+    }))).replace(/"([a-zA-Z0-9_]+)":/g, '$1:');
+    
+    try {
+      await queryGraphQL(`mutation { syncProgramasPC(id_bien: "${id_bien}", programas: ${progsStr}) }`);
+    } catch(err) { console.log("No se pudo guardar programas_pc en update directo: ", err); }
+  }
 };
 
 export const deleteCuentaPC = async (id_cuenta) => {
