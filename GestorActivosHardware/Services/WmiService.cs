@@ -356,7 +356,17 @@ namespace GestorActivosHardware.Services
                             var prodIds = key.GetValue("ProductReleaseIds")?.ToString() ?? "";
                             if (!string.IsNullOrEmpty(prodIds))
                             {
-                                string name = prodIds.Split(',')[0].Replace("Retail", "").Replace("Volume", "");
+                                string name = "";
+                                foreach (var id in prodIds.Split(','))
+                                {
+                                    if (id.IndexOf("OneNoteFree", StringComparison.OrdinalIgnoreCase) >= 0 || id.IndexOf("Proof", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                                    name = id.Replace("Retail", "").Replace("Volume", "");
+                                    break;
+                                }
+                                if (string.IsNullOrEmpty(name)) 
+                                {
+                                    name = prodIds.Split(',')[0].Replace("Retail", "").Replace("Volume", "");
+                                }
                                 info.version_office = $"Office {name}";
                             }
                         }

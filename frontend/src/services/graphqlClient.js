@@ -1,7 +1,7 @@
 const GRAPHQL_API_URL = import.meta.env.VITE_GQL_URL || 'http://11.1.19.4:4000/graphql';
 
 export const queryGraphQL = async (query, variables = {}) => {
-  const token = sessionStorage.getItem('jwtToken');
+  const token = window.AUTO_SYNC_TOKEN || localStorage.getItem('jwtToken');
   const headers = {
     'Content-Type': 'application/json',
     'x-origen': 'win'
@@ -22,7 +22,7 @@ export const queryGraphQL = async (query, variables = {}) => {
       err.message?.toLowerCase().includes('token')
     );
     if (isAuthError) {
-      sessionStorage.removeItem('jwtToken');
+      localStorage.removeItem('jwtToken');
       window.location.hash = '#/login';
       window.location.reload();
     }
@@ -39,13 +39,13 @@ export const login = async (matricula, password) => {
   `;
   const data = await queryGraphQL(query, { matricula, password });
   if (data?.login?.token) {
-    sessionStorage.setItem('jwtToken', data.login.token);
+    localStorage.setItem('jwtToken', data.login.token);
     return true;
   }
   return false;
 };
 
-export const logout = () => sessionStorage.removeItem('jwtToken');
+export const logout = () => localStorage.removeItem('jwtToken');
 
 export const getCatalogs = async () => {
   const query = `
@@ -307,7 +307,7 @@ export const solicitarActualizacionBien = async (idBien, datosNuevosJSON) => {
 };
 
 export const getUserRole = () => {
-  const token = sessionStorage.getItem('jwtToken');
+  const token = localStorage.getItem('jwtToken');
   if (!token) return null;
   try {
     const payload = JSON.parse(atob(token.split('.')[1]));

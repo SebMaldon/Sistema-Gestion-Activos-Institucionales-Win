@@ -150,7 +150,7 @@ export default function Dashboard() {
   // Listeners de auto-actualizacion
   useEffect(() => {
     if (!isElectron) return;
-    const { ipcRenderer } = require('electron');
+    const { ipcRenderer } = window.require('electron');
     const onAvailable = (_, version) => setUpdateInfo({ version, countdown: null });
     const onCountdown = (_, seconds) => setUpdateInfo(prev => prev ? { ...prev, countdown: seconds } : { version: '?', countdown: seconds });
     ipcRenderer.on('update-available', onAvailable);
@@ -245,6 +245,8 @@ export default function Dashboard() {
     };
     initDashboard();
   }, []);
+
+
 
   const loadAllCatalogs = async () => {
     try {
@@ -778,7 +780,7 @@ export default function Dashboard() {
         >
           <div className="flex items-center gap-4">
             <img src="IMSS_Logosímbolo_Blanco.png" alt="IMSS" className="h-5 w-5 object-contain" />
-            <span className="text-xs font-semibold tracking-wide">Gestor de Activos — IMSS cambios 2</span>
+            <span className="text-xs font-semibold tracking-wide">Gestor de Activos — IMSS</span>
           </div>
         </header>
         <div className="flex flex-col items-center gap-4 mt-11">
@@ -868,7 +870,7 @@ export default function Dashboard() {
 
           {/* Cuentas PC (Tarjetas) */}
           {formState.cuentasList && formState.cuentasList.length > 0 && (
-            <div className="space-y-2">
+            <div className="space-y-2 max-h-[14rem] overflow-y-auto no-scrollbar pb-1">
               {formState.cuentasList.map((c, i) => {
                 const isExpanded = selectedCuentaIdx === i;
                 return (
