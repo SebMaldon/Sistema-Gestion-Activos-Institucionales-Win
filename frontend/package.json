@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.5",
   "description": "Gestor de Activos Institucionales IMSS",
   "author": "IMSS",
   "type": "module",
@@ -11,12 +11,11 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "electron": "electron .",
-    "dist": "npm run build && electron-builder --win nsis -p always",
-    "dist:msi": "npm run build && electron-builder --win msi -p always",
-    "dist:all": "npm run build && electron-builder --win nsis msi -p always"
+    "dist": "npm run build && electron-builder --win nsis -p always"
   },
   "dependencies": {
     "clsx": "^2.1.1",
+    "electron-log": "^5.4.4",
     "electron-updater": "^6.8.3",
     "lucide-react": "^1.14.0",
     "react": "^19.2.5",
@@ -63,18 +62,7 @@
     ],
     "win": {
       "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "msi",
-          "arch": [
-            "x64"
-          ]
-        }
+        "nsis"
       ],
       "icon": "public/IMSS_Logosímbolo_Blanco.png"
     },
@@ -86,12 +74,6 @@
       "shortcutName": "Gestor Activos IMSS",
       "allowElevation": true,
       "include": "electron/installer.nsh"
-    },
-    "msi": {
-      "perMachine": true,
-      "createDesktopShortcut": false,
-      "createStartMenuShortcut": true,
-      "shortcutName": "Gestor Activos IMSS"
     }
   }
 }

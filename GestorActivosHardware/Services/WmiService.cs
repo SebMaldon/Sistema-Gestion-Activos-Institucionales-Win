@@ -554,33 +554,34 @@ namespace GestorActivosHardware.Services
                 } catch {}
 
                 try {
-                    using (var searcher = new ManagementObjectSearcher("SELECT Name, Domain, SID FROM Win32_UserAccount WHERE LocalAccount=True"))
+                    foreach (string sid in validSids)
                     {
-                        foreach (ManagementObject o in searcher.Get())
-                        {
-                            string sid = o["SID"]?.ToString() ?? "";
-                            if (!validSids.Contains(sid)) continue; // Filtrar ocultas y de sistema sin carpeta
-
-                            string name = o["Name"]?.ToString() ?? "";
-                            string domain = o["Domain"]?.ToString() ?? "";
-                            if (!string.IsNullOrEmpty(name))
-                            {
-                                string fullName = domain + "\\\\" + name;
-                                string tipo = admins.Contains(name) ? "Administrador" : "Avanzado";
-                                
-                                string correo = "";
-                                if (name.Equals(Environment.UserName, StringComparison.OrdinalIgnoreCase) && info.correos_usuario.Count > 0)
-                                {
-                                    correo = info.correos_usuario[0];
-                                }
-
-                                info.cuentasList.Add(new CuentaInfo {
-                                    cuenta_windows = fullName,
-                                    tipo_user = tipo,
-                                    correo = correo
-                                });
+                        try {
+                            var secId = new System.Security.Principal.SecurityIdentifier(sid);
+                            var acc = (System.Security.Principal.NTAccount)secId.Translate(typeof(System.Security.Principal.NTAccount));
+                            string fullName = acc.Value; // DOMINIO\Nombre
+                            string name = fullName;
+                            
+                            int slashIdx = fullName.IndexOf('\\');
+                            if (slashIdx >= 0) {
+                                name = fullName.Substring(slashIdx + 1);
+                                fullName = fullName.Replace("\\", "\\\\");
                             }
-                        }
+
+                            string tipo = admins.Contains(name) ? "Administrador" : "Avanzado";
+                            
+                            string correo = "";
+                            if (name.Equals(Environment.UserName, StringComparison.OrdinalIgnoreCase) && info.correos_usuario.Count > 0)
+                            {
+                                correo = info.correos_usuario[0];
+                            }
+
+                            info.cuentasList.Add(new CuentaInfo {
+                                cuenta_windows = fullName,
+                                tipo_user = tipo,
+                                correo = correo
+                            });
+                        } catch {}
                     }
                 } catch {}
 

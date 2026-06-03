@@ -10,34 +10,30 @@ const { autoUpdater } = require('electron-updater');
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Optimización para PC viejas: Desactivar aceleración por hardware
+app.disableHardwareAcceleration();
+
 let mainWindow;
 let backendProcess;
 
-function setupAutoUpdater() {
-  autoUpdater.autoDownload = false;
-  autoUpdater.autoInstallOnAppQuit = true;
+const log = require('electron-log');
+autoUpdater.logger = log;
+autoUpdater.logger.transports.file.level = 'info';
+autoUpdater.autoDownload = false;
+autoUpdater.requestHeaders = { "Cache-Control": "no-cache" };
 
+function setupAutoUpdater() {
   autoUpdater.on('checking-for-update', () => {
     console.log('Buscando actualizaciones...');
   });
 
   autoUpdater.on('update-available', (info) => {
-    dialog.showMessageBox(mainWindow, {
-      type: 'info',
-      title: 'Actualización disponible',
-      message: `Nueva versión ${info.version} disponible.\n¿Deseas descargarla ahora?`,
-      buttons: ['Sí, actualizar', 'Después'],
-      defaultId: 0,
-      cancelId: 1
-    }).then(result => {
-      if (result.response === 0) {
-        autoUpdater.downloadUpdate();
-      }
-    });
+    console.log('Actualización disponible:', info.version);
+    autoUpdater.downloadUpdate();
   });
 
-  autoUpdater.on('update-not-available', () => {
-    console.log('La aplicación está actualizada.');
+  autoUpdater.on('update-not-available', (info) => {
+    console.log('El sistema está en la versión más reciente.');
   });
 
   autoUpdater.on('download-progress', (progress) => {
@@ -45,18 +41,8 @@ function setupAutoUpdater() {
   });
 
   autoUpdater.on('update-downloaded', () => {
-    dialog.showMessageBox(mainWindow, {
-      type: 'info',
-      title: 'Lista para instalar',
-      message: 'Actualización descargada. Se instalará al cerrar la aplicación.',
-      buttons: ['Reiniciar ahora', 'Después'],
-      defaultId: 0,
-      cancelId: 1
-    }).then(result => {
-      if (result.response === 0) {
-        autoUpdater.quitAndInstall(false, true);
-      }
-    });
+    console.log('Actualización descargada. Instalando en segundo plano...');
+    autoUpdater.quitAndInstall(true, true);
   });
 
   autoUpdater.on('error', (err) => {
@@ -65,9 +51,18 @@ function setupAutoUpdater() {
 
   // Verificar al arrancar (solo en producción)
   if (app.isPackaged) {
-    autoUpdater.checkForUpdates();
+    autoUpdater.checkForUpdates().catch(err => {
+        console.error("Error al conectar con IIS:", err);
+    });
   }
 }
+
+// Expuesto para polling si se requiere
+ipcMain.on('checar-actualizaciones', () => {
+  if (app.isPackaged) {
+    autoUpdater.checkForUpdates().catch(console.error);
+  }
+});
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -115,14 +110,23 @@ function startBackend() {
 
   console.log('Iniciando Backend en:', exePath);
 
-  backendProcess = spawn(exePath, [], { detached: false });
+  // Matar cualquier instancia huérfana previa
+  import('child_process').then(({ exec }) => {
+    exec('taskkill /f /im GestorActivosHardware.exe', (err) => {
+      // Ignoramos error si no existía el proceso
+      backendProcess = spawn(exePath, [], { 
+        detached: false,
+        cwd: path.dirname(exePath)
+      });
 
-  backendProcess.stdout.on('data', (data) => {
-    console.log(`Backend: ${data}`);
-  });
+      backendProcess.stdout.on('data', (data) => {
+        console.log(`Backend: ${data}`);
+      });
 
-  backendProcess.stderr.on('data', (data) => {
-    console.error(`Backend Error: ${data}`);
+      backendProcess.stderr.on('data', (data) => {
+        console.error(`Backend Error: ${data}`);
+      });
+    });
   });
 }
 
@@ -136,7 +140,7 @@ app.whenReady().then(() => {
   });
 });
 
-app.on('window-all-closed', () => {
+app.on('before-quit', () => {
   if (backendProcess) {
     try {
       backendProcess.kill();
@@ -144,6 +148,9 @@ app.on('window-all-closed', () => {
       console.error('Error cerrando backend:', e);
     }
   }
+});
+
+app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }

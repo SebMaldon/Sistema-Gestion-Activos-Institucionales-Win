@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchHardwareInfo } from './services/wmiClient';
 import {
@@ -80,12 +80,12 @@ const NotasBienSection = ({ idBien, title, showAlert }) => {
   return (
     <div className="w-full">
       {title && (
-        <button 
+        <button
           onClick={toggleOpen}
           className="w-full flex items-center justify-between text-sm font-bold text-[#333333] mb-2 hover:bg-gray-100 p-2 rounded-lg transition-colors focus:outline-none"
         >
           <span className="flex items-center gap-2">
-            <MessageSquare className="w-4 h-4 text-[#006241]" /> 
+            <MessageSquare className="w-4 h-4 text-[#006241]" />
             {title}
             {!loadingNotas && (
               <span className={clsx("ml-2 px-2 py-0.5 rounded-full text-[10px] tracking-wide", notas.length > 0 ? "bg-blue-100 text-blue-700" : "bg-gray-200 text-gray-600")}>
@@ -147,7 +147,22 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const isElectron = typeof window !== 'undefined' && !!window.process?.versions?.electron;
 
+  // Listeners de auto-actualizacion
+  useEffect(() => {
+    if (!isElectron) return;
+    const { ipcRenderer } = require('electron');
+    const onAvailable = (_, version) => setUpdateInfo({ version, countdown: null });
+    const onCountdown = (_, seconds) => setUpdateInfo(prev => prev ? { ...prev, countdown: seconds } : { version: '?', countdown: seconds });
+    ipcRenderer.on('update-available', onAvailable);
+    ipcRenderer.on('update-countdown', onCountdown);
+    return () => {
+      ipcRenderer.removeListener('update-available', onAvailable);
+      ipcRenderer.removeListener('update-countdown', onCountdown);
+    };
+  }, [isElectron]);
+
   const [alertState, setAlertState] = useState(null); // { type, title, message, onConfirm, onCancel }
+  const [updateInfo, setUpdateInfo] = useState(null);
 
   const showAlert = (message, type = 'info', title = '') => {
     return new Promise((resolve) => {
@@ -313,7 +328,7 @@ export default function Dashboard() {
         // Cuentas PC desde WMI
         if (data.cuentasList && data.cuentasList.length > 0) {
           const currentCuentas = [...(newData.cuentasList || [])];
-          
+
           data.cuentasList.forEach(wmiCuenta => {
             let existingIdx = currentCuentas.findIndex(c => c.cuenta_windows === wmiCuenta.cuenta_windows);
             if (existingIdx === -1) {
@@ -336,7 +351,7 @@ export default function Dashboard() {
         } else if (data.usuario_pc || data.tipo_usuario_pc || (data.correos_usuario && data.correos_usuario.length > 0)) {
           // Fallback por si la nueva propiedad cuentasList no está
           let existingIdx = (newData.cuentasList || []).findIndex(c => c.cuenta_windows === data.usuario_pc);
-          
+
           if (existingIdx === -1) {
             newData.cuentasList = [...(newData.cuentasList || []), {
               _new: true, _editing: false,
@@ -430,8 +445,8 @@ export default function Dashboard() {
           clave_unidad_ref: bien.clave_unidad_ref || '',
           clave_modelo: bien.clave_modelo || '',
           id_usuario_resguardo: bien.id_usuario_resguardo ? String(bien.id_usuario_resguardo) : '',
-          nombre_usuario_resguardo: bien.usuarioResguardo 
-            ? `${bien.usuarioResguardo.matricula} - ${bien.usuarioResguardo.nombre_completo}` 
+          nombre_usuario_resguardo: bien.usuarioResguardo
+            ? `${bien.usuarioResguardo.matricula} - ${bien.usuarioResguardo.nombre_completo}`
             : '',
           id_segmento: bien.id_segmento ? String(bien.id_segmento) : '',
           id_ubicacion: bien.id_ubicacion ? String(bien.id_ubicacion) : '',
@@ -603,7 +618,7 @@ export default function Dashboard() {
           // Actualización: Guardado directo de specs y programas aunque sea rol menor
           try {
             await saveDirectSpecsAndPrograms(idBienTarget, { ...formState, dir_ip: dirIpString, mac_address: macString });
-          } catch(err) {
+          } catch (err) {
             console.log("Error guardando specs directos:", err);
           }
 
@@ -612,7 +627,7 @@ export default function Dashboard() {
           Object.keys(initialFormState).forEach(key => {
             // Ignoramos campos de TI porque ya se guardaron directo
             if (['id_bien', 'correos_usuario', 'tipo_equipo', 'nombre_usuario_resguardo', 'monitores', 'mac_address', 'dir_ip', 'dir_ip_list', 'cuentasList', 'programas', 'nombre_host', 'windows_serial', 'cpu_info', 'ram_gb', 'almacenamiento_gb', 'puerto_red', 'switch_red', 'modelo_so', 'version_office', 'fecha_act_antivirus'].includes(key)) return;
-            
+
             if (key === 'dir_ip_list') {
               const cIp = (formState.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean).join('/');
               const oIp = (safeDbInfo.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean).join('/');
@@ -646,18 +661,18 @@ export default function Dashboard() {
         }
 
         if (datosNuevos.dir_ip_list) {
-            datosNuevos.dir_ip = (formState.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean).join('/');
-            datosNuevos.mac_address = (formState.dir_ip_list || []).map(x => (x.mac || '').trim()).filter(Boolean).join('/');
-            delete datosNuevos.dir_ip_list;
+          datosNuevos.dir_ip = (formState.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean).join('/');
+          datosNuevos.mac_address = (formState.dir_ip_list || []).map(x => (x.mac || '').trim()).filter(Boolean).join('/');
+          delete datosNuevos.dir_ip_list;
         }
 
         if (Object.keys(datosNuevos).filter(k => k !== '_esCreacion').length === 0) {
           if (!effectiveIsNew) {
-             await showAlert('La información técnica (HW/SW) ha sido guardada directamente. No hubo cambios adicionales para revisión.', 'success', 'Guardado Técnico');
-             setSearchSerial(formState.num_serie);
-             await syncDB();
+            await showAlert('La información técnica (HW/SW) ha sido guardada directamente. No hubo cambios adicionales para revisión.', 'success', 'Guardado Técnico');
+            setSearchSerial(formState.num_serie);
+            await syncDB();
           } else {
-             await showAlert('No se detectaron cambios en el formulario para enviar a revisión.', 'info', 'Sin Cambios');
+            await showAlert('No se detectaron cambios en el formulario para enviar a revisión.', 'info', 'Sin Cambios');
           }
           return;
         }
@@ -763,7 +778,7 @@ export default function Dashboard() {
         >
           <div className="flex items-center gap-4">
             <img src="IMSS_Logosímbolo_Blanco.png" alt="IMSS" className="h-5 w-5 object-contain" />
-            <span className="text-xs font-semibold tracking-wide">Gestor de Activos — IMSS</span>
+            <span className="text-xs font-semibold tracking-wide">Gestor de Activos — IMSS cambios 2</span>
           </div>
         </header>
         <div className="flex flex-col items-center gap-4 mt-11">
@@ -786,7 +801,7 @@ export default function Dashboard() {
           <img src="IMSS_Logosímbolo_Blanco.png" alt="IMSS" className="h-5 w-5 object-contain" />
           <span className="text-xs font-semibold tracking-wide">Gestor de Activos — IMSS</span>
           {dbInfo && dbInfo.id_bien && (
-            <div 
+            <div
               className="flex items-center gap-2 bg-[#008F59]/30 border border-[#008F59]/50 px-2 py-0.5 rounded-full"
               style={{ WebkitAppRegion: 'no-drag' }}
             >
@@ -807,7 +822,7 @@ export default function Dashboard() {
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar Actions */}
         <aside className="w-64 bg-white border-r border-[#E0E0E0] p-6 flex flex-col gap-4 shadow-sm z-10">
-          
+
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-bold text-[#757575] uppercase tracking-wider">Buscar Equipo (N/S)</label>
             <div className="flex items-center bg-[#F9FAFB] rounded-xl px-2 py-1.5 border border-[#E0E0E0] focus-within:border-[#006241] focus-within:ring-1 focus-within:ring-[#006241] transition-all">
@@ -859,12 +874,12 @@ export default function Dashboard() {
                 return (
                   <div key={i} className="border border-[#E0E0E0] rounded-xl overflow-hidden bg-[#F9FAFB] shadow-sm">
                     <div className="flex items-center justify-between px-3 py-2 hover:bg-gray-100">
-                      <button 
+                      <button
                         onClick={() => setSelectedCuentaIdx(isExpanded ? -1 : i)}
                         className="text-left flex-grow flex items-center justify-between min-w-0"
                       >
                         <div className="overflow-hidden min-w-0 flex-grow">
-                          <span className="text-[#006241] font-bold block uppercase text-[9px] leading-tight truncate">Cuenta de Usuario PC {i > 0 ? i+1 : ''}</span>
+                          <span className="text-[#006241] font-bold block uppercase text-[9px] leading-tight truncate">Cuenta de Usuario PC {i > 0 ? i + 1 : ''}</span>
                           <span className="text-[#333333] font-bold block truncate text-xs mt-0.5">{c.cuenta_windows || '—'}</span>
                         </div>
                         <div className="mx-2 flex-shrink-0">
@@ -967,11 +982,11 @@ export default function Dashboard() {
                   </div>
 
                   <div className="w-full sm:col-span-2">
-                    <SearchableSelect 
-                      label="Segmento" 
-                      options={filteredSegmentos} 
-                      value={formState.id_segmento} 
-                      onChange={v => updateForm('id_segmento', v)} 
+                    <SearchableSelect
+                      label="Segmento"
+                      options={filteredSegmentos}
+                      value={formState.id_segmento}
+                      onChange={v => updateForm('id_segmento', v)}
                       disabled={!formState.clave_unidad_ref}
                       placeholder={formState.clave_unidad_ref ? "Buscar segmento..." : "Seleccione unidad primero"}
                     />
@@ -1040,7 +1055,7 @@ export default function Dashboard() {
 
                   <FieldInput label="Memoria RAM (GB)" val={formState.ram_gb} onChange={v => updateForm('ram_gb', v)} color={getBorderColor('ram_gb')} type="number" readOnly={true} />
                   <FieldInput label="Almacenamiento (GB)" val={formState.almacenamiento_gb} onChange={v => updateForm('almacenamiento_gb', v)} color={getBorderColor('almacenamiento_gb')} type="number" readOnly={true} />
-                  
+
                   <div className="w-full sm:col-span-2 flex flex-col">
                     <div className="flex items-center justify-between mb-1">
                       <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block">
@@ -1078,7 +1093,7 @@ export default function Dashboard() {
                               className={`py-2 px-3 ${getBorderColor('dir_ip').replace('border-', 'border border-').replace('border-gray-200', 'border-gray-300')} focus-within:ring-1 focus-within:ring-[#006241] h-10`}
                             />
                           </div>
-                          
+
                           <div className="flex-1 min-w-0">
                             <MacInput
                               value={item.mac || ''}
@@ -1106,7 +1121,7 @@ export default function Dashboard() {
                       ))}
                     </div>
                   </div>
-                  
+
                   <FieldInput label="Puerto / Nodo Red" val={formState.puerto_red} onChange={v => updateForm('puerto_red', v)} color={getBorderColor('puerto_red')} />
                   <FieldInput label="Switch Conectado" val={formState.switch_red} onChange={v => updateForm('switch_red', v)} color={getBorderColor('switch_red')} />
 
@@ -1173,9 +1188,33 @@ export default function Dashboard() {
         />
       )}
 
+      {/* Banner de actualizacion */}
+      {updateInfo && (
+        <div className="fixed bottom-4 right-4 z-50 bg-[#006241] text-white rounded-xl shadow-2xl px-5 py-4 max-w-sm w-full border border-[#008F59]">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 mt-0.5">
+              <svg className="w-5 h-5 text-green-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-bold">Nueva actualizacion disponible</p>
+              {updateInfo.countdown !== null ? (
+                <p className="text-xs text-green-200 mt-0.5">Instalando en <span className="font-bold text-white text-base">{updateInfo.countdown}</span>s...</p>
+              ) : (
+                <p className="text-xs text-green-200 mt-0.5">Descargando actualizacion...</p>
+              )}
+            </div>
+          </div>
+          {updateInfo.countdown !== null && (
+            <div className="mt-3 w-full bg-[#008F59]/40 rounded-full h-1.5">
+              <div className="bg-white h-1.5 rounded-full transition-all duration-1000" style={{ width: `${(updateInfo.countdown / 5) * 100}%` }} />
+            </div>
+          )}
+        </div>
+      )}
+
       {alertState && (
         <div className="fixed top-14 right-4 z-50 animate-fade-in max-w-xs sm:max-w-sm w-full">
-          <div 
+          <div
             onClick={() => alertState.type !== 'confirm' && alertState.onConfirm()}
             className={clsx(
               "bg-white rounded-xl p-4 shadow-xl border border-gray-250 relative overflow-hidden transform scale-100 transition-all animate-scale-up select-none",
