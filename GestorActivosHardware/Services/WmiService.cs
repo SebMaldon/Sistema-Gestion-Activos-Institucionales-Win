@@ -328,7 +328,7 @@ namespace GestorActivosHardware.Services
                 info.ram_gb = ramBytes > 0 ? (ramBytes / (1024L * 1024 * 1024)).ToString() : "0";
 
                 long diskBytes = 0;
-                using (var searcher = new ManagementObjectSearcher("SELECT Size FROM Win32_DiskDrive WHERE MediaType='Fixed hard disk media'"))
+                using (var searcher = new ManagementObjectSearcher("SELECT Size FROM Win32_LogicalDisk WHERE DeviceID='C:'"))
                     foreach (ManagementObject o in searcher.Get())
                         if (o["Size"] != null)
                             diskBytes += Convert.ToInt64(o["Size"]);

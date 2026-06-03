@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchHardwareInfo } from './services/wmiClient';
 import {
@@ -594,7 +594,11 @@ export default function Dashboard() {
         }
 
         setLastSubmitted(JSON.stringify(formState));
-        await showAlert('El activo y sus componentes han sido guardados exitosamente.', 'success', 'Guardado Exitoso');
+        if (hasDbChanges || monitorsChanged || tiFieldsChanged) {
+          await showAlert('El activo y sus componentes han sido guardados exitosamente.', 'success', 'Guardado Exitoso');
+        } else {
+          await showAlert('Se actualizaron los programas y la información técnica, no hubo cambios adicionales para guardar.', 'success', 'Sincronización Exitosa');
+        }
         setSearchSerial(formState.num_serie);
         await syncDB();
       } else {
@@ -670,7 +674,7 @@ export default function Dashboard() {
 
         if (Object.keys(datosNuevos).filter(k => k !== '_esCreacion').length === 0) {
           if (!effectiveIsNew) {
-            await showAlert('La información técnica (HW/SW) ha sido guardada directamente. No hubo cambios adicionales para revisión.', 'success', 'Guardado Técnico');
+            await showAlert('Se actualizaron los programas y la información técnica, no hubo cambios adicionales para guardar.', 'success', 'Sincronización Exitosa');
             setSearchSerial(formState.num_serie);
             await syncDB();
           } else {
@@ -935,7 +939,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <button onClick={handleSave} disabled={loadingAction || !canSave} className="bg-white border-2 border-[#006241] text-[#006241] hover:bg-[#F9FAFB] py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-colors disabled:opacity-50 shadow-sm">
+          <button onClick={handleSave} disabled={loadingAction} className="bg-white border-2 border-[#006241] text-[#006241] hover:bg-[#F9FAFB] py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-colors disabled:opacity-50 shadow-sm">
             <Save className="w-5 h-5" /> Guardar Cambios
           </button>
 

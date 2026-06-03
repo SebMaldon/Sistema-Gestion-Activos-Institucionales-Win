@@ -70,6 +70,7 @@
     "nsis": {
       "oneClick": true,
       "perMachine": true,
+      "uninstallDisplayName": "Gestor Activos HW",
       "createDesktopShortcut": false,
       "createStartMenuShortcut": true,
       "shortcutName": "Gestor Activos IMSS",
