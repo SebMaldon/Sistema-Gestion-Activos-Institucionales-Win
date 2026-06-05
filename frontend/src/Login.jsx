@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { login } from './services/graphqlClient';
-import { UserCircle, KeyRound, Loader2, MonitorSmartphone, Eye, EyeOff } from 'lucide-react';
+import { UserCircle, KeyRound, Loader2, Eye, EyeOff, RefreshCw } from 'lucide-react';
 import pkg from '../package.json';
+
+const isElectron = typeof window !== 'undefined' && !!window.process?.versions?.electron;
 
 export default function Login() {
   const [matricula, setMatricula] = useState('');
@@ -10,7 +12,45 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [updateMsg, setUpdateMsg] = useState('');
   const navigate = useNavigate();
+
+  // Rate-limit: máx 3 clics en 60s
+  const clickTimes = useRef([]);
+  const blockedUntil = useRef(0);
+
+  const handleCheckUpdate = () => {
+    if (!isElectron) return;
+    const now = Date.now();
+
+    // Si está bloqueado
+    if (now < blockedUntil.current) {
+      const restSecs = Math.ceil((blockedUntil.current - now) / 1000);
+      setUpdateMsg(`Espera ${restSecs}s antes de volver a intentar.`);
+      return;
+    }
+
+    // Limpiar clicks viejos (> 60s)
+    clickTimes.current = clickTimes.current.filter(t => now - t < 60000);
+    clickTimes.current.push(now);
+
+    if (clickTimes.current.length > 3) {
+      blockedUntil.current = now + 5 * 60000; // bloquear 5 min
+      clickTimes.current = [];
+      setUpdateMsg('Demasiados intentos. Bloqueado por 5 min.');
+      return;
+    }
+
+    try {
+      const { ipcRenderer } = window.require('electron');
+      ipcRenderer.send('checar-actualizaciones');
+      setUpdateMsg('Buscando actualización...');
+      setTimeout(() => setUpdateMsg(''), 4000);
+    } catch (e) {
+      setUpdateMsg('No disponible en este entorno.');
+      setTimeout(() => setUpdateMsg(''), 3000);
+    }
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -49,7 +89,7 @@ export default function Login() {
           <div className="flex flex-col items-center mb-10">
             <img src="imssFavicon.png" alt="IMSS Logo" className="w-20 h-20 object-contain mb-4" />
             <h1 className="text-3xl font-bold text-[#333333] tracking-tight">Gestor de Activos</h1>
-            <p className="text-[#757575] mt-2 text-sm uppercase tracking-widest font-medium">Hardware & Red — IMSS</p>
+            <p className="text-[#757575] mt-2 text-sm uppercase tracking-widest font-medium">Hardware &amp; Red — IMSS</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6">
@@ -109,9 +149,25 @@ export default function Login() {
             </button>
           </form>
 
-          <p className="text-center mt-8 text-xs text-[#9e9e9e] font-medium">v{pkg.version} — IMSS</p>
+          <div className="mt-6 flex flex-col items-center gap-2">
+            {isElectron && (
+              <button
+                type="button"
+                onClick={handleCheckUpdate}
+                className="flex items-center gap-1.5 text-xs text-[#006241] hover:text-[#008F59] font-medium transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Buscar actualización
+              </button>
+            )}
+            {updateMsg && (
+              <p className="text-xs text-[#757575] font-medium animate-pulse">{updateMsg}</p>
+            )}
+            <p className="text-xs text-[#9e9e9e] font-medium">v{pkg.version} — IMSS</p>
+          </div>
         </div>
       </div>
     </div>
   );
 }
+

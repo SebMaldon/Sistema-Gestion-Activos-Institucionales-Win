@@ -254,3 +254,10 @@ app.on('window-all-closed', () => {
   // En lugar de app.quit(), la app sigue en segundo plano
   // No hacemos nada aqui
 });
+
+ipcMain.on('checar-actualizaciones', () => {
+  if (app.isPackaged) {
+    console.log('Verificación manual de actualizaciones solicitada.');
+    autoUpdater.checkForUpdates().catch(console.error);
+  }
+});
