@@ -328,11 +328,36 @@ namespace GestorActivosHardware.Services
                 info.ram_gb = ramBytes > 0 ? (ramBytes / (1024L * 1024 * 1024)).ToString() : "0";
 
                 long diskBytes = 0;
-                using (var searcher = new ManagementObjectSearcher("SELECT Size FROM Win32_LogicalDisk WHERE DeviceID='C:'"))
-                    foreach (ManagementObject o in searcher.Get())
-                        if (o["Size"] != null)
-                            diskBytes += Convert.ToInt64(o["Size"]);
-                            
+                try 
+                {
+                    using (var searcher = new ManagementObjectSearcher("ASSOCIATORS OF {Win32_LogicalDisk.DeviceID='C:'} WHERE AssocClass=Win32_LogicalDiskToPartition"))
+                    {
+                        foreach (ManagementObject partition in searcher.Get())
+                        {
+                            using (var searcher2 = new ManagementObjectSearcher("ASSOCIATORS OF {" + partition["__RELPATH"] + "} WHERE AssocClass=Win32_DiskDriveToDiskPartition"))
+                            {
+                                foreach (ManagementObject drive in searcher2.Get())
+                                {
+                                    if (drive["Size"] != null)
+                                    {
+                                        diskBytes = Convert.ToInt64(drive["Size"]);
+                                        break;
+                                    }
+                                }
+                            }
+                            if (diskBytes > 0) break;
+                        }
+                    }
+                } 
+                catch 
+                {
+                    // Fallback
+                    using (var searcher = new ManagementObjectSearcher("SELECT Size FROM Win32_DiskDrive WHERE Index=0"))
+                        foreach (ManagementObject o in searcher.Get())
+                            if (o["Size"] != null)
+                                diskBytes = Convert.ToInt64(o["Size"]);
+                }
+                             
                 info.almacenamiento_gb = diskBytes > 0 ? (diskBytes / (1024L * 1024 * 1024)).ToString() : "256";
 
                 using (var searcher = new ManagementObjectSearcher("SELECT Caption, SerialNumber, OSArchitecture FROM Win32_OperatingSystem"))
@@ -357,12 +382,33 @@ namespace GestorActivosHardware.Services
                             if (!string.IsNullOrEmpty(prodIds))
                             {
                                 string name = "";
+                                string[] priority = { "O365", "ProPlus", "Standard", "Professional", "Business", "Enterprise", "Home", "Personal" };
                                 foreach (var id in prodIds.Split(','))
                                 {
-                                    if (id.IndexOf("OneNoteFree", StringComparison.OrdinalIgnoreCase) >= 0 || id.IndexOf("Proof", StringComparison.OrdinalIgnoreCase) >= 0) continue;
-                                    name = id.Replace("Retail", "").Replace("Volume", "");
-                                    break;
+                                    bool matched = false;
+                                    foreach(var p in priority) {
+                                        if (id.IndexOf(p, StringComparison.OrdinalIgnoreCase) >= 0) {
+                                            matched = true;
+                                            break;
+                                        }
+                                    }
+                                    if (matched)
+                                    {
+                                        name = id.Replace("Retail", "").Replace("Volume", "");
+                                        break;
+                                    }
                                 }
+                                // 2. Fallback si no hay prioridad (pero ignorar OneNoteFree)
+                                if (string.IsNullOrEmpty(name))
+                                {
+                                    foreach (var id in prodIds.Split(','))
+                                    {
+                                        if (id.IndexOf("OneNoteFree", StringComparison.OrdinalIgnoreCase) >= 0 || id.IndexOf("Proof", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                                        name = id.Replace("Retail", "").Replace("Volume", "");
+                                        break;
+                                    }
+                                }
+                                // 3. Último caso si de plano solo había OneNoteFree
                                 if (string.IsNullOrEmpty(name)) 
                                 {
                                     name = prodIds.Split(',')[0].Replace("Retail", "").Replace("Volume", "");

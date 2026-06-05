@@ -52,12 +52,28 @@ function setupAutoUpdater() {
 
   autoUpdater.on('update-available', (info) => {
     console.log('Actualización disponible:', info.version);
-    sendToRenderer('update-available', info.version);
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+      sendToRenderer('update-available', info.version);
+      // El usuario decidirá cuándo descargar usando el botón en la UI
+    } else {
+      console.log('App en segundo plano, descargando actualización automáticamente...');
+      autoUpdater.downloadUpdate();
+    }
+  });
+
+  ipcMain.on('descargar-actualizacion', () => {
+    console.log('Usuario solicitó descargar actualización...');
     autoUpdater.downloadUpdate();
   });
 
   autoUpdater.on('update-not-available', (info) => {
     console.log('El sistema está en la versión más reciente.');
+    sendToRenderer('update-not-available', true);
+  });
+
+  autoUpdater.on('error', (err) => {
+    console.error('Error en actualización:', err?.message || err);
+    sendToRenderer('update-error', true);
   });
 
   autoUpdater.on('download-progress', (progress) => {
@@ -65,26 +81,30 @@ function setupAutoUpdater() {
   });
 
   autoUpdater.on('update-downloaded', () => {
-    console.log('Actualización descargada. Instalando en 5s...');
+    console.log('Actualización descargada.');
     require('fs').writeFileSync(path.join(app.getPath('userData'), '.update-restart'), '1');
 
-    // Countdown de 5s visible en el frontend
-    let secs = 5;
-    sendToRenderer('update-countdown', secs);
-    const timer = setInterval(() => {
-      secs--;
-      if (secs <= 0) {
-        clearInterval(timer);
-        autoUpdater.quitAndInstall(true, true);
-      } else {
-        sendToRenderer('update-countdown', secs);
-      }
-    }, 1000);
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+      // Countdown de 5s visible en el frontend
+      let secs = 5;
+      sendToRenderer('update-countdown', secs);
+      const timer = setInterval(() => {
+        secs--;
+        if (secs <= 0) {
+          clearInterval(timer);
+          autoUpdater.quitAndInstall(true, true);
+        } else {
+          sendToRenderer('update-countdown', secs);
+        }
+      }, 1000);
+    } else {
+      // Si la app está cerrada/oculta, actualizamos silenciosamente
+      console.log('Instalando en segundo plano...');
+      autoUpdater.quitAndInstall(true, true);
+    }
   });
 
-  autoUpdater.on('error', (err) => {
-    console.error('Error en actualización:', err?.message || err);
-  });
+
 
   // Verificar al arrancar (solo en producción)
   if (app.isPackaged) {
@@ -142,15 +162,22 @@ function createWindow() {
   });
 
   mainWindow.setMenuBarVisibility(false);
+  
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    console.log(`[Renderer] ${message} (line ${line})`);
+  });
+
   try { os.setPriority(process.pid, os.constants.priority.PRIORITY_NORMAL); } catch(e){}
 
   mainWindow.on('close', (event) => {
     if (!isQuitting) {
       event.preventDefault();
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.destroy();
-        mainWindow = null;
-        try { os.setPriority(process.pid, os.constants.priority.PRIORITY_LOW); } catch(e){}
+        mainWindow.webContents.executeJavaScript('localStorage.clear();').finally(() => {
+          mainWindow.destroy();
+          mainWindow = null;
+          try { os.setPriority(process.pid, os.constants.priority.PRIORITY_LOW); } catch(e){}
+        });
       }
     }
   });

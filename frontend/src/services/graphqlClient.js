@@ -328,6 +328,11 @@ export const getUserRole = () => {
 };
 
 export const procesarMonitoresEquipo = async (idBienPc, monitores, forzar = false) => {
+  const monitoresLimpios = monitores.map(m => ({
+    num_serie: m.num_serie,
+    marca: m.marca,
+    modelo: m.modelo
+  }));
   const query = `
     mutation($idBienPc: ID!, $monitores: [MonitorWmiInput!]!, $forzar: Boolean) {
       procesarMonitoresEquipo(id_bien_pc: $idBienPc, monitores: $monitores, forzar: $forzar) {
@@ -340,7 +345,7 @@ export const procesarMonitoresEquipo = async (idBienPc, monitores, forzar = fals
       }
     }
   `;
-  const data = await queryGraphQL(query, { idBienPc, monitores, forzar });
+  const data = await queryGraphQL(query, { idBienPc, monitores: monitoresLimpios, forzar });
   return data?.procesarMonitoresEquipo ?? { ok: false, conflictos: [] };
 };
 

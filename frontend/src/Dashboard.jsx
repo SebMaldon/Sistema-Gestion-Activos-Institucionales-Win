@@ -232,15 +232,8 @@ export default function Dashboard() {
       setIsInitialLoading(true);
       try {
         await loadAllCatalogs();
-        try {
-          const data = await fetchHardwareInfo();
-          if (data && data.num_serie) {
-            setSearchSerial(prev => prev || data.num_serie);
-            await syncDB(data.num_serie, true);
-          }
-        } catch (err) {
-          console.log('Silent WMI fetch failed on startup', err);
-        }
+        // Disparar carga local automáticamente simulando el botón
+        await loadWMI();
       } finally {
         setIsInitialLoading(false);
       }
@@ -310,30 +303,7 @@ export default function Dashboard() {
       const scannedSerial = data.num_serie || '';
       if (scannedSerial && !searchSerial) setSearchSerial(scannedSerial);
 
-      // 2. Buscar en BD si tenemos num_serie
-      let bdCuentas = []; // cuentas que existen en BD
-      let bdInfo = null;
-      if (scannedSerial) {
-        try {
-          const q = `query { bienByTermino(termino: "${scannedSerial}") {
-            id_bien cuentasPC { id_cuenta cuenta_windows correo tipo_user }
-          }}`;
-          const bdData = await queryGraphQL(q);
-          if (bdData?.bienByTermino?.cuentasPC) {
-            bdCuentas = bdData.bienByTermino.cuentasPC;
-            bdInfo = bdData.bienByTermino;
-          }
-        } catch (e) {
-          // BD no disponible o no encontrado — sin problema
-          console.warn('[loadWMI] BD lookup failed:', e);
-        }
-      }
-
-      // Normalizar para comparar: trim + lowercase
-      const norm = (s) => (s || '').trim().toLowerCase();
-      const bdSet = new Set(bdCuentas.map(c => norm(c.cuenta_windows)));
-
-      // 3. Merge atómico en un solo setFormState
+      // 2. Volcar datos locales al state primero
       setFormState(prev => {
         const baseState = (scannedSerial && searchSerial && scannedSerial !== searchSerial)
           ? initialFormState
@@ -345,55 +315,31 @@ export default function Dashboard() {
         }
         if (data.nom_pc) newData.nombre_host = data.nom_pc;
 
-        // Construir lista final de cuentas:
-        // - Empezar con las de BD (marcadas _selected: true)
-        // - Agregar las de WMI que no estén en BD (desmarcadas)
-        const mergedCuentas = bdCuentas.map(c => ({
-          id_cuenta: c.id_cuenta,
-          cuenta_windows: c.cuenta_windows || '',
-          correo: c.correo || '',
-          tipo_user: c.tipo_user || '',
-          _editing: false,
-          _selected: true,  // ya está en BD → marcada
-          _new: false
-        }));
-
-        // Agregar las de WMI que no existan en BD
+        // Cuentas locales (WMI)
+        const norm = (s) => (s || '').trim().toLowerCase();
         const wmiCuentas = data.cuentasList || [];
+        const finalCuentas = [];
+        
         wmiCuentas.forEach(wmiC => {
-          const wmiNorm = norm(wmiC.cuenta_windows);
-          // Si ya está en BD no duplicar, pero actualizar correo/tipo si la BD no los tiene
-          const bdIdx = mergedCuentas.findIndex(c => norm(c.cuenta_windows) === wmiNorm);
-          if (bdIdx !== -1) {
-            if (!mergedCuentas[bdIdx].correo && wmiC.correo)
-              mergedCuentas[bdIdx].correo = wmiC.correo;
-            if (!mergedCuentas[bdIdx].tipo_user && wmiC.tipo_user)
-              mergedCuentas[bdIdx].tipo_user = wmiC.tipo_user;
-          } else {
-            // Solo en WMI → nueva, desmarcada
-            mergedCuentas.push({
-              _new: true, _editing: false, _selected: false,
-              cuenta_windows: wmiC.cuenta_windows || '',
-              correo: wmiC.correo || '',
-              tipo_user: wmiC.tipo_user || ''
-            });
-          }
+          finalCuentas.push({
+            _new: true, _editing: false, _selected: false,
+            cuenta_windows: wmiC.cuenta_windows || '',
+            correo: wmiC.correo || '',
+            tipo_user: wmiC.tipo_user || ''
+          });
         });
 
         // Fallback si WMI no trae cuentasList pero sí usuario_pc
-        if (wmiCuentas.length === 0 && data.usuario_pc) {
-          const uNorm = norm(data.usuario_pc);
-          if (!mergedCuentas.find(c => norm(c.cuenta_windows) === uNorm)) {
-            mergedCuentas.push({
-              _new: true, _editing: false, _selected: false,
-              cuenta_windows: data.usuario_pc || '',
-              correo: (data.correos_usuario?.length > 0) ? data.correos_usuario[0] : '',
-              tipo_user: data.tipo_usuario_pc || ''
-            });
-          }
+        if (finalCuentas.length === 0 && data.usuario_pc) {
+          finalCuentas.push({
+            _new: true, _editing: false, _selected: false,
+            cuenta_windows: data.usuario_pc || '',
+            correo: (data.correos_usuario?.length > 0) ? data.correos_usuario[0] : '',
+            tipo_user: data.tipo_usuario_pc || ''
+          });
         }
 
-        newData.cuentasList = mergedCuentas;
+        newData.cuentasList = finalCuentas;
 
         if (data.adaptadores_red?.length > 0) {
           newData.dir_ip_list = data.adaptadores_red.slice(0, 3).map(a => ({ ip: a.ip, mac: a.mac, adapter: a.descripcion }));
@@ -406,10 +352,10 @@ export default function Dashboard() {
         return newData;
       });
 
-      // Si encontramos el bien en BD, actualizar dbInfo también
-      if (bdInfo) {
-        // Solo actualizamos el id_bien para que el save sepa que ya existe
-        setDbInfo(prev => prev ? { ...prev, id_bien: bdInfo.id_bien } : { id_bien: bdInfo.id_bien });
+      // 3. Ahora que el state tiene WMI, buscar en BD todo el registro y fusionarlo (syncDB)
+      if (scannedSerial) {
+        // Ejecutamos syncDB asíncronamente
+        await syncDB(scannedSerial, false);
       }
 
     } catch (err) {
@@ -530,9 +476,41 @@ export default function Dashboard() {
         // Populate form but don't overwrite physical WMI fields if they differ
         setFormState(prev => {
           const ns = { ...prev };
-          // For each key in mergedObj, if it's not a WMI field, we take DB value
+          const wmiFields = ['nombre_host', 'windows_serial', 'cpu_info', 'ram_gb', 'almacenamiento_gb', 'mac_address', 'dir_ip', 'modelo_so', 'version_office'];
+          
           Object.keys(mergedObj).forEach(k => {
-            ns[k] = mergedObj[k];
+            if (wmiFields.includes(k)) {
+              // Dar prioridad al dato local (WMI) si ya existe. Si está vacío, usar el de la BD.
+              if (!ns[k]) {
+                ns[k] = mergedObj[k];
+              }
+            } else if (k === 'cuentasList' || k === 'monitores' || k === 'dir_ip_list') {
+              // Las listas ya las procesa loadWMI y syncDB de forma especial, si venimos de loadWMI prev ya tiene los datos.
+              // Para no perder el merge de WMI, si es cuentasList y ya teníamos, intentamos preservarlas.
+              if (k === 'cuentasList' && ns.cuentasList && ns.cuentasList.length > 0 && ns.cuentasList.some(c => c._new)) {
+                // Hacer un merge real para no perder cuentas de la BD
+                const finalCuentas = mergedObj.cuentasList.map(c => ({...c, _new: false}));
+                const bdNorms = new Set(finalCuentas.map(c => (c.cuenta_windows || '').trim().toLowerCase()));
+
+                ns.cuentasList.forEach(localC => {
+                  const lNorm = (localC.cuenta_windows || '').trim().toLowerCase();
+                  if (bdNorms.has(lNorm)) {
+                    // Si la BD ya la tiene, podemos rellenar correo o tipo_user si faltan en BD
+                    const bdC = finalCuentas.find(c => (c.cuenta_windows || '').trim().toLowerCase() === lNorm);
+                    if (!bdC.correo && localC.correo) bdC.correo = localC.correo;
+                    if (!bdC.tipo_user && localC.tipo_user) bdC.tipo_user = localC.tipo_user;
+                  } else {
+                    // Solo está en WMI, la agregamos al final
+                    finalCuentas.push(localC);
+                  }
+                });
+                ns.cuentasList = finalCuentas;
+              } else {
+                ns[k] = mergedObj[k];
+              }
+            } else {
+              ns[k] = mergedObj[k];
+            }
           });
           return ns;
         });
@@ -1263,11 +1241,24 @@ export default function Dashboard() {
               <svg className="w-5 h-5 text-green-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
             </div>
             <div className="flex-1">
-              <p className="text-sm font-bold">Nueva actualizacion disponible</p>
+              <p className="text-sm font-bold">Nueva actualizacion disponible (v{updateInfo.version})</p>
+              
               {updateInfo.countdown !== null ? (
                 <p className="text-xs text-green-200 mt-0.5">Instalando en <span className="font-bold text-white text-base">{updateInfo.countdown}</span>s...</p>
-              ) : (
+              ) : updateInfo.downloading ? (
                 <p className="text-xs text-green-200 mt-0.5">Descargando actualizacion...</p>
+              ) : (
+                <button
+                  onClick={() => {
+                    setUpdateInfo(prev => ({...prev, downloading: true}));
+                    if (isElectron) {
+                      window.require('electron').ipcRenderer.send('descargar-actualizacion');
+                    }
+                  }}
+                  className="mt-2 text-xs font-semibold bg-white text-[#006241] px-3 py-1.5 rounded-full hover:bg-green-100 transition-colors"
+                >
+                  Descargar e Instalar
+                </button>
               )}
             </div>
           </div>

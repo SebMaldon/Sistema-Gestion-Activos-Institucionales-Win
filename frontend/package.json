@@ -1,7 +1,8 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "1.0.14",
+  "productName": "Gestor de hardware y bienes",
+  "version": "1.0.18",
   "description": "Gestor de Activos Institucionales IMSS",
   "author": "IMSS",
   "type": "module",
@@ -70,13 +71,12 @@
     },
     "nsis": {
       "oneClick": true,
-      "perMachine": true,
+      "perMachine": false,
       "uninstallDisplayName": "Gestor Activos HW",
       "createDesktopShortcut": false,
       "createStartMenuShortcut": true,
       "shortcutName": "Gestor Activos IMSS",
-      "allowElevation": true,
-      "include": "electron/installer.nsh"
+      "allowElevation": false
     }
   }
 }

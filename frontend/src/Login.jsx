@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { login } from './services/graphqlClient';
 import { UserCircle, KeyRound, Loader2, Eye, EyeOff, RefreshCw } from 'lucide-react';
@@ -13,11 +13,43 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [updateMsg, setUpdateMsg] = useState('');
+  const [updateAvailable, setUpdateAvailable] = useState(false);
   const navigate = useNavigate();
 
   // Rate-limit: máx 3 clics en 60s
   const clickTimes = useRef([]);
   const blockedUntil = useRef(0);
+
+  useEffect(() => {
+    if (!isElectron) return;
+    const { ipcRenderer } = window.require('electron');
+    
+    const onAvailable = () => {
+      setUpdateMsg('¡Actualización encontrada!');
+      setUpdateAvailable(true);
+    };
+    const onCountdown = (_, seconds) => setUpdateMsg(`Instalando en ${seconds}s...`);
+    const onNotAvailable = () => {
+      setUpdateMsg('Ya cuentas con la versión más reciente.');
+      setTimeout(() => setUpdateMsg(''), 4000);
+    };
+    const onError = () => {
+      setUpdateMsg('Error al buscar actualizaciones.');
+      setTimeout(() => setUpdateMsg(''), 4000);
+    };
+
+    ipcRenderer.on('update-available', onAvailable);
+    ipcRenderer.on('update-countdown', onCountdown);
+    ipcRenderer.on('update-not-available', onNotAvailable);
+    ipcRenderer.on('update-error', onError);
+
+    return () => {
+      ipcRenderer.removeListener('update-available', onAvailable);
+      ipcRenderer.removeListener('update-countdown', onCountdown);
+      ipcRenderer.removeListener('update-not-available', onNotAvailable);
+      ipcRenderer.removeListener('update-error', onError);
+    };
+  }, []);
 
   const handleCheckUpdate = () => {
     if (!isElectron) return;
@@ -45,7 +77,7 @@ export default function Login() {
       const { ipcRenderer } = window.require('electron');
       ipcRenderer.send('checar-actualizaciones');
       setUpdateMsg('Buscando actualización...');
-      setTimeout(() => setUpdateMsg(''), 4000);
+      // Ya no lo borramos con timeout, esperamos los eventos
     } catch (e) {
       setUpdateMsg('No disponible en este entorno.');
       setTimeout(() => setUpdateMsg(''), 3000);
@@ -150,7 +182,7 @@ export default function Login() {
           </form>
 
           <div className="mt-6 flex flex-col items-center gap-2">
-            {isElectron && (
+            {isElectron && !updateAvailable && (
               <button
                 type="button"
                 onClick={handleCheckUpdate}
@@ -158,6 +190,19 @@ export default function Login() {
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 Buscar actualización
+              </button>
+            )}
+            {isElectron && updateAvailable && (
+              <button
+                type="button"
+                onClick={() => {
+                  setUpdateAvailable(false);
+                  setUpdateMsg('Descargando...');
+                  window.require('electron').ipcRenderer.send('descargar-actualizacion');
+                }}
+                className="flex items-center gap-1.5 text-xs text-white bg-[#006241] hover:bg-[#008F59] px-3 py-1.5 rounded-full font-medium transition-colors shadow-sm"
+              >
+                Descargar e Instalar
               </button>
             )}
             {updateMsg && (
