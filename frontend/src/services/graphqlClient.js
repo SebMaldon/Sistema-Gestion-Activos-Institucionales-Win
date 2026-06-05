@@ -156,7 +156,11 @@ export const saveAsset = async (isNew, assetData) => {
 
   const finalIdBien = isNew ? (await queryGraphQL(mutCreate)).createBien.id_bien : (await queryGraphQL(mutUpdate)).updateBien.id_bien;
 
-  if (assetData.cpu_info || assetData.ram_gb || assetData.almacenamiento_gb) {
+  const hasTiFields = assetData.cpu_info || assetData.ram_gb || assetData.almacenamiento_gb ||
+    assetData.nombre_host || assetData.mac_address || assetData.dir_ip ||
+    assetData.modelo_so || assetData.windows_serial || assetData.version_office ||
+    assetData.puerto_red || assetData.switch_red || assetData.fecha_act_antivirus;
+  if (hasTiFields) {
     await queryGraphQL(`
       mutation { upsertEspecificacionTI(
         id_bien: "${finalIdBien}"
@@ -176,9 +180,10 @@ export const saveAsset = async (isNew, assetData) => {
     `);
   }
 
-  // Guardar Cuentas PC (1:N)
-  if (assetData.cuentasList && assetData.cuentasList.length > 0) {
-    for (const c of assetData.cuentasList) {
+  // Guardar Cuentas PC (1:N) — solo las seleccionadas
+  const selectedCuentas = (assetData.cuentasList || []).filter(c => c._selected);
+  if (selectedCuentas.length > 0) {
+    for (const c of selectedCuentas) {
       if (c.id_cuenta && !c._new) {
         await queryGraphQL(`
           mutation {
@@ -214,7 +219,6 @@ export const saveAsset = async (isNew, assetData) => {
     const progsStr = JSON.stringify(assetData.programas.map(p => ({
       programa: p.nombre_programa || p.programa || '',
       version: p.version || '',
-      editor: p.editor || '',
       fecha_instalacion: p.fecha_instalacion || ''
     }))).replace(/"([a-zA-Z0-9_]+)":/g, '$1:');
 
@@ -234,7 +238,11 @@ export const saveDirectSpecsAndPrograms = async (id_bien, assetData) => {
   const N = (v) => v ? JSON.stringify(v) : "null";
   const I = (v) => v ? v : "null";
 
-  if (assetData.cpu_info || assetData.ram_gb || assetData.almacenamiento_gb) {
+  const hasTiFields2 = assetData.cpu_info || assetData.ram_gb || assetData.almacenamiento_gb ||
+    assetData.nombre_host || assetData.mac_address || assetData.dir_ip ||
+    assetData.modelo_so || assetData.windows_serial || assetData.version_office ||
+    assetData.puerto_red || assetData.switch_red || assetData.fecha_act_antivirus;
+  if (hasTiFields2) {
     await queryGraphQL(`
       mutation { upsertEspecificacionTI(
         id_bien: "${id_bien}"
@@ -254,8 +262,10 @@ export const saveDirectSpecsAndPrograms = async (id_bien, assetData) => {
     `);
   }
 
-  if (assetData.cuentasList && assetData.cuentasList.length > 0) {
-    const cuentasStr = JSON.stringify(assetData.cuentasList.map(c => ({
+  // Guardar cuentas — solo las seleccionadas
+  const selectedCuentas2 = (assetData.cuentasList || []).filter(c => c._selected);
+  if (selectedCuentas2.length > 0) {
+    const cuentasStr = JSON.stringify(selectedCuentas2.map(c => ({
       cuenta_windows: c.cuenta_windows || '',
       correo: c.correo || '',
       tipo_user: c.tipo_user || ''

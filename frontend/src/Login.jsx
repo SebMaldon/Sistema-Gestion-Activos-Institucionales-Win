@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { login } from './services/graphqlClient';
 import { UserCircle, KeyRound, Loader2, MonitorSmartphone, Eye, EyeOff } from 'lucide-react';
+import pkg from '../package.json';
 
 export default function Login() {
   const [matricula, setMatricula] = useState('');
@@ -108,7 +109,7 @@ export default function Login() {
             </button>
           </form>
 
-          <p className="text-center mt-8 text-xs text-[#9e9e9e] font-medium">v2.0 — IMSS</p>
+          <p className="text-center mt-8 text-xs text-[#9e9e9e] font-medium">v{pkg.version} — IMSS</p>
         </div>
       </div>
     </div>

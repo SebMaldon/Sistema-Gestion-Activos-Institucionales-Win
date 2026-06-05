@@ -1,4 +1,4 @@
-const WMI_API_URL = 'http://localhost:6060/api/hw-info';
+const WMI_API_URL = import.meta.env.VITE_WMI_URL || 'http://localhost:6060/api/hw-info';
 
 export const fetchHardwareInfo = async () => {
   try {

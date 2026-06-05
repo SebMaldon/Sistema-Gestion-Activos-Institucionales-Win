@@ -21,6 +21,7 @@ import { clsx } from 'clsx';
 import SearchableSelect from './components/SearchableSelect';
 import { ModalUbicacion, ModalModeloMarca } from './components/Modals';
 import { IpInput, MacInput } from './components/MaskedInputs';
+import pkg from '../package.json';
 
 const initialFormState = {
   num_serie: '', num_inv: '', estatus_operativo: 'ACTIVO',
@@ -229,16 +230,17 @@ export default function Dashboard() {
   useEffect(() => {
     const initDashboard = async () => {
       setIsInitialLoading(true);
-      await loadAllCatalogs();
       try {
-        // Fetch local serial quietly on startup to populate search bar
-        const data = await fetchHardwareInfo();
-        if (data && data.num_serie) {
-          setSearchSerial(prev => prev || data.num_serie);
-          await syncDB(data.num_serie, true);
+        await loadAllCatalogs();
+        try {
+          const data = await fetchHardwareInfo();
+          if (data && data.num_serie) {
+            setSearchSerial(prev => prev || data.num_serie);
+            await syncDB(data.num_serie, true);
+          }
+        } catch (err) {
+          console.log('Silent WMI fetch failed on startup', err);
         }
-      } catch (err) {
-        console.log('Silent WMI fetch failed on startup', err);
       } finally {
         setIsInitialLoading(false);
       }
@@ -301,82 +303,99 @@ export default function Dashboard() {
   const loadWMI = async () => {
     setLoadingAction(true);
     try {
+      // 1. Traer datos WMI
       const data = await fetchHardwareInfo();
       setWmiInfo(data);
 
       const scannedSerial = data.num_serie || '';
-      const isDifferentMachine = searchSerial && scannedSerial && scannedSerial !== searchSerial;
+      if (scannedSerial && !searchSerial) setSearchSerial(scannedSerial);
 
-      if (isDifferentMachine) {
-        setSearchSerial(scannedSerial);
-        setDbInfo(null);
-      } else if (scannedSerial && !searchSerial) {
-        setSearchSerial(scannedSerial);
+      // 2. Buscar en BD si tenemos num_serie
+      let bdCuentas = []; // cuentas que existen en BD
+      let bdInfo = null;
+      if (scannedSerial) {
+        try {
+          const q = `query { bienByTermino(termino: "${scannedSerial}") {
+            id_bien cuentasPC { id_cuenta cuenta_windows correo tipo_user }
+          }}`;
+          const bdData = await queryGraphQL(q);
+          if (bdData?.bienByTermino?.cuentasPC) {
+            bdCuentas = bdData.bienByTermino.cuentasPC;
+            bdInfo = bdData.bienByTermino;
+          }
+        } catch (e) {
+          // BD no disponible o no encontrado — sin problema
+          console.warn('[loadWMI] BD lookup failed:', e);
+        }
       }
 
-      // Merge WMI data into formState
+      // Normalizar para comparar: trim + lowercase
+      const norm = (s) => (s || '').trim().toLowerCase();
+      const bdSet = new Set(bdCuentas.map(c => norm(c.cuenta_windows)));
+
+      // 3. Merge atómico en un solo setFormState
       setFormState(prev => {
-        const baseState = isDifferentMachine ? initialFormState : prev;
+        const baseState = (scannedSerial && searchSerial && scannedSerial !== searchSerial)
+          ? initialFormState
+          : prev;
         const newData = { ...baseState, ...data };
 
         if (data.windows_serial || data.serial_number) {
           newData.windows_serial = data.windows_serial || data.serial_number;
         }
+        if (data.nom_pc) newData.nombre_host = data.nom_pc;
 
-        if (data.nom_pc) {
-          newData.nombre_host = data.nom_pc;
-        }
+        // Construir lista final de cuentas:
+        // - Empezar con las de BD (marcadas _selected: true)
+        // - Agregar las de WMI que no estén en BD (desmarcadas)
+        const mergedCuentas = bdCuentas.map(c => ({
+          id_cuenta: c.id_cuenta,
+          cuenta_windows: c.cuenta_windows || '',
+          correo: c.correo || '',
+          tipo_user: c.tipo_user || '',
+          _editing: false,
+          _selected: true,  // ya está en BD → marcada
+          _new: false
+        }));
 
-        // Cuentas PC desde WMI
-        if (data.cuentasList && data.cuentasList.length > 0) {
-          const currentCuentas = [...(newData.cuentasList || [])];
-
-          data.cuentasList.forEach(wmiCuenta => {
-            let existingIdx = currentCuentas.findIndex(c => c.cuenta_windows === wmiCuenta.cuenta_windows);
-            if (existingIdx === -1) {
-              currentCuentas.push({
-                _new: true, _editing: false,
-                cuenta_windows: wmiCuenta.cuenta_windows || '',
-                correo: wmiCuenta.correo || '',
-                tipo_user: wmiCuenta.tipo_user || ''
-              });
-            } else {
-              if (!currentCuentas[existingIdx].correo && wmiCuenta.correo) {
-                currentCuentas[existingIdx].correo = wmiCuenta.correo;
-              }
-              if (!currentCuentas[existingIdx].tipo_user && wmiCuenta.tipo_user) {
-                currentCuentas[existingIdx].tipo_user = wmiCuenta.tipo_user;
-              }
-            }
-          });
-          newData.cuentasList = currentCuentas;
-        } else if (data.usuario_pc || data.tipo_usuario_pc || (data.correos_usuario && data.correos_usuario.length > 0)) {
-          // Fallback por si la nueva propiedad cuentasList no está
-          let existingIdx = (newData.cuentasList || []).findIndex(c => c.cuenta_windows === data.usuario_pc);
-
-          if (existingIdx === -1) {
-            newData.cuentasList = [...(newData.cuentasList || []), {
-              _new: true, _editing: false,
-              cuenta_windows: data.usuario_pc || '',
-              correo: (data.correos_usuario && data.correos_usuario.length > 0) ? data.correos_usuario[0] : '',
-              tipo_user: data.tipo_usuario_pc || ''
-            }];
+        // Agregar las de WMI que no existan en BD
+        const wmiCuentas = data.cuentasList || [];
+        wmiCuentas.forEach(wmiC => {
+          const wmiNorm = norm(wmiC.cuenta_windows);
+          // Si ya está en BD no duplicar, pero actualizar correo/tipo si la BD no los tiene
+          const bdIdx = mergedCuentas.findIndex(c => norm(c.cuenta_windows) === wmiNorm);
+          if (bdIdx !== -1) {
+            if (!mergedCuentas[bdIdx].correo && wmiC.correo)
+              mergedCuentas[bdIdx].correo = wmiC.correo;
+            if (!mergedCuentas[bdIdx].tipo_user && wmiC.tipo_user)
+              mergedCuentas[bdIdx].tipo_user = wmiC.tipo_user;
           } else {
-            const updatedCuentas = [...newData.cuentasList];
-            let changed = false;
-            if (!updatedCuentas[existingIdx].correo && data.correos_usuario && data.correos_usuario.length > 0) {
-              updatedCuentas[existingIdx].correo = data.correos_usuario[0];
-              changed = true;
-            }
-            if (!updatedCuentas[existingIdx].tipo_user && data.tipo_usuario_pc) {
-              updatedCuentas[existingIdx].tipo_user = data.tipo_usuario_pc;
-              changed = true;
-            }
-            if (changed) newData.cuentasList = updatedCuentas;
+            // Solo en WMI → nueva, desmarcada
+            mergedCuentas.push({
+              _new: true, _editing: false, _selected: false,
+              cuenta_windows: wmiC.cuenta_windows || '',
+              correo: wmiC.correo || '',
+              tipo_user: wmiC.tipo_user || ''
+            });
+          }
+        });
+
+        // Fallback si WMI no trae cuentasList pero sí usuario_pc
+        if (wmiCuentas.length === 0 && data.usuario_pc) {
+          const uNorm = norm(data.usuario_pc);
+          if (!mergedCuentas.find(c => norm(c.cuenta_windows) === uNorm)) {
+            mergedCuentas.push({
+              _new: true, _editing: false, _selected: false,
+              cuenta_windows: data.usuario_pc || '',
+              correo: (data.correos_usuario?.length > 0) ? data.correos_usuario[0] : '',
+              tipo_user: data.tipo_usuario_pc || ''
+            });
           }
         }
 
-        if (data.adaptadores_red && data.adaptadores_red.length > 0) {
+        newData.cuentasList = mergedCuentas;
+
+        if (data.adaptadores_red?.length > 0) {
           newData.dir_ip_list = data.adaptadores_red.slice(0, 3).map(a => ({ ip: a.ip, mac: a.mac, adapter: a.descripcion }));
           newData.dir_ip = data.dir_ip;
           newData.mac_address = data.mac_address;
@@ -387,7 +406,11 @@ export default function Dashboard() {
         return newData;
       });
 
-
+      // Si encontramos el bien en BD, actualizar dbInfo también
+      if (bdInfo) {
+        // Solo actualizamos el id_bien para que el save sepa que ya existe
+        setDbInfo(prev => prev ? { ...prev, id_bien: bdInfo.id_bien } : { id_bien: bdInfo.id_bien });
+      }
 
     } catch (err) {
       showAlert('Error obteniendo WMI del backend C#. Asegúrate de que el backend C# esté corriendo.', 'error');
@@ -475,7 +498,8 @@ export default function Dashboard() {
             cuenta_windows: c.cuenta_windows || '',
             correo: c.correo || '',
             tipo_user: c.tipo_user || '',
-            _editing: false
+            _editing: false,
+            _selected: true  // ya existe en BD → marcada
           })),
           fecha_act_antivirus: (() => {
             if (!esp.last_scan) return '';
@@ -764,6 +788,20 @@ export default function Dashboard() {
         const oMac = (dbInfo.dir_ip_list || []).map(x => (x.mac || '').trim()).filter(Boolean).join('/');
         return cIp !== oIp || cMac !== oMac;
       }
+      if (key === 'cuentasList') {
+        // Comparar solo datos relevantes, ignorar _selected/_new/_editing
+        const norm = (arr) => JSON.stringify(
+          (arr || []).map(c => ({ w: c.cuenta_windows || '', m: c.correo || '', t: c.tipo_user || '' }))
+            .sort((a, b) => a.w.localeCompare(b.w))
+        );
+        return norm(formState.cuentasList) !== norm(dbInfo.cuentasList);
+      }
+      if (key === 'programas') {
+        const norm = (arr) => JSON.stringify(
+          (arr || []).map(p => p.programa || p.nombre_programa || '').sort()
+        );
+        return norm(formState.programas) !== norm(dbInfo.programas);
+      }
       if (Array.isArray(formState[key])) {
         return JSON.stringify(formState[key]) !== JSON.stringify(dbInfo[key]);
       }
@@ -805,7 +843,7 @@ export default function Dashboard() {
       >
         <div className="flex items-center gap-4">
           <img src="IMSS_Logosímbolo_Blanco.png" alt="IMSS" className="h-5 w-5 object-contain" />
-          <span className="text-xs font-semibold tracking-wide">Gestor de Activos — IMSS</span>
+          <span className="text-xs font-semibold tracking-wide">Gestor de Activos — IMSS <span className="text-[10px] text-gray-300 ml-1 font-normal">v{pkg.version}</span></span>
           {dbInfo && dbInfo.id_bien && (
             <div
               className="flex items-center gap-2 bg-[#008F59]/30 border border-[#008F59]/50 px-2 py-0.5 rounded-full"
@@ -872,52 +910,75 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Cuentas PC (Tarjetas) */}
+          {/* Cuentas PC (Tarjetas con checkbox) */}
           {formState.cuentasList && formState.cuentasList.length > 0 && (
-            <div className="space-y-2 max-h-[14rem] overflow-y-auto no-scrollbar pb-1">
+            <div className="space-y-1.5 max-h-[14rem] overflow-y-auto no-scrollbar pb-1">
+              <p className="text-[10px] font-bold text-[#757575] uppercase tracking-wider px-1">Cuentas Detectadas</p>
               {formState.cuentasList.map((c, i) => {
                 const isExpanded = selectedCuentaIdx === i;
+                const isChecked = !!c._selected;
+                // Fix 2: key estable por nombre de cuenta, no por índice
+                const stableKey = c.cuenta_windows || c.id_cuenta || `cuenta-${i}`;
                 return (
-                  <div key={i} className="border border-[#E0E0E0] rounded-xl overflow-hidden bg-[#F9FAFB] shadow-sm">
-                    <div className="flex items-center justify-between px-3 py-2 hover:bg-gray-100">
+                  <div key={stableKey} className={clsx(
+                    "border rounded-xl overflow-hidden shadow-sm transition-colors",
+                    isChecked ? "border-[#006241] bg-[#F0FAF4]" : "border-[#E0E0E0] bg-[#F9FAFB]"
+                  )}>
+                    <div className="flex items-center px-3 py-2 gap-2">
+                      {/* Checkbox */}
+                      <button
+                        onClick={() => {
+                          const newC = formState.cuentasList.map((item, idx) =>
+                            idx === i ? { ...item, _selected: !item._selected } : item
+                          );
+                          updateForm('cuentasList', newC);
+                          // Fix 3: cerrar acordeón al marcar/desmarcar para evitar desfase
+                          if (isExpanded) setSelectedCuentaIdx(-1);
+                        }}
+                        title={isChecked ? "Desmarcar (no guardar)" : "Marcar para guardar"}
+                        className={clsx(
+                          "flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors",
+                          isChecked
+                            ? "bg-[#006241] border-[#006241] text-white"
+                            : "bg-white border-gray-300 hover:border-[#006241]"
+                        )}
+                      >
+                        {isChecked && (
+                          <svg className="w-3 h-3" viewBox="0 0 12 12" fill="none">
+                            <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )}
+                      </button>
+
+                      {/* Label / expand */}
                       <button
                         onClick={() => setSelectedCuentaIdx(isExpanded ? -1 : i)}
                         className="text-left flex-grow flex items-center justify-between min-w-0"
                       >
                         <div className="overflow-hidden min-w-0 flex-grow">
-                          <span className="text-[#006241] font-bold block uppercase text-[9px] leading-tight truncate">Cuenta de Usuario PC {i > 0 ? i + 1 : ''}</span>
-                          <span className="text-[#333333] font-bold block truncate text-xs mt-0.5">{c.cuenta_windows || '—'}</span>
+                          <span className={clsx("font-bold block text-xs mt-0.5 truncate", isChecked ? "text-[#006241]" : "text-[#333333]")}>
+                            {c.cuenta_windows || '—'}
+                          </span>
+                          {c.id_cuenta && !c._new && (
+                            <span className="text-[9px] text-[#006241] font-semibold">● En BD</span>
+                          )}
                         </div>
-                        <div className="mx-2 flex-shrink-0">
-                          {isExpanded ? <ChevronUp className="w-4 h-4 text-[#757575] flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-[#757575] flex-shrink-0" />}
+                        <div className="mx-1 flex-shrink-0">
+                          {isExpanded ? <ChevronUp className="w-3 h-3 text-[#757575]" /> : <ChevronDown className="w-3 h-3 text-[#757575]" />}
                         </div>
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const newC = formState.cuentasList.filter((_, idx) => idx !== i);
-                          updateForm('cuentasList', newC);
-                        }}
-                        className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg flex-shrink-0 transition-colors ml-1"
-                        title="Eliminar cuenta"
-                      >
-                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
+
                     {isExpanded && (
-                      <div className="p-3 bg-white border-t border-[#E0E0E0] space-y-2.5">
+                      <div className="p-3 bg-white border-t border-[#E0E0E0] space-y-1.5">
                         <div>
-                          <span className="text-[#757575] font-semibold block uppercase text-[9px] leading-tight">Nombre de Cuenta Completo</span>
-                          <span className="text-[#333333] font-medium block text-[11px] mt-0.5 break-all">{c.cuenta_windows || '—'}</span>
-                        </div>
-                        <div>
-                          <span className="text-[#757575] font-semibold block uppercase text-[9px] leading-tight">Tipo Usuario</span>
-                          <span className="text-[#333333] font-medium block truncate text-[11px] mt-0.5" title={c.tipo_user}>{c.tipo_user || '—'}</span>
+                          <span className="text-[#757575] font-semibold block uppercase text-[9px]">Tipo</span>
+                          <span className="text-[#333333] font-medium block text-[11px] truncate">{c.tipo_user || '—'}</span>
                         </div>
                         {c.correo && (
                           <div>
-                            <span className="text-[#757575] font-semibold block uppercase text-[9px] leading-tight">Correo</span>
-                            <span className="text-[#333333] font-medium block text-[11px] mt-0.5 break-all" title={c.correo}>{c.correo}</span>
+                            <span className="text-[#757575] font-semibold block uppercase text-[9px]">Correo</span>
+                            <span className="text-[#333333] font-medium block text-[11px] break-all">{c.correo}</span>
                           </div>
                         )}
                       </div>

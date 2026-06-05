@@ -10,9 +10,11 @@ dotenv.config({ path: path.join(__dirname, '../.env') });
 const AUTOSYNC_USER = process.env.VITE_AUTOSYNC_USER;
 const AUTOSYNC_PASS = process.env.VITE_AUTOSYNC_PASS;
 const GQL_URL = process.env.VITE_GQL_URL ?? 'http://11.1.19.4:4000/graphql';
+const WMI_URL = process.env.VITE_WMI_URL ?? 'http://localhost:6060/api/hw-info';
 
 export const startAutoSync = () => {
-  // Intervalo 1: AutoSync natural (cada hora chequea si pasaron 48h)
+  // Intervalo 1: AutoSync natural (cada hora chequea si pasaron 72h)
+  let syncScheduled = false; // evita acumular timeouts si el app corre mucho tiempo
   setInterval(async () => {
     try {
       const syncFile = path.join(app.getPath('userData'), 'autosync.json');
@@ -23,20 +25,25 @@ export const startAutoSync = () => {
 
       const now = Date.now();
       if (now - lastSync < 72 * 3600 * 1000) return;
+      if (syncScheduled) return; // ya hay un sync pendiente en cola
 
       const jitter = Math.floor(Math.random() * 8 * 3600 * 1000);
       console.log(`[AutoSync Main] Programado en ${Math.round(jitter / 60000)} mins`);
 
-      setTimeout(() => performSync(syncFile), jitter);
+      syncScheduled = true;
+      setTimeout(async () => {
+        await performSync(syncFile);
+        syncScheduled = false;
+      }, jitter);
     } catch (e) {
       console.error("[AutoSync Interval] Error:", e);
     }
-  }, 3600000); // 1 hora
+  }, 3600000); // cada 1 hora
 
-  // Intervalo 2: Polling de Forzar Sincronización (cada 30 min)
-  setInterval(async () => {
+  // Intervalo 2: Polling de Forzar Sincronización (cada 24h, y también al arrancar)
+  const checkForzarSync = async () => {
     try {
-      const wmiRes = await fetch('http://localhost:6060/api/hw-info');
+      const wmiRes = await fetch(WMI_URL);
       if (!wmiRes.ok) return;
       const wmiData = await wmiRes.json();
       if (!wmiData.num_serie) return;
@@ -75,12 +82,17 @@ export const startAutoSync = () => {
     } catch (e) {
       console.error("[Polling] Error:", e);
     }
-  }, 24 * 3600000); // 24h
+  };
+
+  // Correr al arrancar (con delay de 30s para dar tiempo al app de inicializar)
+  setTimeout(checkForzarSync, 30000);
+  // Y repetir cada 24h
+  setInterval(checkForzarSync, 24 * 3600000);
 };
 
 async function performSync(syncFile) {
   try {
-    const wmiRes = await fetch('http://localhost:6060/api/hw-info');
+    const wmiRes = await fetch(WMI_URL);
     if (!wmiRes.ok) return;
     const wmiData = await wmiRes.json();
     if (!wmiData.num_serie) return;
@@ -134,7 +146,6 @@ async function performSync(syncFile) {
       const progsStr = JSON.stringify(wmiData.programas.map(p => ({
         programa: p.nombre_programa || p.programa || '',
         version: p.version || '',
-        editor: p.editor || '',
         fecha_instalacion: p.fecha_instalacion || ''
       }))).replace(/"([a-zA-Z0-9_]+)":/g, '$1:');
       await queryGraphQL(`mutation { syncProgramasPC(id_bien: "${id_bien}", programas: ${progsStr}) }`, token);

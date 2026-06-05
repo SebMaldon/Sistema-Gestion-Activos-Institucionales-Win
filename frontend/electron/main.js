@@ -40,12 +40,19 @@ autoUpdater.autoDownload = false;
 autoUpdater.requestHeaders = { "Cache-Control": "no-cache" };
 
 function setupAutoUpdater() {
+  const sendToRenderer = (channel, payload) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(channel, payload);
+    }
+  };
+
   autoUpdater.on('checking-for-update', () => {
     console.log('Buscando actualizaciones...');
   });
 
   autoUpdater.on('update-available', (info) => {
     console.log('Actualización disponible:', info.version);
+    sendToRenderer('update-available', info.version);
     autoUpdater.downloadUpdate();
   });
 
@@ -54,16 +61,25 @@ function setupAutoUpdater() {
   });
 
   autoUpdater.on('download-progress', (progress) => {
-    mainWindow?.webContents.send('update-progress', Math.round(progress.percent));
+    sendToRenderer('update-progress', Math.round(progress.percent));
   });
 
   autoUpdater.on('update-downloaded', () => {
-    console.log('Actualización descargada. Instalando en segundo plano...');
-    
-    // Escribir bandera para iniciar oculto tras actualizar
+    console.log('Actualización descargada. Instalando en 5s...');
     require('fs').writeFileSync(path.join(app.getPath('userData'), '.update-restart'), '1');
-    
-    autoUpdater.quitAndInstall(true, true);
+
+    // Countdown de 5s visible en el frontend
+    let secs = 5;
+    sendToRenderer('update-countdown', secs);
+    const timer = setInterval(() => {
+      secs--;
+      if (secs <= 0) {
+        clearInterval(timer);
+        autoUpdater.quitAndInstall(true, true);
+      } else {
+        sendToRenderer('update-countdown', secs);
+      }
+    }, 1000);
   });
 
   autoUpdater.on('error', (err) => {
@@ -167,7 +183,7 @@ function createTray() {
     }
   ]);
 
-  tray.setToolTip('Gestor Activos - IMSS');
+  tray.setToolTip(`Gestor Activos - IMSS v${app.getVersion()}`);
   tray.setContextMenu(contextMenu);
 
   tray.on('click', () => showOrCreateWindow());

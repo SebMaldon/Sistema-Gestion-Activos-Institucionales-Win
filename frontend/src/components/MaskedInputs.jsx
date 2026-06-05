@@ -7,9 +7,9 @@ export const IpInput = ({ value, onChange, className }) => {
   useEffect(() => {
     const parts = (value || '').split('.');
     setOctets([
-      parts[0] || '', 
-      parts[1] || '', 
-      parts[2] || '', 
+      parts[0] || '',
+      parts[1] || '',
+      parts[2] || '',
       parts[3] || ''
     ]);
   }, [value]);
@@ -18,7 +18,6 @@ export const IpInput = ({ value, onChange, className }) => {
     const newOctets = [...octets];
     newOctets[idx] = val;
     setOctets(newOctets);
-    // Join and clean up trailing dots if empty
     let joined = newOctets.join('.');
     while (joined.endsWith('.') && joined.length > 0) {
       joined = joined.slice(0, -1);
@@ -42,12 +41,30 @@ export const IpInput = ({ value, onChange, className }) => {
       if (num > 255) val = '255';
       else val = num.toString();
     }
-    
     updateOctet(idx, val);
-
     if (val.length === 3 && idx < 3) {
       refs[idx + 1].current.focus();
     }
+  };
+
+  // Fix 6: sanitizar paste completo tipo "192.168.1.100"
+  const handlePaste = (e, idx) => {
+    e.preventDefault();
+    const raw = e.clipboardData.getData('text');
+    const parts = raw.replace(/[^0-9.]/g, '').split('.').slice(0, 4);
+    const newOctets = [...octets];
+    parts.forEach((p, i) => {
+      if (idx + i < 4) {
+        let num = parseInt(p, 10);
+        if (isNaN(num)) num = 0;
+        if (num > 255) num = 255;
+        newOctets[idx + i] = num.toString();
+      }
+    });
+    setOctets(newOctets);
+    onChange(newOctets.filter((_, i) => i < 4).join('.').replace(/\.+$/, ''));
+    const focusIdx = Math.min(idx + parts.length - 1, 3);
+    refs[focusIdx].current?.focus();
   };
 
   return (
@@ -60,6 +77,7 @@ export const IpInput = ({ value, onChange, className }) => {
             value={oct}
             onChange={(e) => handleChange(e, idx)}
             onKeyDown={(e) => handleKeyDown(e, idx)}
+            onPaste={(e) => handlePaste(e, idx)}
             className="w-8 text-center bg-transparent focus:outline-none text-[#333333] placeholder-gray-300"
             maxLength={3}
             placeholder="0"
@@ -78,7 +96,7 @@ export const MacInput = ({ value, onChange, className }) => {
   useEffect(() => {
     const parts = (value || '').split(':');
     setHexes([
-      parts[0] || '', parts[1] || '', parts[2] || '', 
+      parts[0] || '', parts[1] || '', parts[2] || '',
       parts[3] || '', parts[4] || '', parts[5] || ''
     ]);
   }, [value]);
@@ -106,12 +124,25 @@ export const MacInput = ({ value, onChange, className }) => {
   const handleChange = (e, idx) => {
     let val = e.target.value.replace(/[^0-9A-Fa-f]/g, '');
     if (val.length > 2) val = val.substring(0, 2);
-    
     updateHex(idx, val);
-
     if (val.length === 2 && idx < 5) {
       refs[idx + 1].current.focus();
     }
+  };
+
+  // Fix 6: sanitizar paste completo tipo "AA:BB:CC:DD:EE:FF" o "AA-BB-CC-DD-EE-FF"
+  const handlePaste = (e) => {
+    e.preventDefault();
+    const raw = e.clipboardData.getData('text');
+    // normalizar separadores y filtrar solo hex
+    const clean = raw.replace(/[-:.\s]/g, '').replace(/[^0-9A-Fa-f]/g, '').substring(0, 12);
+    const parts = clean.match(/.{1,2}/g) || [];
+    const newHexes = ['', '', '', '', '', ''];
+    parts.forEach((p, i) => { if (i < 6) newHexes[i] = p.toUpperCase(); });
+    setHexes(newHexes);
+    onChange(newHexes.join(':').replace(/:+$/, ''));
+    const focusIdx = Math.min(parts.length - 1, 5);
+    refs[Math.max(0, focusIdx)].current?.focus();
   };
 
   return (
@@ -124,6 +155,7 @@ export const MacInput = ({ value, onChange, className }) => {
             value={hex}
             onChange={(e) => handleChange(e, idx)}
             onKeyDown={(e) => handleKeyDown(e, idx)}
+            onPaste={handlePaste}
             className="w-6 text-center bg-transparent focus:outline-none text-[#333333] placeholder-gray-300 uppercase"
             maxLength={2}
             placeholder="00"
