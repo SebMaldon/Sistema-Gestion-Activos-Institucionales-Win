@@ -23,6 +23,16 @@ let backendProcess;
 let tray = null;
 let isQuitting = false;
 
+// Debe ir ANTES de whenReady para evitar race condition al reiniciar
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+}
+
+app.on('second-instance', () => {
+  showOrCreateWindow();
+});
+
 const log = require('electron-log');
 autoUpdater.logger = log;
 autoUpdater.logger.transports.file.level = 'info';
@@ -80,25 +90,24 @@ ipcMain.on('checar-actualizaciones', () => {
   }
 });
 
+function showOrCreateWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow();
+  } else if (!mainWindow.isVisible()) {
+    mainWindow.show();
+    mainWindow.focus();
+  } else {
+    mainWindow.focus();
+  }
+}
+
 function createWindow() {
-  const fs = require('fs');
-  const flagPath = path.join(app.getPath('userData'), '.update-restart');
-  let startHidden = false;
-  if (fs.existsSync(flagPath)) {
-    startHidden = true;
-    fs.unlinkSync(flagPath);
-  }
-
-  if (process.argv.includes('--hidden')) {
-    startHidden = true;
-  }
-
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 1200,
     minHeight: 800,
-    show: !startHidden,
+    show: true,
     title: 'Gestor Activos - IMSS',
     icon: !app.isPackaged
       ? path.join(__dirname, '../public/IMSS_logo_blanco.png')
@@ -117,16 +126,7 @@ function createWindow() {
   });
 
   mainWindow.setMenuBarVisibility(false);
-  
-  // Quitar modo eficiencia al abrir
   try { os.setPriority(process.pid, os.constants.priority.PRIORITY_NORMAL); } catch(e){}
-  
-  if (startHidden) {
-    mainWindow.destroy();
-    mainWindow = null;
-    try { os.setPriority(process.pid, os.constants.priority.PRIORITY_LOW); } catch(e){}
-    return;
-  }
 
   mainWindow.on('close', (event) => {
     if (!isQuitting) {
@@ -134,14 +134,12 @@ function createWindow() {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.destroy();
         mainWindow = null;
-        // Entrar a modo eficiencia (Hojita Verde) al cerrar
         try { os.setPriority(process.pid, os.constants.priority.PRIORITY_LOW); } catch(e){}
       }
     }
   });
 
   const isDev = !app.isPackaged;
-
   if (isDev) {
     mainWindow.loadURL('http://localhost:5200');
   } else {
@@ -158,7 +156,7 @@ function createTray() {
   tray = new Tray(icon.resize({ width: 16, height: 16 }));
   
   const contextMenu = Menu.buildFromTemplate([
-    { label: 'Mostrar aplicación', click: () => mainWindow?.show() },
+    { label: 'Mostrar aplicación', click: () => showOrCreateWindow() },
     { type: 'separator' },
     { 
       label: 'Salir', 
@@ -172,19 +170,7 @@ function createTray() {
   tray.setToolTip('Gestor Activos - IMSS');
   tray.setContextMenu(contextMenu);
 
-  tray.on('click', () => {
-    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
-      mainWindow.destroy();
-      mainWindow = null;
-      try { os.setPriority(process.pid, os.constants.priority.PRIORITY_LOW); } catch(e){}
-    } else {
-      if (!mainWindow || mainWindow.isDestroyed()) {
-        createWindow();
-      } else {
-        mainWindow.show();
-      }
-    }
-  });
+  tray.on('click', () => showOrCreateWindow());
 }
 
 function startBackend() {
@@ -220,39 +206,22 @@ function startBackend() {
 }
 
 app.whenReady().then(() => {
-  const gotTheLock = app.requestSingleInstanceLock();
-  
-  if (!gotTheLock) {
-    app.quit();
-    return;
-  }
+  if (!gotTheLock) return;
 
   app.setLoginItemSettings({
     openAtLogin: true,
     openAsHidden: true,
-    args: [
-      '--hidden'
-    ]
-  });
-
-  app.on('second-instance', (event, commandLine, workingDirectory) => {
-    // Alguien intentó abrir otra instancia. Enfocar nuestra ventana.
-    if (mainWindow) {
-      if (!mainWindow.isVisible()) mainWindow.show();
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-    }
+    args: ['--hidden']
   });
 
   startBackend();
-  createWindow();
+  // NO crear ventana al inicio — el usuario la abre desde el tray
   createTray();
   setupAutoUpdater();
   startAutoSync();
 
-  app.on('activate', () => {
-    if (!mainWindow || mainWindow.isDestroyed()) createWindow();
-  });
+  // macOS: al hacer click en el dock volver a abrir
+  app.on('activate', () => showOrCreateWindow());
 });
 
 app.on('before-quit', () => {

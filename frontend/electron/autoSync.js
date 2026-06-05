@@ -1,6 +1,15 @@
 import fs from 'fs';
 import path from 'path';
 import { app } from 'electron';
+import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, '../.env') });
+
+const AUTOSYNC_USER = process.env.VITE_AUTOSYNC_USER;
+const AUTOSYNC_PASS = process.env.VITE_AUTOSYNC_PASS;
+const GQL_URL = process.env.VITE_GQL_URL ?? 'http://11.1.19.4:4000/graphql';
 
 export const startAutoSync = () => {
   // Intervalo 1: AutoSync natural (cada hora chequea si pasaron 48h)
@@ -11,9 +20,9 @@ export const startAutoSync = () => {
       if (fs.existsSync(syncFile)) {
         lastSync = JSON.parse(fs.readFileSync(syncFile, 'utf-8')).lastSync || 0;
       }
-      
+
       const now = Date.now();
-      if (now - lastSync < 48 * 3600 * 1000) return;
+      if (now - lastSync < 72 * 3600 * 1000) return;
 
       const jitter = Math.floor(Math.random() * 8 * 3600 * 1000);
       console.log(`[AutoSync Main] Programado en ${Math.round(jitter / 60000)} mins`);
@@ -27,14 +36,13 @@ export const startAutoSync = () => {
   // Intervalo 2: Polling de Forzar Sincronización (cada 30 min)
   setInterval(async () => {
     try {
-      const wmiRes = await fetch('http://localhost:5200/api/wmi/hardware');
+      const wmiRes = await fetch('http://localhost:6060/api/hw-info');
       if (!wmiRes.ok) return;
       const wmiData = await wmiRes.json();
       if (!wmiData.num_serie) return;
 
-      const GQL_URL = 'http://11.1.19.4:4000/graphql';
-      const user = 'ti_autosync';
-      const pass = 'ti_autosync123';
+      const user = AUTOSYNC_USER;
+      const pass = AUTOSYNC_PASS;
 
       const headers = { 'Content-Type': 'application/json', 'x-origen': 'win' };
       // Login
@@ -57,7 +65,7 @@ export const startAutoSync = () => {
         console.log("[AutoSync] Forzar Sincronización detectado.");
         const syncFile = path.join(app.getPath('userData'), 'autosync.json');
         await performSync(syncFile);
-        
+
         // Limpiar bandera
         await fetch(GQL_URL, {
           method: 'POST', headers, body: JSON.stringify({ query: `mutation { clearSyncPending(num_serie: "${wmiData.num_serie}") }` })
@@ -67,19 +75,18 @@ export const startAutoSync = () => {
     } catch (e) {
       console.error("[Polling] Error:", e);
     }
-  }, 1800000); // 30 mins
+  }, 24 * 3600000); // 24h
 };
 
 async function performSync(syncFile) {
   try {
-    const wmiRes = await fetch('http://localhost:5200/api/wmi/hardware');
+    const wmiRes = await fetch('http://localhost:6060/api/hw-info');
     if (!wmiRes.ok) return;
     const wmiData = await wmiRes.json();
     if (!wmiData.num_serie) return;
 
-    const GQL_URL = 'http://11.1.19.4:4000/graphql';
-    const user = 'ti_autosync';
-    const pass = 'ti_autosync123';
+    const user = AUTOSYNC_USER;
+    const pass = AUTOSYNC_PASS;
 
     const queryGraphQL = async (query, token = null) => {
       const headers = { 'Content-Type': 'application/json', 'x-origen': 'win' };
@@ -106,8 +113,8 @@ async function performSync(syncFile) {
     // 3. Sincronizar
     const N = (v) => v ? JSON.stringify(v) : "null";
     const I = (v) => v ? v : "null";
-    const dirIpString = (wmiData.adaptadores_red?.slice(0,3) || []).map(x => x.ip).filter(Boolean).join('/');
-    const macString = (wmiData.adaptadores_red?.slice(0,3) || []).map(x => x.mac).filter(Boolean).join('/');
+    const dirIpString = (wmiData.adaptadores_red?.slice(0, 3) || []).map(x => x.ip).filter(Boolean).join('/');
+    const macString = (wmiData.adaptadores_red?.slice(0, 3) || []).map(x => x.mac).filter(Boolean).join('/');
 
     if (wmiData.cpu_info || wmiData.ram_gb || wmiData.almacenamiento_gb) {
       await queryGraphQL(`
@@ -125,7 +132,7 @@ async function performSync(syncFile) {
 
     if (wmiData.programas && wmiData.programas.length > 0) {
       const progsStr = JSON.stringify(wmiData.programas.map(p => ({
-        nombre_programa: p.nombre_programa || '',
+        programa: p.nombre_programa || p.programa || '',
         version: p.version || '',
         editor: p.editor || '',
         fecha_instalacion: p.fecha_instalacion || ''

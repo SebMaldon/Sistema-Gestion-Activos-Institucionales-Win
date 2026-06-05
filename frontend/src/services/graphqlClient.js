@@ -212,7 +212,7 @@ export const saveAsset = async (isNew, assetData) => {
   // Guardar programas PC
   if (assetData.programas && assetData.programas.length > 0) {
     const progsStr = JSON.stringify(assetData.programas.map(p => ({
-      nombre_programa: p.nombre_programa || '',
+      programa: p.nombre_programa || p.programa || '',
       version: p.version || '',
       editor: p.editor || '',
       fecha_instalacion: p.fecha_instalacion || ''
@@ -280,7 +280,7 @@ export const saveDirectSpecsAndPrograms = async (id_bien, assetData) => {
 
   if (assetData.programas && assetData.programas.length > 0) {
     const progsStr = JSON.stringify(assetData.programas.map(p => ({
-      nombre_programa: p.nombre_programa || '',
+      programa: p.nombre_programa || p.programa || '',
       version: p.version || '',
       fecha_instalacion: p.fecha_instalacion || ''
     }))).replace(/"([a-zA-Z0-9_]+)":/g, '$1:');
