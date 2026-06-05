@@ -180,8 +180,21 @@ export const saveAsset = async (isNew, assetData) => {
     `);
   }
 
-  // Guardar Cuentas PC (1:N) — solo las seleccionadas
+  // Guardar Cuentas PC (1:N) — procesar seleccionadas y eliminar las desmarcadas que ya existían
   const selectedCuentas = (assetData.cuentasList || []).filter(c => c._selected);
+  const unselectedCuentas = (assetData.cuentasList || []).filter(c => !c._selected && c.id_cuenta);
+
+  // Eliminar cuentas desmarcadas que ya estaban en BD
+  if (unselectedCuentas.length > 0) {
+    for (const c of unselectedCuentas) {
+      try {
+        await queryGraphQL(`mutation { deleteCuentaPC(id_cuenta: "${c.id_cuenta}") }`);
+      } catch (err) {
+        console.log(`Error eliminando cuenta desmarcada ${c.id_cuenta}:`, err);
+      }
+    }
+  }
+
   if (selectedCuentas.length > 0) {
     for (const c of selectedCuentas) {
       if (c.id_cuenta && !c._new) {
@@ -262,19 +275,17 @@ export const saveDirectSpecsAndPrograms = async (id_bien, assetData) => {
     `);
   }
 
-  // Guardar cuentas — solo las seleccionadas
+  // Guardar cuentas — sincronizar con las seleccionadas (incluso si es 0, para borrar las existentes)
   const selectedCuentas2 = (assetData.cuentasList || []).filter(c => c._selected);
-  if (selectedCuentas2.length > 0) {
-    const cuentasStr = JSON.stringify(selectedCuentas2.map(c => ({
-      cuenta_windows: c.cuenta_windows || '',
-      correo: c.correo || '',
-      tipo_user: c.tipo_user || ''
-    }))).replace(/"([a-zA-Z0-9_]+)":/g, '$1:');
+  const cuentasStr = JSON.stringify(selectedCuentas2.map(c => ({
+    cuenta_windows: c.cuenta_windows || '',
+    correo: c.correo || '',
+    tipo_user: c.tipo_user || ''
+  }))).replace(/"([a-zA-Z0-9_]+)":/g, '$1:');
 
-    try {
-      await queryGraphQL(`mutation { syncCuentasPC(id_bien: "${id_bien}", cuentas: ${cuentasStr}) }`);
-    } catch (err) { console.log("No se pudo guardar cuentasList en update directo: ", err); }
-  }
+  try {
+    await queryGraphQL(`mutation { syncCuentasPC(id_bien: "${id_bien}", cuentas: ${cuentasStr}) }`);
+  } catch (err) { console.log("No se pudo guardar cuentasList en update directo: ", err); }
 
   if (assetData.monitores && assetData.monitores.length > 0) {
     const monitoresStr = JSON.stringify(assetData.monitores.map(m => ({

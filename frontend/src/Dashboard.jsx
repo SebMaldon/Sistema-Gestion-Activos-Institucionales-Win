@@ -354,8 +354,8 @@ export default function Dashboard() {
 
       // 3. Ahora que el state tiene WMI, buscar en BD todo el registro y fusionarlo (syncDB)
       if (scannedSerial) {
-        // Ejecutamos syncDB asíncronamente
-        await syncDB(scannedSerial, false);
+        // Ejecutamos syncDB asíncronamente y preservamos la data WMI local
+        await syncDB(scannedSerial, true);
       }
 
     } catch (err) {
@@ -366,43 +366,116 @@ export default function Dashboard() {
   };
 
   // Sync DB
-  const syncDB = async (overrideSerial = null, autoLoadWMI = false) => {
+  const syncDB = async (overrideSerial = null, preserveLocal = false) => {
     const serialToSearch = typeof overrideSerial === 'string' ? overrideSerial : searchSerial;
-    if (!serialToSearch) return showAlert('Ingresa un número de serie para buscar en la BD.', 'warning');
+    if (!serialToSearch && !formState.dir_ip) {
+      showAlert('Ingresa un número de serie o dirección IP para buscar.', 'warning');
+      return;
+    }
 
     setLoadingAction(true);
     try {
-      const query = `
-        query {
-          bienByTermino(termino: "${serialToSearch}") {
-            id_bien num_serie num_inv estatus_operativo clave_unidad_ref clave_modelo 
-            id_usuario_resguardo id_segmento id_ubicacion fecha_adquisicion fecha_actualizacion
-            usuarioResguardo {
-              matricula
-              nombre_completo
-            }
-            especificacionTI {
-              nombre_host windows_serial cpu_info ram_gb almacenamiento_gb mac_address dir_ip puerto_red switch_red modelo_so version_office
-              last_scan
-            }
-            cuentasPC {
-              id_cuenta cuenta_windows correo tipo_user
-            }
-            monitores {
-              monitor {
-                id_bien
-                num_serie
-                modelo {
-                  descrip_disp
-                  marca {
-                    marca
-                  }
+      // 1. Buscar en BD
+      let query = '';
+      if (serialToSearch) {
+        query = `
+          query {
+            bienByTermino(termino: "${serialToSearch}") {
+              id_bien
+              num_serie
+              num_inv
+              estatus_operativo
+              clave_unidad_ref
+              clave_modelo
+              id_usuario_resguardo
+              id_segmento
+              id_ubicacion
+              fecha_adquisicion
+              fecha_actualizacion
+              usuarioResguardo {
+                matricula
+                nombre_completo
+              }
+              especificacionTI {
+                nombre_host
+                windows_serial
+                cpu_info
+                ram_gb
+                almacenamiento_gb
+                mac_address
+                dir_ip
+                puerto_red
+                switch_red
+                modelo_so
+                version_office
+                last_scan
+              }
+              monitores {
+                monitor {
+                  id_bien
+                  num_serie
+                  modelo { descrip_disp, marca { marca } }
                 }
+              }
+              cuentasPC {
+                id_cuenta
+                cuenta_windows
+                correo
+                tipo_user
               }
             }
           }
-        }
-      `;
+        `;
+      } else if (formState.dir_ip) {
+        query = `
+          query {
+            bienByTermino(termino: "${formState.dir_ip}") {
+              id_bien
+              num_serie
+              num_inv
+              estatus_operativo
+              clave_unidad_ref
+              clave_modelo
+              id_usuario_resguardo
+              id_segmento
+              id_ubicacion
+              fecha_adquisicion
+              fecha_actualizacion
+              usuarioResguardo {
+                matricula
+                nombre_completo
+              }
+              especificacionTI {
+                nombre_host
+                windows_serial
+                cpu_info
+                ram_gb
+                almacenamiento_gb
+                mac_address
+                dir_ip
+                puerto_red
+                switch_red
+                modelo_so
+                version_office
+                last_scan
+              }
+              monitores {
+                monitor {
+                  id_bien
+                  num_serie
+                  modelo { descrip_disp, marca { marca } }
+                }
+              }
+              cuentasPC {
+                id_cuenta
+                cuenta_windows
+                correo
+                tipo_user
+              }
+            }
+          }
+        `;
+      }
       const data = await queryGraphQL(query);
       if (data && data.bienByTermino) {
         const bien = data.bienByTermino;
@@ -473,51 +546,50 @@ export default function Dashboard() {
         setDbInfo(mergedObj);
         setLastSubmitted(null);
 
-        // Populate form but don't overwrite physical WMI fields if they differ
+        // Populate form
         setFormState(prev => {
           const ns = { ...prev };
-          const wmiFields = ['nombre_host', 'windows_serial', 'cpu_info', 'ram_gb', 'almacenamiento_gb', 'mac_address', 'dir_ip', 'modelo_so', 'version_office'];
+          const wmiFields = ['num_serie', 'nombre_host', 'windows_serial', 'cpu_info', 'ram_gb', 'almacenamiento_gb', 'mac_address', 'dir_ip', 'modelo_so', 'version_office', 'fecha_act_antivirus'];
           
           Object.keys(mergedObj).forEach(k => {
-            if (wmiFields.includes(k)) {
-              // Dar prioridad al dato local (WMI) si ya existe. Si está vacío, usar el de la BD.
+            if (wmiFields.includes(k) && preserveLocal) {
+              // Dar prioridad al dato local (WMI) si ya existe y preservar. Si está vacío, usar el de la BD.
               if (!ns[k]) {
                 ns[k] = mergedObj[k];
               }
-            } else if (k === 'cuentasList' || k === 'monitores' || k === 'dir_ip_list') {
-              // Las listas ya las procesa loadWMI y syncDB de forma especial, si venimos de loadWMI prev ya tiene los datos.
-              // Para no perder el merge de WMI, si es cuentasList y ya teníamos, intentamos preservarlas.
+            } else if ((k === 'cuentasList' || k === 'monitores' || k === 'dir_ip_list') && preserveLocal) {
+              // Si debemos preservar lo local y es una lista, la fusionamos.
               if (k === 'cuentasList' && ns.cuentasList && ns.cuentasList.length > 0 && ns.cuentasList.some(c => c._new)) {
-                // Hacer un merge real para no perder cuentas de la BD
                 const finalCuentas = mergedObj.cuentasList.map(c => ({...c, _new: false}));
                 const bdNorms = new Set(finalCuentas.map(c => (c.cuenta_windows || '').trim().toLowerCase()));
 
                 ns.cuentasList.forEach(localC => {
                   const lNorm = (localC.cuenta_windows || '').trim().toLowerCase();
                   if (bdNorms.has(lNorm)) {
-                    // Si la BD ya la tiene, podemos rellenar correo o tipo_user si faltan en BD
                     const bdC = finalCuentas.find(c => (c.cuenta_windows || '').trim().toLowerCase() === lNorm);
                     if (!bdC.correo && localC.correo) bdC.correo = localC.correo;
                     if (!bdC.tipo_user && localC.tipo_user) bdC.tipo_user = localC.tipo_user;
                   } else {
-                    // Solo está en WMI, la agregamos al final
                     finalCuentas.push(localC);
                   }
                 });
                 ns.cuentasList = finalCuentas;
+              } else if (k === 'monitores' || k === 'dir_ip_list') {
+                 // Dejar las listas de WMI como prioritarias
               } else {
                 ns[k] = mergedObj[k];
               }
             } else {
+              // Buscar normal: la BD manda y sobreescribe todo
               ns[k] = mergedObj[k];
             }
           });
           return ns;
         });
       } else {
-        if (autoLoadWMI) {
+        if (preserveLocal) {
           showAlert('El equipo no se encuentra registrado en la base de datos. Cargando datos locales...', 'info', 'No Encontrado');
-          setDbInfo(null);
+          setDbInfo(null); setDbInfo(null);
           setFormState(prev => ({ ...prev, id_bien: undefined }));
           loadWMI();
         } else {
