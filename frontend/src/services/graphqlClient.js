@@ -227,23 +227,6 @@ export const saveAsset = async (isNew, assetData) => {
     }
   }
 
-  // Siempre sincronizar monitores vía procesarMonitoresEquipo (incluso vacío desvincularía)
-  // El helper del backend maneja el desvincular los que ya no están
-  const monitoresParaSync = (assetData.monitores || []).filter(m => m.num_serie).map(m => ({
-    marca: m.marca || m.fabricante || '',
-    modelo: m.modelo || '',
-    num_serie: m.num_serie || ''
-  }));
-  if (monitoresParaSync.length > 0 || true) {
-    const monStr = JSON.stringify(monitoresParaSync).replace(/"([a-zA-Z0-9_]+)":/g, '$1:');
-    try {
-      await queryGraphQL(`
-        mutation {
-          syncMonitoresPC(id_bien: "${finalIdBien}", monitores: ${monStr})
-        }
-      `);
-    } catch (err) { console.log("No se pudo sincronizar monitores: ", err); }
-  }
 
   if (assetData.programas && assetData.programas.length > 0) {
     const progsStr = JSON.stringify(assetData.programas.map(p => ({
@@ -304,17 +287,18 @@ export const saveDirectSpecsAndPrograms = async (id_bien, assetData) => {
     await queryGraphQL(`mutation { syncCuentasPC(id_bien: "${id_bien}", cuentas: ${cuentasStr}) }`);
   } catch (err) { console.log("No se pudo guardar cuentasList en update directo: ", err); }
 
-  // Siempre sincronizar monitores (incluso si son 0, para desvincular los que ya no están)
-  const monitoresList = (assetData.monitores || []).filter(m => m.num_serie);
-  const monitoresStr = JSON.stringify(monitoresList.map(m => ({
-    marca: m.marca || m.fabricante || '',
-    modelo: m.modelo || '',
-    num_serie: m.num_serie || ''
-  }))).replace(/"([a-zA-Z0-9_]+)":/g, '$1:');
+  // Sincronizar monitores si hay detectados por WMI
+  if (assetData.monitores && assetData.monitores.length > 0) {
+    const monitoresStr = JSON.stringify(assetData.monitores.map(m => ({
+      marca: m.marca || m.fabricante || '',
+      modelo: m.modelo || '',
+      num_serie: m.num_serie || ''
+    }))).replace(/"([a-zA-Z0-9_]+)":/g, '$1:');
 
-  try {
-    await queryGraphQL(`mutation { syncMonitoresPC(id_bien: "${id_bien}", monitores: ${monitoresStr}) }`);
-  } catch (err) { console.log("No se pudo guardar monitores en update directo: ", err); }
+    try {
+      await queryGraphQL(`mutation { syncMonitoresPC(id_bien: "${id_bien}", monitores: ${monitoresStr}) }`);
+    } catch (err) { console.log("No se pudo guardar monitores en update directo: ", err); }
+  }
 
   if (assetData.programas && assetData.programas.length > 0) {
     const progsStr = JSON.stringify(assetData.programas.map(p => ({

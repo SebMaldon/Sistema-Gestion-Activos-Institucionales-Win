@@ -367,7 +367,6 @@ export default function Dashboard() {
 
   // Sync DB
   const syncDB = async (overrideSerial = null, preserveLocal = false) => {
-    if (!preserveLocal) setWmiInfo(null);
     const serialToSearch = typeof overrideSerial === 'string' ? overrideSerial : searchSerial;
     if (!serialToSearch && !formState.dir_ip) {
       showAlert('Ingresa un número de serie o dirección IP para buscar.', 'warning');
@@ -478,8 +477,8 @@ export default function Dashboard() {
         `;
       }
       const data = await queryGraphQL(query);
-      if (data && data.bienByTermino) {
-        const bien = data.bienByTermino;
+      if (data && data.bienByTermino && data.bienByTermino.length > 0) {
+        const bien = Array.isArray(data.bienByTermino) ? data.bienByTermino[0] : data.bienByTermino;
         const esp = bien.especificacionTI || {};
 
         const mergedObj = {
