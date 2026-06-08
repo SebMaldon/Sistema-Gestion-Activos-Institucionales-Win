@@ -2,7 +2,11 @@ import fs from 'fs';
 import path from 'path';
 import { app } from 'electron';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
 import dotenv from 'dotenv';
+
+const require = createRequire(import.meta.url);
+const log = require('electron-log');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '../.env') });
@@ -11,6 +15,19 @@ const AUTOSYNC_USER = process.env.VITE_AUTOSYNC_USER;
 const AUTOSYNC_PASS = process.env.VITE_AUTOSYNC_PASS;
 const GQL_URL = process.env.VITE_GQL_URL ?? 'http://11.1.19.4:4000/graphql';
 const WMI_URL = process.env.VITE_WMI_URL ?? 'http://localhost:6060/api/hw-info';
+
+const fetchWithTimeout = async (url, options = {}) => {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(id);
+    return response;
+  } catch (error) {
+    clearTimeout(id);
+    throw error;
+  }
+};
 
 export const startAutoSync = () => {
   // Intervalo 1: AutoSync natural (cada hora chequea si pasaron 72h)
@@ -28,7 +45,7 @@ export const startAutoSync = () => {
       if (syncScheduled) return; // ya hay un sync pendiente en cola
 
       const jitter = Math.floor(Math.random() * 8 * 3600 * 1000);
-      console.log(`[AutoSync Main] Programado en ${Math.round(jitter / 60000)} mins`);
+      log.info(`[AutoSync Main] Programado en ${Math.round(jitter / 60000)} mins`);
 
       syncScheduled = true;
       setTimeout(async () => {
@@ -36,14 +53,14 @@ export const startAutoSync = () => {
         syncScheduled = false;
       }, jitter);
     } catch (e) {
-      console.error("[AutoSync Interval] Error:", e);
+      log.error("[AutoSync Interval] Error:", e);
     }
   }, 3600000); // cada 1 hora
 
   // Intervalo 2: Polling de Forzar Sincronización (cada 24h, y también al arrancar)
   const checkForzarSync = async () => {
     try {
-      const wmiRes = await fetch(WMI_URL);
+      const wmiRes = await fetchWithTimeout(WMI_URL);
       if (!wmiRes.ok) return;
       const wmiData = await wmiRes.json();
       if (!wmiData.num_serie) return;
@@ -53,7 +70,7 @@ export const startAutoSync = () => {
 
       const headers = { 'Content-Type': 'application/json', 'x-origen': 'win' };
       // Login
-      const logRes = await fetch(GQL_URL, {
+      const logRes = await fetchWithTimeout(GQL_URL, {
         method: 'POST', headers, body: JSON.stringify({ query: `mutation { login(matricula: "${user}", password: "${pass}") { token } }` })
       });
       const logJson = await logRes.json();
@@ -62,37 +79,43 @@ export const startAutoSync = () => {
 
       // Check Forzar Sync
       headers['Authorization'] = `Bearer ${token}`;
-      const checkRes = await fetch(GQL_URL, {
+      const checkRes = await fetchWithTimeout(GQL_URL, {
         method: 'POST', headers, body: JSON.stringify({ query: `query { checkSyncPending(num_serie: "${wmiData.num_serie}") }` })
       });
       const checkJson = await checkRes.json();
       const isPending = checkJson?.data?.checkSyncPending;
 
       if (isPending) {
-        console.log("[AutoSync] Forzar Sincronización detectado.");
+        log.info("[AutoSync] Forzar Sincronización detectado.");
         const syncFile = path.join(app.getPath('userData'), 'autosync.json');
         await performSync(syncFile);
 
         // Limpiar bandera
-        await fetch(GQL_URL, {
+        await fetchWithTimeout(GQL_URL, {
           method: 'POST', headers, body: JSON.stringify({ query: `mutation { clearSyncPending(num_serie: "${wmiData.num_serie}") }` })
         });
-        console.log("[AutoSync] Bandera de forzar sync limpiada.");
+        log.info("[AutoSync] Bandera de forzar sync limpiada.");
       }
     } catch (e) {
-      console.error("[Polling] Error:", e);
+      if (e.name === 'AbortError') {
+        log.error("[Polling] Timeout de 15s excedido en fetch.");
+      } else {
+        log.error("[Polling] Error:", e);
+      }
     }
   };
 
-  // Correr al arrancar (con delay de 30s para dar tiempo al app de inicializar)
-  setTimeout(checkForzarSync, 30000);
+  // Correr al arrancar (jitter entre 30s y 5m para evitar saturación)
+  const initJitter = Math.floor(Math.random() * (300000 - 30000 + 1)) + 30000;
+  log.info(`[AutoSync] Arranque programado en ${Math.round(initJitter / 1000)}s`);
+  setTimeout(checkForzarSync, initJitter);
   // Y repetir cada 24h
   setInterval(checkForzarSync, 24 * 3600000);
 };
 
 async function performSync(syncFile) {
   try {
-    const wmiRes = await fetch(WMI_URL);
+    const wmiRes = await fetchWithTimeout(WMI_URL);
     if (!wmiRes.ok) return;
     const wmiData = await wmiRes.json();
     if (!wmiData.num_serie) return;
@@ -103,7 +126,7 @@ async function performSync(syncFile) {
     const queryGraphQL = async (query, token = null) => {
       const headers = { 'Content-Type': 'application/json', 'x-origen': 'win' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
-      const res = await fetch(GQL_URL, {
+      const res = await fetchWithTimeout(GQL_URL, {
         method: 'POST',
         headers,
         body: JSON.stringify({ query })
@@ -152,9 +175,13 @@ async function performSync(syncFile) {
     }
 
     fs.writeFileSync(syncFile, JSON.stringify({ lastSync: Date.now() }));
-    console.log("[AutoSync Main] Éxito");
+    log.info("[AutoSync Main] Éxito");
 
   } catch (e) {
-    console.error("[AutoSync Main] Falló:", e);
+    if (e.name === 'AbortError') {
+      log.error("[AutoSync Main] Timeout de 15s excedido en fetch.");
+    } else {
+      log.error("[AutoSync Main] Falló:", e);
+    }
   }
 }

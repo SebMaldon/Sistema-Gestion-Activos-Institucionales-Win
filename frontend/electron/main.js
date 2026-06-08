@@ -244,6 +244,13 @@ function startBackend() {
       backendProcess.stderr.on('data', (data) => {
         console.error(`Backend Error: ${data}`);
       });
+
+      backendProcess.on('close', (code) => {
+        if (!isQuitting) {
+          console.error(`[Watchdog] Backend crasheó (código ${code}). Reiniciando en 5s...`);
+          setTimeout(startBackend, 5000);
+        }
+      });
     });
   });
 }
