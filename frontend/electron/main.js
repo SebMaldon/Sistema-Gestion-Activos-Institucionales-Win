@@ -85,21 +85,22 @@ function setupAutoUpdater() {
     require('fs').writeFileSync(path.join(app.getPath('userData'), '.update-restart'), '1');
 
     if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
-      // Countdown de 5s visible en el frontend
-      let secs = 5;
-      sendToRenderer('update-countdown', secs);
-      const timer = setInterval(() => {
-        secs--;
-        if (secs <= 0) {
-          clearInterval(timer);
+      const { dialog } = require('electron');
+      dialog.showMessageBox(mainWindow, {
+        type: 'info',
+        title: 'Actualización lista',
+        message: 'Se ha descargado una nueva actualización.',
+        detail: 'La aplicación debe reiniciarse para aplicar los cambios. ¿Deseas reiniciar ahora?',
+        buttons: ['Reiniciar Ahora', 'Más Tarde'],
+        defaultId: 0,
+        cancelId: 1
+      }).then(({ response }) => {
+        if (response === 0) {
           autoUpdater.quitAndInstall(true, true);
-        } else {
-          sendToRenderer('update-countdown', secs);
         }
-      }, 1000);
+      });
     } else {
-      // Si la app está cerrada/oculta, actualizamos silenciosamente
-      console.log('Instalando en segundo plano...');
+      console.log('App en segundo plano, instalando silenciosamente...');
       autoUpdater.quitAndInstall(true, true);
     }
   });

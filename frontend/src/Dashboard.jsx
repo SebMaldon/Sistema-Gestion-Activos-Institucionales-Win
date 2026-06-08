@@ -367,6 +367,7 @@ export default function Dashboard() {
 
   // Sync DB
   const syncDB = async (overrideSerial = null, preserveLocal = false) => {
+    if (!preserveLocal) setWmiInfo(null);
     const serialToSearch = typeof overrideSerial === 'string' ? overrideSerial : searchSerial;
     if (!serialToSearch && !formState.dir_ip) {
       showAlert('Ingresa un número de serie o dirección IP para buscar.', 'warning');
@@ -674,7 +675,7 @@ export default function Dashboard() {
           await showAlert('Se actualizaron los programas y la información técnica, no hubo cambios adicionales para guardar.', 'success', 'Sincronización Exitosa');
         }
         setSearchSerial(formState.num_serie);
-        await syncDB();
+        await syncDB(formState.num_serie, wmiInfo !== null);
       } else {
 
         // Roles 2, 3, 4 → solicitud de cambio
@@ -750,7 +751,7 @@ export default function Dashboard() {
           if (!effectiveIsNew) {
             await showAlert('Se actualizaron los programas y la información técnica, no hubo cambios adicionales para guardar.', 'success', 'Sincronización Exitosa');
             setSearchSerial(formState.num_serie);
-            await syncDB();
+            await syncDB(formState.num_serie, wmiInfo !== null);
           } else {
             await showAlert('No se detectaron cambios en el formulario para enviar a revisión.', 'info', 'Sin Cambios');
           }
