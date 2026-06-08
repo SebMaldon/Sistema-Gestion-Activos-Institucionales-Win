@@ -661,9 +661,9 @@ export default function Dashboard() {
         const finalIdBien = await saveAsset(effectiveIsNew, dataToSave);
         const idBien = typeof finalIdBien === 'string' ? finalIdBien : effectiveDbInfo?.id_bien;
 
-        // Procesar monitores WMI
-        const monitores = formState.monitores || [];
-        if (monitores.length > 0 && idBien) {
+        // Procesar monitores WMI — siempre, para desvincular los que ya no están
+        const monitores = (formState.monitores || []).filter(m => m.num_serie);
+        if (idBien) {
           await _procesarMonitoresFrontend(idBien, monitores, false);
         }
 
