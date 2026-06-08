@@ -589,10 +589,9 @@ export default function Dashboard() {
         });
       } else {
         if (preserveLocal) {
-          showAlert('El equipo no se encuentra registrado en la base de datos. Cargando datos locales...', 'info', 'No Encontrado');
-          setDbInfo(null); setDbInfo(null);
+          showAlert('El equipo no se encuentra registrado en la base de datos. Se han cargado únicamente los datos locales.', 'info', 'No Encontrado');
+          setDbInfo(null);
           setFormState(prev => ({ ...prev, id_bien: undefined }));
-          loadWMI();
         } else {
           showAlert('Activo no encontrado en la BD. Rellene los campos para registrar uno nuevo.', 'info', 'No Encontrado');
           setDbInfo(null);
