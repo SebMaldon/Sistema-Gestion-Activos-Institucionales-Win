@@ -305,9 +305,8 @@ export default function Dashboard() {
 
       // 2. Volcar datos locales al state primero
       setFormState(prev => {
-        const baseState = (scannedSerial && searchSerial && scannedSerial !== searchSerial)
-          ? initialFormState
-          : prev;
+        // Siempre resetear al estado inicial para limpiar datos de una búsqueda anterior
+        const baseState = initialFormState;
         const newData = { ...baseState, ...data };
 
         if (data.windows_serial || data.serial_number) {
