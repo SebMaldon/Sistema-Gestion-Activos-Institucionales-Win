@@ -1237,8 +1237,8 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <FieldInput label="Puerto / Nodo Red" val={formState.puerto_red} onChange={v => updateForm('puerto_red', v)} color={getBorderColor('puerto_red')} />
-                  <FieldInput label="Switch Conectado" val={formState.switch_red} onChange={v => updateForm('switch_red', v)} color={getBorderColor('switch_red')} />
+                  <FieldInput label="Puerto / Nodo Red" val={formState.puerto_red} onChange={v => updateForm('puerto_red', v)} color={getBorderColor('puerto_red')} maxLength={15} />
+                  <FieldInput label="Switch Conectado" val={formState.switch_red} onChange={v => updateForm('switch_red', v)} color={getBorderColor('switch_red')} maxLength={50} />
 
                   <div className="col-span-full border-t border-[#E0E0E0] my-2"></div>
 
@@ -1408,7 +1408,7 @@ export default function Dashboard() {
   );
 }
 
-function FieldInput({ label, val, onChange, color, type = "text", readOnly = false }) {
+function FieldInput({ label, val, onChange, color, type = "text", readOnly = false, maxLength }) {
   return (
     <div className="w-full">
       <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block mb-1">{label}</label>
@@ -1416,6 +1416,7 @@ function FieldInput({ label, val, onChange, color, type = "text", readOnly = fal
         type={type}
         value={val || ''}
         readOnly={readOnly}
+        maxLength={maxLength}
         onChange={e => !readOnly && onChange(e.target.value)}
         className={clsx(
           "w-full text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]",
