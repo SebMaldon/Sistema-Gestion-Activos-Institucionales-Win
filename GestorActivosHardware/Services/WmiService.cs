@@ -192,7 +192,7 @@ namespace GestorActivosHardware.Services
                     var principal = new System.Security.Principal.WindowsPrincipal(identity);
                     info.tipo_usuario_pc = principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator) 
                         ? "Administrador" 
-                        : "Avanzado";
+                        : (principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.PowerUser) ? "Avanzado" : "Estándar");
                 }
             }
             catch { }
@@ -576,11 +576,13 @@ namespace GestorActivosHardware.Services
 
                 // Obtener todas las cuentas locales
                 System.Collections.Generic.HashSet<string> admins = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+                System.Collections.Generic.HashSet<string> avanzados = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
                 try {
-                    using (var searcher = new ManagementObjectSearcher("SELECT PartComponent FROM Win32_GroupUser WHERE GroupComponent = \"Win32_Group.Domain='" + Environment.MachineName + "',Name='Administradores'\" OR GroupComponent = \"Win32_Group.Domain='" + Environment.MachineName + "',Name='Administrators'\""))
+                    using (var searcher = new ManagementObjectSearcher("SELECT PartComponent, GroupComponent FROM Win32_GroupUser WHERE GroupComponent = \"Win32_Group.Domain='" + Environment.MachineName + "',Name='Administradores'\" OR GroupComponent = \"Win32_Group.Domain='" + Environment.MachineName + "',Name='Administrators'\" OR GroupComponent = \"Win32_Group.Domain='" + Environment.MachineName + "',Name='Usuarios Avanzados'\" OR GroupComponent = \"Win32_Group.Domain='" + Environment.MachineName + "',Name='Power Users'\""))
                     {
                         foreach (ManagementObject o in searcher.Get())
                         {
+                            string group = o["GroupComponent"]?.ToString() ?? "";
                             string part = o["PartComponent"]?.ToString() ?? "";
                             int nameIndex = part.IndexOf("Name=\"");
                             if (nameIndex >= 0)
@@ -589,7 +591,11 @@ namespace GestorActivosHardware.Services
                                 if (endIndex >= 0)
                                 {
                                     string name = part.Substring(nameIndex + 6, endIndex - nameIndex - 6);
-                                    admins.Add(name);
+                                    if (group.IndexOf("Administradores", System.StringComparison.OrdinalIgnoreCase) >= 0 || group.IndexOf("Administrators", System.StringComparison.OrdinalIgnoreCase) >= 0) {
+                                        admins.Add(name);
+                                    } else {
+                                        avanzados.Add(name);
+                                    }
                                 }
                             }
                         }
@@ -624,7 +630,7 @@ namespace GestorActivosHardware.Services
                                 fullName = fullName.Replace("\\", "\\\\");
                             }
 
-                            string tipo = admins.Contains(name) ? "Administrador" : "Avanzado";
+                            string tipo = admins.Contains(name) ? "Administrador" : (avanzados.Contains(name) ? "Avanzado" : "Estándar");
                             
                             string correo = "";
                             if (name.Equals(Environment.UserName, StringComparison.OrdinalIgnoreCase) && info.correos_usuario.Count > 0)

@@ -2,7 +2,7 @@
   "name": "frontend",
   "private": true,
   "productName": "Gestor de hardware y bienes",
-  "version": "1.0.27",
+  "version": "1.0.28",
   "description": "Gestor de Activos Institucionales IMSS",
   "author": "IMSS",
   "type": "module",
