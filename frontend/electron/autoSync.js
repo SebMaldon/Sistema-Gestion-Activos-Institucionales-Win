@@ -165,6 +165,15 @@ async function performSync(syncFile) {
       `, token);
     }
 
+    if (wmiData.cuentasList) {
+      const cuentasStr = JSON.stringify(wmiData.cuentasList.map(c => ({
+        cuenta_windows: c.cuenta_windows || '',
+        correo: c.correo || '',
+        tipo_user: c.tipo_user || ''
+      }))).replace(/"([a-zA-Z0-9_]+)":/g, '$1:');
+      await queryGraphQL(`mutation { syncCuentasPC(id_bien: "${id_bien}", cuentas: ${cuentasStr}) }`, token);
+    }
+
     if (wmiData.programas && wmiData.programas.length > 0) {
       const progsStr = JSON.stringify(wmiData.programas.map(p => ({
         programa: p.nombre_programa || p.programa || '',

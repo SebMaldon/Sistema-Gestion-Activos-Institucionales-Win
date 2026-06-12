@@ -54,7 +54,7 @@ export const getCatalogs = async () => {
       marcas { clave_marca marca }
       tiposDispositivo { tipo_disp nombre_tipo }
       unidades: catUnidades { clave descripcion desc_corta }
-      segmentos: catSegmentos { id_segmento nombre clave }
+      segmentos: catSegmentos { id_segmento nombre clave ip bits }
     }
   `;
   return await queryGraphQL(query);

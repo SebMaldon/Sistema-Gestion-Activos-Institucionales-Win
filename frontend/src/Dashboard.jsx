@@ -248,7 +248,13 @@ export default function Dashboard() {
       const data = await getCatalogs();
       if (data) {
         if (data.segmentos) {
-          setCatUnidades(data.segmentos.map(s => ({ value: String(s.id_segmento), label: s.nombre, clave: s.clave })));
+          setCatUnidades(data.segmentos.map(s => ({ 
+            value: String(s.id_segmento), 
+            label: s.ip ? `${s.ip}/${s.bits} - ${s.nombre}` : s.nombre, 
+            clave: s.clave,
+            ip: s.ip,
+            bits: s.bits
+          })));
         }
         if (data.unidades) {
           setCatInmuebles(data.unidades.map(u => ({ value: u.clave, label: u.desc_corta || u.descripcion })));
@@ -282,6 +288,42 @@ export default function Dashboard() {
       updateForm('id_segmento', '');
     }
   }, [formState.clave_unidad_ref, catUnidades]);
+
+  // Watch IP changes -> Auto assign Segmento
+  useEffect(() => {
+    if (formState.dir_ip && catUnidades.length > 0) {
+      const primaryIp = formState.dir_ip.split('/')[0].trim();
+      
+      const ip2long = (ip) => {
+        const parts = ip.split('.');
+        if (parts.length !== 4) return null;
+        return parts.reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
+      };
+
+      const isIpInSubnet = (ip, subnetIp, bits) => {
+        if (!subnetIp || !bits) return false;
+        const ipLong = ip2long(ip);
+        const subLong = ip2long(subnetIp);
+        if (ipLong === null || subLong === null) return false;
+        const mask = ~((1 << (32 - bits)) - 1) >>> 0;
+        return (ipLong & mask) === (subLong & mask);
+      };
+
+      const matchedSegment = catUnidades.find(s => isIpInSubnet(primaryIp, s.ip, s.bits));
+      if (matchedSegment) {
+        if (formState.id_segmento !== matchedSegment.value) {
+          updateForm('id_segmento', matchedSegment.value);
+          if (matchedSegment.clave && !formState.clave_unidad_ref) {
+            updateForm('clave_unidad_ref', matchedSegment.clave);
+          }
+        }
+      } else if (formState.id_segmento) {
+        updateForm('id_segmento', '');
+      }
+    } else if (!formState.dir_ip && formState.id_segmento) {
+      updateForm('id_segmento', '');
+    }
+  }, [formState.dir_ip, catUnidades]);
 
   const updateForm = (key, value) => {
     setFormState(prev => ({ ...prev, [key]: value }));
@@ -559,19 +601,31 @@ export default function Dashboard() {
             } else if ((k === 'cuentasList' || k === 'monitores' || k === 'dir_ip_list') && preserveLocal) {
               // Si debemos preservar lo local y es una lista, la fusionamos.
               if (k === 'cuentasList' && ns.cuentasList && ns.cuentasList.length > 0 && ns.cuentasList.some(c => c._new)) {
-                const finalCuentas = mergedObj.cuentasList.map(c => ({...c, _new: false}));
-                const bdNorms = new Set(finalCuentas.map(c => (c.cuenta_windows || '').trim().toLowerCase()));
+                const bdCuentas = new Map(mergedObj.cuentasList.map(c => [(c.cuenta_windows || '').trim().toLowerCase(), c]));
+                const finalCuentas = [];
 
                 ns.cuentasList.forEach(localC => {
                   const lNorm = (localC.cuenta_windows || '').trim().toLowerCase();
-                  if (bdNorms.has(lNorm)) {
-                    const bdC = finalCuentas.find(c => (c.cuenta_windows || '').trim().toLowerCase() === lNorm);
-                    if (!bdC.correo && localC.correo) bdC.correo = localC.correo;
-                    if (!bdC.tipo_user && localC.tipo_user) bdC.tipo_user = localC.tipo_user;
+                  if (bdCuentas.has(lNorm)) {
+                    const bdC = bdCuentas.get(lNorm);
+                    finalCuentas.push({
+                      ...localC,
+                      id_cuenta: bdC.id_cuenta,
+                      correo: localC.correo || bdC.correo,
+                      tipo_user: localC.tipo_user || bdC.tipo_user,
+                      _new: false,
+                      _selected: true
+                    });
+                    bdCuentas.delete(lNorm);
                   } else {
-                    finalCuentas.push(localC);
+                    finalCuentas.push({ ...localC, _selected: true });
                   }
                 });
+
+                bdCuentas.forEach(bdC => {
+                  finalCuentas.push({ ...bdC, _new: false, _selected: false });
+                });
+
                 ns.cuentasList = finalCuentas;
               } else if (k === 'monitores' || k === 'dir_ip_list') {
                  // Dejar las listas de WMI como prioritarias
@@ -632,6 +686,7 @@ export default function Dashboard() {
       }
 
       // Helper: llama procesarMonitoresEquipo con confirm dialog si hay conflictos
+      // Returns true if monitors were saved (including after conflict resolution)
       const _procesarMonitoresFrontend = async (idBien, monitores, forzar) => {
         const result = await procesarMonitoresEquipo(idBien, monitores, forzar);
         if (!result.ok && result.conflictos && result.conflictos.length > 0) {
@@ -647,9 +702,16 @@ export default function Dashboard() {
           );
           if (confirmar) {
             await procesarMonitoresEquipo(idBien, monitores, true);
+            // Actualizar formState.monitores para que los monitores recién vinculados aparezcan de inmediato
+            // Mezclar: los WMI ya tienen marca/modelo, solo aseguramos que todos los de WMI estén
+            setFormState(prev => ({ ...prev, monitores }));
+            return true; // conflict resolved
           }
+          return false;
         }
+        return result.ok;
       };
+
 
       // Roles Admin(1) y Maestro(2) → guardado directo sin solicitud
       if (userRole === 1 || userRole === 2) {
