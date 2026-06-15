@@ -85,6 +85,7 @@ function setupAutoUpdater() {
 
   autoUpdater.on('update-downloaded', () => {
     console.log('Actualización descargada.');
+    sendToRenderer('update-downloaded', true);
     // Solo marcar para mostrar ventana si el usuario lo pidió explícitamente
     if (userRequestedUpdate) {
       require('fs').writeFileSync(path.join(app.getPath('userData'), '.update-restart'), '1');

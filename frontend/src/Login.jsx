@@ -14,6 +14,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [updateMsg, setUpdateMsg] = useState('');
   const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [updateDownloaded, setUpdateDownloaded] = useState(false);
   const navigate = useNavigate();
 
   // Rate-limit: máx 3 clics en 60s
@@ -25,8 +26,12 @@ export default function Login() {
     const { ipcRenderer } = window.require('electron');
     
     const onAvailable = () => {
-      setUpdateMsg('¡Actualización encontrada!');
+      setUpdateMsg('¡Actualización requerida! Descargando...');
       setUpdateAvailable(true);
+    };
+    const onDownloaded = () => {
+      setUpdateMsg('Actualización lista. Instala para continuar.');
+      setUpdateDownloaded(true);
     };
     const onCountdown = (_, seconds) => setUpdateMsg(`Instalando en ${seconds}s...`);
     const onNotAvailable = () => {
@@ -39,12 +44,14 @@ export default function Login() {
     };
 
     ipcRenderer.on('update-available', onAvailable);
+    ipcRenderer.on('update-downloaded', onDownloaded);
     ipcRenderer.on('update-countdown', onCountdown);
     ipcRenderer.on('update-not-available', onNotAvailable);
     ipcRenderer.on('update-error', onError);
 
     return () => {
       ipcRenderer.removeListener('update-available', onAvailable);
+      ipcRenderer.removeListener('update-downloaded', onDownloaded);
       ipcRenderer.removeListener('update-countdown', onCountdown);
       ipcRenderer.removeListener('update-not-available', onNotAvailable);
       ipcRenderer.removeListener('update-error', onError);
@@ -86,6 +93,13 @@ export default function Login() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    if (updateAvailable) {
+      setError(updateDownloaded
+        ? 'Hay una actualización lista. Instálala antes de continuar.'
+        : 'Hay una actualización disponible. Espera a que se descargue...'
+      );
+      return;
+    }
     setError('');
     setLoading(true);
 
@@ -174,8 +188,8 @@ export default function Login() {
 
             <button
               type="submit"
-              disabled={loading}
-              className="w-full bg-[#006241] hover:bg-[#008F59] text-white font-bold py-4 px-4 rounded-xl transition-all flex items-center justify-center shadow-lg shadow-[#006241]/20 hover:shadow-[#006241]/40 active:scale-[0.98]"
+              disabled={loading || updateAvailable}
+              className="w-full bg-[#006241] hover:bg-[#008F59] text-white font-bold py-4 px-4 rounded-xl transition-all flex items-center justify-center shadow-lg shadow-[#006241]/20 hover:shadow-[#006241]/40 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'INICIAR SESIÓN'}
             </button>

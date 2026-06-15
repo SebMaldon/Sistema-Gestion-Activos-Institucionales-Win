@@ -44,7 +44,7 @@ export const startAutoSync = () => {
       if (now - lastSync < 72 * 3600 * 1000) return;
       if (syncScheduled) return; // ya hay un sync pendiente en cola
 
-      const jitter = Math.floor(Math.random() * 8 * 3600 * 1000);
+      const jitter = Math.floor(Math.random() * 30 * 60000); // max 30 min
       log.info(`[AutoSync Main] Programado en ${Math.round(jitter / 60000)} mins`);
 
       syncScheduled = true;
@@ -106,7 +106,7 @@ export const startAutoSync = () => {
   };
 
   // Correr al arrancar (jitter entre 30s y 5m para evitar saturación)
-  const initJitter = Math.floor(Math.random() * (300000 - 30000 + 1)) + 30000;
+  const initJitter = Math.floor(Math.random() * 20000) + 10000; // 10-30s
   log.info(`[AutoSync] Arranque programado en ${Math.round(initJitter / 1000)}s`);
   setTimeout(checkForzarSync, initJitter);
   // Y repetir cada 24h
