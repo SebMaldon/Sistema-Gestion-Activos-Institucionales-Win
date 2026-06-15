@@ -772,11 +772,17 @@ export default function Dashboard() {
           datosNuevos._esCreacion = true;
           // Si es nuevo y es rol menor, la info de TI se enviará como solicitud junto con lo general
         } else {
-          // Actualización: Guardado directo de specs y programas aunque sea rol menor
+          // Actualización: Guardado directo de specs, programas y MONITORES aunque sea rol menor
           try {
             await saveDirectSpecsAndPrograms(idBienTarget, { ...formState, dir_ip: dirIpString, mac_address: macString });
+            
+            // Auto-guardar monitores
+            const monitores = (formState.monitores || []).filter(m => m.num_serie);
+            if (idBienTarget) {
+              await _procesarMonitoresFrontend(idBienTarget, monitores, false);
+            }
           } catch (err) {
-            console.log("Error guardando specs directos:", err);
+            console.log("Error guardando datos técnicos directos:", err);
           }
 
           // Actualización: solo campos generales para la solicitud
@@ -811,10 +817,7 @@ export default function Dashboard() {
               }
             }
           });
-          // Incluir monitores en actualización solo si realmente cambiaron
-          if (monitorsChanged) {
-            datosNuevos.monitores = formState.monitores;
-          }
+          // Monitores ya no se incluyen en la solicitud, se auto-guardan arriba
         }
 
         if (datosNuevos.dir_ip_list) {
