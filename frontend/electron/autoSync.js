@@ -71,7 +71,7 @@ export const startAutoSync = () => {
       const headers = { 'Content-Type': 'application/json', 'x-origen': 'win' };
       // Login
       const logRes = await fetchWithTimeout(GQL_URL, {
-        method: 'POST', headers, body: JSON.stringify({ query: `mutation { login(matricula: "${user}", password: "${pass}") { token } }` })
+        method: 'POST', headers, body: JSON.stringify({ query: `mutation { login(matricula: "${user}", password: "${pass}", equipoInfo: "${wmiData.num_serie}") { token } }` })
       });
       const logJson = await logRes.json();
       const token = logJson?.data?.login?.token;
@@ -105,6 +105,7 @@ export const startAutoSync = () => {
     }
   };
 
+
   // Correr al arrancar (jitter entre 30s y 5m para evitar saturación)
   const initJitter = Math.floor(Math.random() * 20000) + 10000; // 10-30s
   log.info(`[AutoSync] Arranque programado en ${Math.round(initJitter / 1000)}s`);
@@ -136,7 +137,7 @@ async function performSync(syncFile) {
     };
 
     // 1. Login
-    const loginData = await queryGraphQL(`mutation { login(matricula: "${user}", password: "${pass}") { token } }`);
+    const loginData = await queryGraphQL(`mutation { login(matricula: "${user}", password: "${pass}", equipoInfo: "${wmiData.num_serie}") { token } }`);
     const token = loginData?.login?.token;
     if (!token) return;
 
@@ -151,19 +152,22 @@ async function performSync(syncFile) {
     const dirIpString = (wmiData.adaptadores_red?.slice(0, 3) || []).map(x => x.ip).filter(Boolean).join('/');
     const macString = (wmiData.adaptadores_red?.slice(0, 3) || []).map(x => x.mac).filter(Boolean).join('/');
 
-    if (wmiData.cpu_info || wmiData.ram_gb || wmiData.almacenamiento_gb) {
-      await queryGraphQL(`
-        mutation { upsertEspecificacionTI(
-          id_bien: "${id_bien}"
-          cpu_info: ${N(wmiData.cpu_info)}
-          ram_gb: ${I(wmiData.ram_gb)}
-          almacenamiento_gb: ${I(wmiData.almacenamiento_gb)}
-          mac_address: ${N(macString || wmiData.mac_address)}
-          dir_ip: ${N(dirIpString || wmiData.dir_ip)}
-          modelo_so: ${N(wmiData.modelo_so)}
-        ) { id_bien } }
-      `, token);
-    }
+    await queryGraphQL(`
+      mutation { upsertEspecificacionTI(
+        id_bien: "${id_bien}"
+        cpu_info: ${N(wmiData.cpu_info)}
+        ram_gb: ${I(wmiData.ram_gb)}
+        almacenamiento_gb: ${I(wmiData.almacenamiento_gb)}
+        mac_address: ${N(macString || wmiData.mac_address)}
+        dir_ip: ${N(dirIpString || wmiData.dir_ip)}
+        modelo_so: ${N(wmiData.modelo_so)}
+        windows_serial: ${N(wmiData.windows_serial)}
+        nombre_host: ${N(wmiData.nom_pc)}
+        version_office: ${N(wmiData.version_office)}
+        last_scan: ${N(wmiData.fecha_act_antivirus)}
+      ) { id_bien } }
+    `, token);
+    log.info(`[AutoSync Main] Specs TI sincronizados para id_bien: ${id_bien}`);
 
     if (wmiData.cuentasList) {
       const cuentasStr = JSON.stringify(wmiData.cuentasList.map(c => ({
@@ -181,6 +185,17 @@ async function performSync(syncFile) {
         fecha_instalacion: p.fecha_instalacion || ''
       }))).replace(/"([a-zA-Z0-9_]+)":/g, '$1:');
       await queryGraphQL(`mutation { syncProgramasPC(id_bien: "${id_bien}", programas: ${progsStr}) }`, token);
+      log.info(`[AutoSync Main] ${wmiData.programas.length} programas sincronizados`);
+    }
+
+    if (wmiData.monitores && wmiData.monitores.length > 0) {
+      const monitoresStr = JSON.stringify(wmiData.monitores.map(m => ({
+        marca: m.marca || '',
+        modelo: m.modelo || '',
+        num_serie: m.num_serie || ''
+      }))).replace(/"([a-zA-Z0-9_]+)":/g, '$1:');
+      await queryGraphQL(`mutation { syncMonitoresPC(id_bien: "${id_bien}", monitores: ${monitoresStr}) }`, token);
+      log.info(`[AutoSync Main] ${wmiData.monitores.length} monitores sincronizados`);
     }
 
     fs.writeFileSync(syncFile, JSON.stringify({ lastSync: Date.now() }));

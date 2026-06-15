@@ -32,12 +32,23 @@ export const queryGraphQL = async (query, variables = {}) => {
 };
 
 export const login = async (matricula, password) => {
+  let equipoInfo = null;
+  try {
+    const wmiRes = await fetch('http://localhost:6060/api/hw-info');
+    if (wmiRes.ok) {
+      const data = await wmiRes.json();
+      if (data.num_serie) equipoInfo = data.num_serie;
+    }
+  } catch (e) {
+    // Si falla, se queda null, es decir, no está en Win o el servicio no corre
+  }
+
   const query = `
-    mutation($matricula: String!, $password: String!) {
-      login(matricula: $matricula, password: $password) { token }
+    mutation($matricula: String!, $password: String!, $equipoInfo: String) {
+      login(matricula: $matricula, password: $password, equipoInfo: $equipoInfo) { token }
     }
   `;
-  const data = await queryGraphQL(query, { matricula, password });
+  const data = await queryGraphQL(query, { matricula, password, equipoInfo });
   if (data?.login?.token) {
     localStorage.setItem('jwtToken', data.login.token);
     return true;
