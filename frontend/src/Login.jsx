@@ -93,18 +93,30 @@ export default function Login() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    if (updateAvailable) {
-      setError(updateDownloaded
-        ? 'Hay una actualización lista. Instálala antes de continuar.'
-        : 'Hay una actualización disponible. Espera a que se descargue...'
-      );
+    if (updateDownloaded) {
+      setError('Hay una actualización lista. Instálala antes de continuar.');
       return;
     }
     setError('');
+    let equipoInfo = null;
+    const ctrl = new AbortController();
+    const wmiTimeout = setTimeout(() => ctrl.abort(), 3000);
+    try {
+      const wmiRes = await fetch('http://localhost:6060/api/hw-info', { signal: ctrl.signal });
+      if (wmiRes.ok) {
+        const data = await wmiRes.json();
+        if (data.num_serie) equipoInfo = data.num_serie;
+      }
+    } catch (e) {
+      // Si falla o timeout, se queda null
+    } finally {
+      clearTimeout(wmiTimeout);
+    }
+
     setLoading(true);
 
     try {
-      const success = await login(matricula, password);
+      const success = await login(matricula, password, equipoInfo);
       if (success) {
         navigate('/dashboard');
       } else {

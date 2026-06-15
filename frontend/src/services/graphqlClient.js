@@ -1,4 +1,4 @@
-const GRAPHQL_API_URL = import.meta.env.VITE_GQL_URL || 'http://11.1.19.4:4000/graphql';
+const GRAPHQL_API_URL = import.meta.env.VITE_GQL_URL || 'http://localhost:4000/graphql';
 
 export const queryGraphQL = async (query, variables = {}) => {
   const token = window.AUTO_SYNC_TOKEN || localStorage.getItem('jwtToken');
@@ -32,23 +32,12 @@ export const queryGraphQL = async (query, variables = {}) => {
 };
 
 export const login = async (matricula, password) => {
-  let equipoInfo = null;
-  try {
-    const wmiRes = await fetch('http://localhost:6060/api/hw-info');
-    if (wmiRes.ok) {
-      const data = await wmiRes.json();
-      if (data.num_serie) equipoInfo = data.num_serie;
-    }
-  } catch (e) {
-    // Si falla, se queda null, es decir, no está en Win o el servicio no corre
-  }
-
   const query = `
-    mutation($matricula: String!, $password: String!, $equipoInfo: String) {
-      login(matricula: $matricula, password: $password, equipoInfo: $equipoInfo) { token }
+    mutation($matricula: String!, $password: String!) {
+      login(matricula: $matricula, password: $password) { token }
     }
   `;
-  const data = await queryGraphQL(query, { matricula, password, equipoInfo });
+  const data = await queryGraphQL(query, { matricula, password });
   if (data?.login?.token) {
     localStorage.setItem('jwtToken', data.login.token);
     return true;
@@ -434,5 +423,3 @@ export const checkIpUsage = async (ip, excludeIdBien) => {
   });
   return inUse;
 };
-
-

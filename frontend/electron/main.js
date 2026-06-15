@@ -193,6 +193,10 @@ function createWindow() {
 
   mainWindow.setMenuBarVisibility(false);
   
+  if (process.env.VITE_SHOW_DEVTOOLS === 'true') {
+    mainWindow.webContents.openDevTools();
+  }
+  
   mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
     console.log(`[Renderer] ${message} (line ${line})`);
   });
