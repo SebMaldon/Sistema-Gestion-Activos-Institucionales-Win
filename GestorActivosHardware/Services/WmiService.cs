@@ -627,7 +627,6 @@ namespace GestorActivosHardware.Services
                             int slashIdx = fullName.IndexOf('\\');
                             if (slashIdx >= 0) {
                                 name = fullName.Substring(slashIdx + 1);
-                                fullName = fullName.Replace("\\", "\\\\");
                             }
 
                             string tipo = admins.Contains(name) ? "Administrador" : (avanzados.Contains(name) ? "Avanzado" : "Estándar");

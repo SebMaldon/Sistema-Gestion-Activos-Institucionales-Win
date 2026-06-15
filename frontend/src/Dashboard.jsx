@@ -362,10 +362,17 @@ export default function Dashboard() {
         const finalCuentas = [];
         
         wmiCuentas.forEach(wmiC => {
+          let cWin = (wmiC.cuenta_windows || '').replace(/\\\\/g, '\\');
+          let cCorreo = wmiC.correo || '';
+          
+          if (!cCorreo && data.usuario_pc && cWin.toLowerCase().includes(data.usuario_pc.toLowerCase())) {
+             cCorreo = (data.correos_usuario?.length > 0) ? data.correos_usuario[0] : '';
+          }
+
           finalCuentas.push({
             _new: true, _editing: false, _selected: false,
-            cuenta_windows: wmiC.cuenta_windows || '',
-            correo: wmiC.correo || '',
+            cuenta_windows: cWin,
+            correo: cCorreo,
             tipo_user: wmiC.tipo_user || ''
           });
         });
@@ -380,7 +387,12 @@ export default function Dashboard() {
           });
         }
 
-        newData.cuentasList = finalCuentas;
+        const isCurrent = (c) => data.usuario_pc && (c.cuenta_windows || '').toLowerCase().includes(data.usuario_pc.toLowerCase());
+        newData.cuentasList = finalCuentas.sort((a, b) => {
+          if (isCurrent(a) && !isCurrent(b)) return -1;
+          if (!isCurrent(a) && isCurrent(b)) return 1;
+          return 0;
+        });
 
         if (data.adaptadores_red?.length > 0) {
           newData.dir_ip_list = data.adaptadores_red.slice(0, 3).map(a => ({ ip: a.ip, mac: a.mac, adapter: a.descripcion }));
@@ -618,7 +630,7 @@ export default function Dashboard() {
                     });
                     bdCuentas.delete(lNorm);
                   } else {
-                    finalCuentas.push({ ...localC, _selected: true });
+                    finalCuentas.push({ ...localC, _selected: false });
                   }
                 });
 
@@ -626,7 +638,12 @@ export default function Dashboard() {
                   finalCuentas.push({ ...bdC, _new: false, _selected: false });
                 });
 
-                ns.cuentasList = finalCuentas;
+                const isCurrentDB = (c) => ns.usuario_pc && (c.cuenta_windows || '').toLowerCase().includes(ns.usuario_pc.toLowerCase());
+                ns.cuentasList = finalCuentas.sort((a, b) => {
+                  if (isCurrentDB(a) && !isCurrentDB(b)) return -1;
+                  if (!isCurrentDB(a) && isCurrentDB(b)) return 1;
+                  return 0;
+                });
               } else if (k === 'monitores' || k === 'dir_ip_list') {
                  // Dejar las listas de WMI como prioritarias
               } else {
@@ -1071,6 +1088,9 @@ export default function Dashboard() {
                           </span>
                           {c.id_cuenta && !c._new && (
                             <span className="text-[9px] text-[#006241] font-semibold">● En BD</span>
+                          )}
+                          {formState.usuario_pc && (c.cuenta_windows || '').toLowerCase().includes(formState.usuario_pc.toLowerCase()) && (
+                            <span className="text-[9px] text-blue-600 font-semibold bg-blue-50 px-1.5 py-0.5 rounded ml-1 border border-blue-200">Cuenta en uso</span>
                           )}
                         </div>
                         <div className="mx-1 flex-shrink-0">

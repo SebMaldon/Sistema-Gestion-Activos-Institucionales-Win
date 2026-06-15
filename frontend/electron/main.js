@@ -22,6 +22,9 @@ let mainWindow;
 let backendProcess;
 let tray = null;
 let isQuitting = false;
+let userRequestedUpdate = false; // true solo si el usuario clickeó descargar
+let initialUpdateCheckDone = false; // true cuando el primer check ya terminó
+let pendingShowWindow = false;    // si el usuario hizo click antes de que terminara el check
 
 // Debe ir ANTES de whenReady para evitar race condition al reiniciar
 const gotTheLock = app.requestSingleInstanceLock();
@@ -52,17 +55,17 @@ function setupAutoUpdater() {
 
   autoUpdater.on('update-available', (info) => {
     console.log('Actualización disponible:', info.version);
+    // Siempre auto-descargar en segundo plano (sin interacción de usuario)
+    // Si la ventana está visible, notificar adicionalmente
     if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
       sendToRenderer('update-available', info.version);
-      // El usuario decidirá cuándo descargar usando el botón en la UI
-    } else {
-      console.log('App en segundo plano, descargando actualización automáticamente...');
-      autoUpdater.downloadUpdate();
     }
+    autoUpdater.downloadUpdate();
   });
 
   ipcMain.on('descargar-actualizacion', () => {
     console.log('Usuario solicitó descargar actualización...');
+    userRequestedUpdate = true;
     autoUpdater.downloadUpdate();
   });
 
@@ -82,7 +85,10 @@ function setupAutoUpdater() {
 
   autoUpdater.on('update-downloaded', () => {
     console.log('Actualización descargada.');
-    require('fs').writeFileSync(path.join(app.getPath('userData'), '.update-restart'), '1');
+    // Solo marcar para mostrar ventana si el usuario lo pidió explícitamente
+    if (userRequestedUpdate) {
+      require('fs').writeFileSync(path.join(app.getPath('userData'), '.update-restart'), '1');
+    }
 
     if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
       const { dialog } = require('electron');
@@ -109,14 +115,26 @@ function setupAutoUpdater() {
 
   // Verificar al arrancar (solo en producción)
   if (app.isPackaged) {
-    autoUpdater.checkForUpdates().catch(err => {
-        console.error("Error al conectar con IIS:", err);
-    });
+    autoUpdater.checkForUpdates()
+      .catch(err => { console.error('Error al conectar con IIS:', err); })
+      .finally(() => {
+        // El check terminó (sea con update o sin él) — si alguien ya pidió ventana, abrirla ahora
+        if (!initialUpdateCheckDone) {
+          initialUpdateCheckDone = true;
+          if (pendingShowWindow) {
+            pendingShowWindow = false;
+            _doShowOrCreateWindow();
+          }
+        }
+      });
 
     // Buscar actualizaciones cada hora (3600000 ms)
     setInterval(() => {
       autoUpdater.checkForUpdates().catch(console.error);
     }, 3600000);
+  } else {
+    // En dev no hay check, marcar como listo de inmediato
+    initialUpdateCheckDone = true;
   }
 }
 
@@ -127,7 +145,7 @@ ipcMain.on('checar-actualizaciones', () => {
   }
 });
 
-function showOrCreateWindow() {
+function _doShowOrCreateWindow() {
   if (!mainWindow || mainWindow.isDestroyed()) {
     createWindow();
   } else if (!mainWindow.isVisible()) {
@@ -136,6 +154,16 @@ function showOrCreateWindow() {
   } else {
     mainWindow.focus();
   }
+}
+
+function showOrCreateWindow() {
+  if (!initialUpdateCheckDone) {
+    // El check de inicio aún no termina; encolar para cuando termine
+    console.log('Check de actualización en curso, esperando antes de abrir ventana...');
+    pendingShowWindow = true;
+    return;
+  }
+  _doShowOrCreateWindow();
 }
 
 function createWindow() {
@@ -266,10 +294,18 @@ app.whenReady().then(() => {
   });
 
   startBackend();
-  // NO crear ventana al inicio — el usuario la abre desde el tray
   createTray();
   setupAutoUpdater();
   startAutoSync();
+
+  // Si reiniciamos desde una actualización, mostrar ventana
+  const fs = require('fs');
+  const updateRestartFlag = path.join(app.getPath('userData'), '.update-restart');
+  if (fs.existsSync(updateRestartFlag)) {
+    try { fs.unlinkSync(updateRestartFlag); } catch(e) {}
+    showOrCreateWindow();
+  }
+  // Si no es reinicio post-update: no abrir ventana (queda en tray)
 
   // macOS: al hacer click en el dock volver a abrir
   app.on('activate', () => showOrCreateWindow());
