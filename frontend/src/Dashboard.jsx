@@ -1202,14 +1202,24 @@ export default function Dashboard() {
                       label="Segmento"
                       options={filteredSegmentos}
                       value={formState.id_segmento}
-                      onChange={v => updateForm('id_segmento', v)}
+                      onChange={v => {
+                        updateForm('id_segmento', v);
+                        updateForm('id_ubicacion', '');
+                      }}
                       disabled={!formState.clave_unidad_ref}
                       placeholder={formState.clave_unidad_ref ? "Buscar segmento..." : "Seleccione unidad primero"}
                     />
                   </div>
 
                   <div className="w-full sm:col-span-2">
-                    <SearchableSelect label="Ubicación Específica" options={catUbicaciones} value={formState.id_ubicacion} onChange={v => updateForm('id_ubicacion', v)} disabled={!formState.clave_unidad_ref} placeholder={formState.clave_unidad_ref ? "Buscar ubicación..." : "Seleccione unidad primero"} />
+                    <SearchableSelect 
+                      label="Ubicación Específica" 
+                      options={catUbicaciones} 
+                      value={formState.id_ubicacion} 
+                      onChange={v => updateForm('id_ubicacion', v)} 
+                      disabled={!formState.clave_unidad_ref} 
+                      placeholder={!formState.clave_unidad_ref ? "Seleccione unidad primero" : "Buscar ubicación..."} 
+                    />
                   </div>
 
                   <div className="w-full sm:col-span-2">
