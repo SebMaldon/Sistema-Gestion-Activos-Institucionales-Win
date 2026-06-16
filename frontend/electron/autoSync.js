@@ -169,14 +169,8 @@ async function performSync(syncFile) {
     `, token);
     log.info(`[AutoSync Main] Specs TI sincronizados para id_bien: ${id_bien}`);
 
-    if (wmiData.cuentasList) {
-      const cuentasStr = JSON.stringify(wmiData.cuentasList.map(c => ({
-        cuenta_windows: c.cuenta_windows || '',
-        correo: c.correo || '',
-        tipo_user: c.tipo_user || ''
-      }))).replace(/"([a-zA-Z0-9_]+)":/g, '$1:');
-      await queryGraphQL(`mutation { syncCuentasPC(id_bien: "${id_bien}", cuentas: ${cuentasStr}) }`, token);
-    }
+    // Las cuentas de usuario ahora se gestionan de forma manual en la web
+    // Ya no se sincronizan automáticamente desde el agente de Windows
 
     if (wmiData.programas && wmiData.programas.length > 0) {
       const progsStr = JSON.stringify(wmiData.programas.map(p => ({
