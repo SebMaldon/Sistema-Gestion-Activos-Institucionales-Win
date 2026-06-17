@@ -36,12 +36,16 @@ export const startAutoSync = () => {
     try {
       const syncFile = path.join(app.getPath('userData'), 'autosync.json');
       let lastSync = 0;
+      let nextSyncInterval = 72 * 3600 * 1000; // Por defecto 3 días
+
       if (fs.existsSync(syncFile)) {
-        lastSync = JSON.parse(fs.readFileSync(syncFile, 'utf-8')).lastSync || 0;
+        const data = JSON.parse(fs.readFileSync(syncFile, 'utf-8'));
+        lastSync = data.lastSync || 0;
+        if (data.nextSyncInterval) nextSyncInterval = data.nextSyncInterval;
       }
 
       const now = Date.now();
-      if (now - lastSync < 72 * 3600 * 1000) return;
+      if (now - lastSync < nextSyncInterval) return;
       if (syncScheduled) return; // ya hay un sync pendiente en cola
 
       const jitter = Math.floor(Math.random() * 30 * 60000); // max 30 min
@@ -110,8 +114,8 @@ export const startAutoSync = () => {
   const initJitter = Math.floor(Math.random() * 20000) + 10000; // 10-30s
   log.info(`[AutoSync] Arranque programado en ${Math.round(initJitter / 1000)}s`);
   setTimeout(checkForzarSync, initJitter);
-  // Y repetir cada 24h
-  setInterval(checkForzarSync, 24 * 3600000);
+  // Y repetir cada 4 horas (con algo de suerte y desfasado por los encendidos)
+  setInterval(checkForzarSync, 4 * 3600000);
 };
 
 async function performSync(syncFile) {
@@ -192,8 +196,13 @@ async function performSync(syncFile) {
       log.info(`[AutoSync Main] ${wmiData.monitores.length} monitores sincronizados`);
     }
 
-    fs.writeFileSync(syncFile, JSON.stringify({ lastSync: Date.now() }));
-    log.info("[AutoSync Main] Éxito");
+    // Calcular el siguiente escaneo (entre 72 y 120 horas -> 3 a 5 días)
+    const nextIntervalHours = Math.floor(Math.random() * (120 - 72 + 1)) + 72;
+    fs.writeFileSync(syncFile, JSON.stringify({ 
+      lastSync: Date.now(),
+      nextSyncInterval: nextIntervalHours * 3600000
+    }));
+    log.info(`[AutoSync Main] Éxito. Próximo escaneo en ${nextIntervalHours} horas.`);
 
   } catch (e) {
     if (e.name === 'AbortError') {
