@@ -605,12 +605,13 @@ namespace GestorActivosHardware.Services
                 // Obtener perfiles reales (con carpeta en C:\Users)
                 System.Collections.Generic.HashSet<string> validSids = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
                 try {
-                    using (var searcher = new ManagementObjectSearcher("SELECT SID FROM Win32_UserProfile WHERE Special=False"))
+                    using (var searcher = new ManagementObjectSearcher("SELECT SID, LocalPath FROM Win32_UserProfile WHERE Special=False"))
                     {
                         foreach (ManagementObject o in searcher.Get())
                         {
                             string sid = o["SID"]?.ToString() ?? "";
-                            if (!string.IsNullOrEmpty(sid)) validSids.Add(sid);
+                            string localPath = o["LocalPath"]?.ToString() ?? "";
+                            if (!string.IsNullOrEmpty(sid) && localPath.StartsWith(@"C:\Users\", System.StringComparison.OrdinalIgnoreCase)) validSids.Add(sid);
                         }
                     }
                 } catch {}

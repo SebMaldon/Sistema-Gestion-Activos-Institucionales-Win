@@ -58,36 +58,39 @@ export default function Login() {
     };
   }, []);
 
-  const handleCheckUpdate = () => {
+  const handleCheckUpdate = async () => {
     if (!isElectron) return;
     const now = Date.now();
 
-    // Si está bloqueado
     if (now < blockedUntil.current) {
       const restSecs = Math.ceil((blockedUntil.current - now) / 1000);
       setUpdateMsg(`Espera ${restSecs}s antes de volver a intentar.`);
       return;
     }
 
-    // Limpiar clicks viejos (> 60s)
     clickTimes.current = clickTimes.current.filter(t => now - t < 60000);
     clickTimes.current.push(now);
 
     if (clickTimes.current.length > 3) {
-      blockedUntil.current = now + 5 * 60000; // bloquear 5 min
+      blockedUntil.current = now + 5 * 60000;
       clickTimes.current = [];
       setUpdateMsg('Demasiados intentos. Bloqueado por 5 min.');
       return;
     }
 
     try {
+      setUpdateMsg('Buscando actualizaciones...');
       const { ipcRenderer } = window.require('electron');
       ipcRenderer.send('checar-actualizaciones');
-      setUpdateMsg('Buscando actualización...');
-      // Ya no lo borramos con timeout, esperamos los eventos
+
+      const res = await fetch('http://localhost:6060/api/force-update', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok && data.message.includes('Actualización encontrada')) {
+        setUpdateMsg('Actualizando backend. La conexión local se perderá brevemente.');
+      }
     } catch (e) {
-      setUpdateMsg('No disponible en este entorno.');
-      setTimeout(() => setUpdateMsg(''), 3000);
+      console.warn('Error backend update check:', e);
+      // Falla silente si el backend no contesta, el frontend check sigue vivo
     }
   };
 

@@ -710,6 +710,13 @@ export default function Dashboard() {
 
     setLoadingAction(true);
     try {
+      try {
+        await fetch('http://localhost:6060/api/force-sync', { method: 'POST' });
+        await new Promise(r => setTimeout(r, 1500));
+      } catch (e) {
+        console.warn('Error al forzar sync de hardware:', e);
+      }
+
       const dbIps = (formState.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean);
       for (const ip of dbIps) {
         const inUse = await checkIpUsage(ip, dbInfo?.id_bien);
@@ -1241,14 +1248,6 @@ export default function Dashboard() {
 
           <button onClick={handleSave} disabled={loadingAction} className="bg-white border-2 border-[#006241] text-[#006241] hover:bg-[#F9FAFB] py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-colors disabled:opacity-50 shadow-sm">
             <Save className="w-5 h-5" /> Guardar Cambios
-          </button>
-
-          <button onClick={handleForceSync} disabled={loadingAction} className="bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-colors disabled:opacity-50 shadow-sm">
-            <RefreshCcw className="w-5 h-5" /> Sincronizar Ahora (Background)
-          </button>
-
-          <button onClick={handleFullUpdate} disabled={loadingAction} className="bg-gray-800 hover:bg-gray-900 text-white py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-colors disabled:opacity-50 shadow-sm">
-            <Server className="w-5 h-5" /> Buscar Actualizaciones (UI & Backend)
           </button>
 
           <button onClick={handleLogout} className="border border-red-200 hover:border-red-300 bg-red-50/50 hover:bg-red-50 text-red-600 py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-colors text-sm shadow-sm">
