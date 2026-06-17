@@ -3,7 +3,6 @@ import { spawn } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
-import { startAutoSync } from './autoSync.js';
 import os from 'os';
 
 const require = createRequire(import.meta.url);
@@ -19,7 +18,6 @@ app.commandLine.appendSwitch('js-flags', '--max-old-space-size=128');
 app.commandLine.appendSwitch('disable-site-isolation-trials');
 
 let mainWindow;
-let backendProcess;
 let tray = null;
 let isQuitting = false;
 let userRequestedUpdate = false; // true solo si el usuario clickeó descargar
@@ -250,44 +248,6 @@ function createTray() {
   tray.on('click', () => showOrCreateWindow());
 }
 
-function startBackend() {
-  const isDev = !app.isPackaged;
-
-  let exePath;
-  if (isDev) {
-    exePath = path.join(__dirname, '../../GestorActivosHardware/bin/Debug/net10.0-windows/GestorActivosHardware.exe');
-  } else {
-    exePath = path.join(process.resourcesPath, 'backend', 'GestorActivosHardware.exe');
-  }
-
-  console.log('Iniciando Backend en:', exePath);
-
-  // Matar cualquier instancia huérfana previa
-  import('child_process').then(({ exec }) => {
-    exec('taskkill /f /im GestorActivosHardware.exe', (err) => {
-      // Ignoramos error si no existía el proceso
-      backendProcess = spawn(exePath, [], { 
-        detached: false,
-        cwd: path.dirname(exePath)
-      });
-
-      backendProcess.stdout.on('data', (data) => {
-        console.log(`Backend: ${data}`);
-      });
-
-      backendProcess.stderr.on('data', (data) => {
-        console.error(`Backend Error: ${data}`);
-      });
-
-      backendProcess.on('close', (code) => {
-        if (!isQuitting) {
-          console.error(`[Watchdog] Backend crasheó (código ${code}). Reiniciando en 5s...`);
-          setTimeout(startBackend, 5000);
-        }
-      });
-    });
-  });
-}
 
 app.whenReady().then(() => {
   if (!gotTheLock) return;
@@ -298,10 +258,8 @@ app.whenReady().then(() => {
     args: ['--hidden']
   });
 
-  startBackend();
   createTray();
   setupAutoUpdater();
-  startAutoSync();
 
   // Si reiniciamos desde una actualización, mostrar ventana
   const fs = require('fs');
@@ -317,13 +275,6 @@ app.whenReady().then(() => {
 });
 
 app.on('before-quit', () => {
-  if (backendProcess) {
-    try {
-      backendProcess.kill();
-    } catch (e) {
-      console.error('Error cerrando backend:', e);
-    }
-  }
 });
 
 app.on('window-all-closed', () => {

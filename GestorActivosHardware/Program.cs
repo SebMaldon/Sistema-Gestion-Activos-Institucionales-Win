@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Http;
 using GestorActivosHardware.Services;
 using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace GestorActivosHardware
 {
@@ -18,15 +19,25 @@ namespace GestorActivosHardware
                 WebRootPath = "wwwroot"
             });
 
-            // Usar puerto 5050
+            // Configurar para correr como Windows Service
+            builder.Host.UseWindowsService(options =>
+            {
+                options.ServiceName = "Gestor Activos - Servicio de Sync";
+            });
+
+            // Usar puerto 6060
             builder.WebHost.UseUrls("http://localhost:6060");
 
-            // Añadir CORS para que el frontend (React) pueda consultarlo
             builder.Services.AddCors(options =>
             {
                 options.AddPolicy("AllowAll",
                     builder => builder.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
             });
+
+            // Registrar Servicios de Sincronización
+            builder.Services.AddSingleton<UpdaterService>();
+            builder.Services.AddSingleton<HardwareSyncService>();
+            builder.Services.AddHostedService<AutoSyncWorker>();
 
             var app = builder.Build();
 
@@ -38,7 +49,13 @@ namespace GestorActivosHardware
                 return Results.Json(info, new JsonSerializerOptions { PropertyNamingPolicy = null });
             });
 
-            // Manejo de apagado gracefully si se requiere
+            // Nuevo endpoint para forzar sincronización desde Electron
+            app.MapPost("/api/force-sync", async (HardwareSyncService syncService) =>
+            {
+                await syncService.PerformSyncAsync();
+                return Results.Ok(new { message = "Sincronización forzada completada." });
+            });
+
             app.MapPost("/api/shutdown", (IHostApplicationLifetime lifetime) =>
             {
                 lifetime.StopApplication();

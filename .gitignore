@@ -351,3 +351,9 @@ FodyWeavers.xsd
 
 # Environment files
 .env
+
+.agents/*   
+
+skills-lock.json
+skills-remote.json
+.md

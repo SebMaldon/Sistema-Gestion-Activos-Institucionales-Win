@@ -880,6 +880,22 @@ export default function Dashboard() {
     }
   };
 
+  const handleForceSync = async () => {
+    setLoadingAction(true);
+    try {
+      const res = await fetch('http://localhost:6060/api/force-sync', { method: 'POST' });
+      if (res.ok) {
+        await showAlert('Orden enviada. El servicio de Windows realizará la sincronización en segundo plano.', 'success', 'Sincronización Forzada');
+      } else {
+        await showAlert('El servicio local devolvió un error.', 'error');
+      }
+    } catch (err) {
+      await showAlert('No se pudo conectar con el Servicio Local. Asegúrate de que el servicio esté ejecutándose en services.msc.', 'error');
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
   // Helper for discrepancy styling
   const getFieldStatus = (key) => {
     const val = formState[key];
@@ -1182,6 +1198,10 @@ export default function Dashboard() {
 
           <button onClick={handleSave} disabled={loadingAction} className="bg-white border-2 border-[#006241] text-[#006241] hover:bg-[#F9FAFB] py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-colors disabled:opacity-50 shadow-sm">
             <Save className="w-5 h-5" /> Guardar Cambios
+          </button>
+
+          <button onClick={handleForceSync} disabled={loadingAction} className="bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-colors disabled:opacity-50 shadow-sm">
+            <RefreshCcw className="w-5 h-5" /> Sincronizar Ahora (Background)
           </button>
 
           <button onClick={handleLogout} className="border border-red-200 hover:border-red-300 bg-red-50/50 hover:bg-red-50 text-red-600 py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-colors text-sm shadow-sm">
