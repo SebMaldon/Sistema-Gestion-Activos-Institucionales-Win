@@ -67,6 +67,15 @@ namespace GestorActivosHardware
                 return Results.Ok(new { message = "El servicio ya está en la última versión." });
             });
 
+            // Endpoint para recibir la configuración (id_bien) desde React
+            app.MapPost("/api/config", async (HttpContext context) =>
+            {
+                var body = await new StreamReader(context.Request.Body).ReadToEndAsync();
+                var configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
+                File.WriteAllText(configPath, body);
+                return Results.Ok(new { message = "Configuración guardada" });
+            });
+
             app.MapPost("/api/shutdown", (IHostApplicationLifetime lifetime) =>
             {
                 lifetime.StopApplication();

@@ -105,11 +105,26 @@ namespace GestorActivosHardware.Services
                 if (!loginData.TryGetProperty("login", out var loginObj)) return;
                 var token = loginObj.GetProperty("token").GetString();
 
-                // 2. Obtener id_bien
-                var bienData = await QueryGraphQLAsync($"query {{ bienes(filter: {{ search: \"{numSerie}\" }}) {{ edges {{ node {{ id_bien }} }} }} }}", token);
-                var edges = bienData.GetProperty("bienes").GetProperty("edges");
-                if (edges.GetArrayLength() == 0) return;
-                var idBien = edges[0].GetProperty("node").GetProperty("id_bien").GetString();
+                // 2. Obtener id_bien (Primero intentar local, si falla buscar en BD)
+                string idBien = null;
+                var configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
+                if (File.Exists(configPath))
+                {
+                    try
+                    {
+                        var cfgDoc = JsonDocument.Parse(File.ReadAllText(configPath)).RootElement;
+                        if (cfgDoc.TryGetProperty("id_bien", out var idProp)) idBien = idProp.GetString();
+                    }
+                    catch { }
+                }
+
+                if (string.IsNullOrEmpty(idBien))
+                {
+                    var bienData = await QueryGraphQLAsync($"query {{ bienes(filter: {{ search: \"{numSerie}\" }}) {{ edges {{ node {{ id_bien }} }} }} }}", token);
+                    var edges = bienData.GetProperty("bienes").GetProperty("edges");
+                    if (edges.GetArrayLength() == 0) return;
+                    idBien = edges[0].GetProperty("node").GetProperty("id_bien").GetString();
+                }
 
                 // 3. Upsert
                 var dirIpStr = string.Join("/", wmiData.adaptadores_red.Take(3).Select(a => a.ip).Where(x => !string.IsNullOrEmpty(x)));

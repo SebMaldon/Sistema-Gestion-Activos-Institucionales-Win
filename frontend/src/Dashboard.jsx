@@ -869,6 +869,17 @@ export default function Dashboard() {
         }
 
         const finalIdBien = effectiveIsNew ? crypto.randomUUID() : idBienTarget;
+        
+        try {
+          await fetch('http://localhost:6060/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id_bien: finalIdBien })
+          });
+        } catch (e) {
+          console.warn('No se pudo enviar config al servicio local', e);
+        }
+
         await solicitarActualizacionBien(finalIdBien, JSON.stringify(datosNuevos));
         setLastSubmitted(JSON.stringify(formState));
         await showAlert('Tus cambios generales han sido enviados a revisión y la información técnica se actualizó directamente.', 'success', 'Enviado a revisión');
