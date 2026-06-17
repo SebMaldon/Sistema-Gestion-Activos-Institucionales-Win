@@ -402,6 +402,35 @@ export default function Dashboard() {
           newData.dir_ip_list = [{ ip: data.dir_ip, mac: data.mac_address || '', adapter: 'WMI' }];
         }
 
+        // --- Calcular segmento localmente aquí mismo ---
+        if (newData.dir_ip && catUnidades && catUnidades.length > 0) {
+          const primaryIp = Array.isArray(newData.dir_ip) ? newData.dir_ip[0] : (newData.dir_ip ? String(newData.dir_ip).split('/')[0].trim() : '');
+          
+          const ip2long = (ipStr) => {
+            const parts = String(ipStr).split('.');
+            if (parts.length !== 4) return null;
+            return parts.reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
+          };
+
+          const isIpInSubnet = (ip, subnetIp, bits) => {
+            if (!subnetIp || !bits) return false;
+            const ipLong = ip2long(ip);
+            const subLong = ip2long(subnetIp);
+            if (ipLong === null || subLong === null) return false;
+            const mask = ~((1 << (32 - bits)) - 1) >>> 0;
+            return (ipLong & mask) === (subLong & mask);
+          };
+
+          const matchedSegment = catUnidades.find(s => isIpInSubnet(primaryIp, s.ip, s.bits));
+          if (matchedSegment) {
+            newData.id_segmento = matchedSegment.value;
+            if (matchedSegment.clave && !newData.clave_unidad_ref) {
+              newData.clave_unidad_ref = matchedSegment.clave;
+            }
+          }
+        }
+        // ----------------------------------------------
+
         return newData;
       });
 
@@ -646,6 +675,8 @@ export default function Dashboard() {
                 });
               } else if (k === 'monitores' || k === 'dir_ip_list') {
                  // Dejar las listas de WMI como prioritarias
+              } else if ((k === 'id_segmento' || k === 'clave_unidad_ref') && preserveLocal && !mergedObj[k]) {
+                 // Dejar el segmento y unidad calculados por la IP si la BD no los tiene
               } else {
                 ns[k] = mergedObj[k];
               }
