@@ -605,7 +605,7 @@ namespace GestorActivosHardware.Services
                 // Obtener perfiles reales (con carpeta en C:\Users)
                 System.Collections.Generic.HashSet<string> validSids = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
                 try {
-                    using (var searcher = new ManagementObjectSearcher("SELECT SID FROM Win32_UserProfile WHERE Special=False"))
+                    using (var searcher = new ManagementObjectSearcher(@"SELECT SID FROM Win32_UserProfile WHERE Special=False AND LocalPath LIKE 'C:\\Users\\%'"))
                     {
                         foreach (ManagementObject o in searcher.Get())
                         {
