@@ -56,6 +56,17 @@ namespace GestorActivosHardware
                 return Results.Ok(new { message = "Sincronización forzada completada." });
             });
 
+            // Nuevo endpoint para forzar actualización del backend
+            app.MapPost("/api/force-update", async (UpdaterService updaterService) =>
+            {
+                bool hasUpdate = await updaterService.CheckForUpdatesAsync();
+                if (hasUpdate)
+                {
+                    return Results.Ok(new { message = "Actualización encontrada. Descargando y reiniciando servicio..." });
+                }
+                return Results.Ok(new { message = "El servicio ya está en la última versión." });
+            });
+
             app.MapPost("/api/shutdown", (IHostApplicationLifetime lifetime) =>
             {
                 lifetime.StopApplication();

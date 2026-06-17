@@ -885,12 +885,44 @@ export default function Dashboard() {
     try {
       const res = await fetch('http://localhost:6060/api/force-sync', { method: 'POST' });
       if (res.ok) {
-        await showAlert('Orden enviada. El servicio de Windows realizará la sincronización en segundo plano.', 'success', 'Sincronización Forzada');
+        // Espera breve para que el background worker guarde en BD
+        await new Promise(r => setTimeout(r, 2000));
+        await loadWMI(); // Recarga la UI automáticamente
       } else {
         await showAlert('El servicio local devolvió un error.', 'error');
       }
     } catch (err) {
-      await showAlert('No se pudo conectar con el Servicio Local. Asegúrate de que el servicio esté ejecutándose en services.msc.', 'error');
+      await showAlert('No se pudo conectar con el Servicio Local. Asegúrate de que el servicio esté ejecutándose.', 'error');
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
+  const handleFullUpdate = async () => {
+    setLoadingAction(true);
+    try {
+      // 1. Electron Frontend Update
+      if (window.require) {
+        const { ipcRenderer } = window.require('electron');
+        ipcRenderer.send('checar-actualizaciones');
+      }
+
+      // 2. C# Backend Update
+      const res = await fetch('http://localhost:6060/api/force-update', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        if (data.message.includes('Actualización encontrada')) {
+            await showAlert(data.message + ' La conexión local se perderá brevemente.', 'success', 'Actualizando Componentes');
+            await new Promise(r => setTimeout(r, 6000));
+            await loadWMI();
+        } else {
+            await showAlert('Se buscaron actualizaciones en ambos componentes (Servicio C# y UI Electron).', 'info', 'Búsqueda Completa');
+        }
+      } else {
+        await showAlert('El servicio local devolvió un error.', 'error');
+      }
+    } catch (err) {
+      await showAlert('No se pudo conectar con el Servicio Local. Frontend verificando en segundo plano.', 'warning');
     } finally {
       setLoadingAction(false);
     }
@@ -1202,6 +1234,10 @@ export default function Dashboard() {
 
           <button onClick={handleForceSync} disabled={loadingAction} className="bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-colors disabled:opacity-50 shadow-sm">
             <RefreshCcw className="w-5 h-5" /> Sincronizar Ahora (Background)
+          </button>
+
+          <button onClick={handleFullUpdate} disabled={loadingAction} className="bg-gray-800 hover:bg-gray-900 text-white py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-colors disabled:opacity-50 shadow-sm">
+            <Server className="w-5 h-5" /> Buscar Actualizaciones (UI & Backend)
           </button>
 
           <button onClick={handleLogout} className="border border-red-200 hover:border-red-300 bg-red-50/50 hover:bg-red-50 text-red-600 py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-colors text-sm shadow-sm">

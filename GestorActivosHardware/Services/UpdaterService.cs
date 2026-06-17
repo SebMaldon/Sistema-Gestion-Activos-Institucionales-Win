@@ -21,7 +21,7 @@ namespace GestorActivosHardware.Services
             _httpClient.Timeout = TimeSpan.FromMinutes(5);
         }
 
-        public async Task CheckForUpdatesAsync()
+        public async Task<bool> CheckForUpdatesAsync()
         {
             try
             {
@@ -40,18 +40,21 @@ namespace GestorActivosHardware.Services
                 {
                     _logger.LogInformation($"[Updater] Nueva versión encontrada: {latestVersion}. Descargando...");
                     await DownloadAndApplyUpdateAsync(downloadUrl);
+                    return true;
                 }
+                return false;
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "[Updater] Error al comprobar/aplicar actualizaciones.");
+                return false;
             }
         }
 
         private async Task DownloadAndApplyUpdateAsync(string downloadUrl)
         {
             var exePath = AppDomain.CurrentDomain.BaseDirectory;
-            var tempFolder = Path.Combine(exePath, "TempUpdate");
+            var tempFolder = @"C:\ProgramData\GestorActivosIMSS\TempUpdate";
             Directory.CreateDirectory(tempFolder);
 
             var newExePath = Path.Combine(tempFolder, "GestorActivosHardware_new.exe");
