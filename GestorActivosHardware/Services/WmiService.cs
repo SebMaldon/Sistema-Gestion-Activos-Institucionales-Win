@@ -633,10 +633,23 @@ namespace GestorActivosHardware.Services
                             string tipo = admins.Contains(name) ? "Administrador" : (avanzados.Contains(name) ? "Avanzado" : "Estándar");
                             
                             string correo = "";
-                            if (name.Equals(Environment.UserName, StringComparison.OrdinalIgnoreCase) && info.correos_usuario.Count > 0)
-                            {
-                                correo = info.correos_usuario[0];
-                            }
+                            try {
+                                var psi = new System.Diagnostics.ProcessStartInfo {
+                                    FileName = "powershell.exe",
+                                    Arguments = $"-NoProfile -Command \"([adsisearcher]'samaccountname={name}').FindOne().Properties.mail\"",
+                                    RedirectStandardOutput = true,
+                                    UseShellExecute = false,
+                                    CreateNoWindow = true
+                                };
+                                using (var process = System.Diagnostics.Process.Start(psi)) {
+                                    if (process != null) {
+                                        string output = process.StandardOutput.ReadToEnd().Trim();
+                                        if (!string.IsNullOrEmpty(output) && output.Contains("@")) {
+                                            correo = output;
+                                        }
+                                    }
+                                }
+                            } catch {}
 
                             info.cuentasList.Add(new CuentaInfo {
                                 cuenta_windows = fullName,
