@@ -12,7 +12,7 @@ namespace GestorActivosHardware.Services
     {
         private readonly ILogger<UpdaterService> _logger;
         private readonly HttpClient _httpClient;
-        private const string CurrentVersion = "1.0.0";
+        private const string CurrentVersion = "1.0.1";
 
         public UpdaterService(ILogger<UpdaterService> logger)
         {
