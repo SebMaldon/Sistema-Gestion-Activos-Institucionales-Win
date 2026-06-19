@@ -795,7 +795,7 @@ export default function Dashboard() {
         if (effectiveIsNew) {
           // Creación: enviar todos los campos con valor
           Object.keys(initialFormState).forEach(key => {
-            if (['correos_usuario', 'tipo_equipo', 'nombre_usuario_resguardo'].includes(key)) return;
+            if (['correos_usuario', 'tipo_equipo', 'nombre_usuario_resguardo', 'id_usuario_resguardo'].includes(key)) return;
             if (formState[key] !== '' && formState[key] !== undefined && formState[key] !== null) {
               datosNuevos[key] = formState[key];
             }
@@ -820,7 +820,7 @@ export default function Dashboard() {
           const safeDbInfo = effectiveDbInfo || {};
           Object.keys(initialFormState).forEach(key => {
             // Ignoramos campos de TI porque ya se guardaron directo
-            if (['id_bien', 'correos_usuario', 'tipo_equipo', 'nombre_usuario_resguardo', 'monitores', 'mac_address', 'dir_ip', 'dir_ip_list', 'cuentasList', 'programas', 'nombre_host', 'windows_serial', 'cpu_info', 'ram_gb', 'almacenamiento_gb', 'puerto_red', 'switch_red', 'modelo_so', 'version_office', 'fecha_act_antivirus'].includes(key)) return;
+            if (['id_bien', 'correos_usuario', 'tipo_equipo', 'nombre_usuario_resguardo', 'id_usuario_resguardo', 'monitores', 'mac_address', 'dir_ip', 'dir_ip_list', 'cuentasList', 'programas', 'nombre_host', 'windows_serial', 'cpu_info', 'ram_gb', 'almacenamiento_gb', 'puerto_red', 'switch_red', 'modelo_so', 'version_office', 'fecha_act_antivirus'].includes(key)) return;
 
             if (key === 'dir_ip_list') {
               const cIp = (formState.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean).join('/');
@@ -903,7 +903,7 @@ export default function Dashboard() {
   let currentDatosNuevos = {};
   if (isNew) {
     Object.keys(initialFormState).forEach(key => {
-      if (['correos_usuario', 'monitores', 'tipo_equipo', 'nombre_usuario_resguardo', 'mac_address', 'dir_ip', 'programas'].includes(key)) return;
+      if (['correos_usuario', 'monitores', 'tipo_equipo', 'nombre_usuario_resguardo', 'id_usuario_resguardo', 'mac_address', 'dir_ip', 'programas'].includes(key)) return;
       if (formState[key] !== '' && formState[key] !== undefined && formState[key] !== null) {
         currentDatosNuevos[key] = formState[key];
       }
@@ -911,7 +911,7 @@ export default function Dashboard() {
     currentDatosNuevos._esCreacion = true;
   } else {
     Object.keys(initialFormState).forEach(key => {
-      if (['id_bien', 'correos_usuario', 'monitores', 'tipo_equipo', 'nombre_usuario_resguardo', 'mac_address', 'dir_ip', 'dir_ip_list', 'cuentasList', 'programas', 'nombre_host', 'windows_serial', 'cpu_info', 'ram_gb', 'almacenamiento_gb', 'puerto_red', 'switch_red', 'modelo_so', 'version_office', 'fecha_act_antivirus'].includes(key)) return;
+      if (['id_bien', 'correos_usuario', 'monitores', 'tipo_equipo', 'nombre_usuario_resguardo', 'id_usuario_resguardo', 'mac_address', 'dir_ip', 'dir_ip_list', 'cuentasList', 'programas', 'nombre_host', 'windows_serial', 'cpu_info', 'ram_gb', 'almacenamiento_gb', 'puerto_red', 'switch_red', 'modelo_so', 'version_office', 'fecha_act_antivirus'].includes(key)) return;
       if (Array.isArray(formState[key])) {
         if (JSON.stringify(formState[key]) !== JSON.stringify(dbInfo[key])) {
           currentDatosNuevos[key] = formState[key];
