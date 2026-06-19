@@ -634,19 +634,13 @@ namespace GestorActivosHardware.Services
                             
                             string correo = "";
                             try {
-                                var psi = new System.Diagnostics.ProcessStartInfo {
-                                    FileName = "powershell.exe",
-                                    Arguments = $"-NoProfile -Command \"([adsisearcher]'samaccountname={name}').FindOne().Properties.mail\"",
-                                    RedirectStandardOutput = true,
-                                    UseShellExecute = false,
-                                    CreateNoWindow = true
-                                };
-                                using (var process = System.Diagnostics.Process.Start(psi)) {
-                                    if (process != null) {
-                                        string output = process.StandardOutput.ReadToEnd().Trim();
-                                        if (!string.IsNullOrEmpty(output) && output.Contains("@")) {
-                                            correo = output;
-                                        }
+                                using (var searcher = new System.DirectoryServices.DirectorySearcher($"samaccountname={name}")) {
+                                    searcher.ClientTimeout = TimeSpan.FromSeconds(1);
+                                    searcher.ServerTimeLimit = TimeSpan.FromSeconds(1);
+                                    searcher.PropertiesToLoad.Add("mail");
+                                    var result = searcher.FindOne();
+                                    if (result != null && result.Properties.Contains("mail") && result.Properties["mail"].Count > 0) {
+                                        correo = result.Properties["mail"][0].ToString();
                                     }
                                 }
                             } catch {}
@@ -674,6 +668,22 @@ namespace GestorActivosHardware.Services
             {
                 Console.WriteLine($"Error retrieving WMI info: {ex.Message}");
             }
+
+            try {
+                using (var searcher = new ManagementObjectSearcher("SELECT UserName FROM Win32_ComputerSystem")) {
+                    foreach (ManagementObject o in searcher.Get()) {
+                        string loggedUser = o["UserName"]?.ToString();
+                        if (!string.IsNullOrEmpty(loggedUser)) {
+                            var idx = info.cuentasList.FindIndex(c => c.cuenta_windows.Equals(loggedUser, StringComparison.OrdinalIgnoreCase) || c.cuenta_windows.EndsWith("\\" + loggedUser.Split('\\').Last(), StringComparison.OrdinalIgnoreCase));
+                            if (idx > 0) {
+                                var item = info.cuentasList[idx];
+                                info.cuentasList.RemoveAt(idx);
+                                info.cuentasList.Insert(0, item);
+                            }
+                        }
+                    }
+                }
+            } catch {}
 
             return info;
         }

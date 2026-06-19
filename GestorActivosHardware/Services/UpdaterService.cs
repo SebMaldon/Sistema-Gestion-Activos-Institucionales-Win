@@ -12,10 +12,11 @@ namespace GestorActivosHardware.Services
     {
         private readonly ILogger<UpdaterService> _logger;
         private readonly HttpClient _httpClient;
-        private const string CurrentVersion = "1.0.1";
+        private readonly string CurrentVersion;
 
         public UpdaterService(ILogger<UpdaterService> logger)
         {
+            CurrentVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0";
             _logger = logger;
             _httpClient = new HttpClient();
             _httpClient.Timeout = TimeSpan.FromMinutes(5);

@@ -802,7 +802,7 @@ export default function Dashboard() {
         if (effectiveIsNew) {
           // Creación: enviar todos los campos con valor
           Object.keys(initialFormState).forEach(key => {
-            if (['correos_usuario', 'tipo_equipo', 'nombre_usuario_resguardo'].includes(key)) return;
+            if (['correos_usuario', 'tipo_equipo', 'nombre_usuario_resguardo', 'id_usuario_resguardo'].includes(key)) return;
             if (formState[key] !== '' && formState[key] !== undefined && formState[key] !== null) {
               datosNuevos[key] = formState[key];
             }
@@ -827,7 +827,7 @@ export default function Dashboard() {
           const safeDbInfo = effectiveDbInfo || {};
           Object.keys(initialFormState).forEach(key => {
             // Ignoramos campos de TI porque ya se guardaron directo
-            if (['id_bien', 'correos_usuario', 'tipo_equipo', 'nombre_usuario_resguardo', 'monitores', 'mac_address', 'dir_ip', 'dir_ip_list', 'cuentasList', 'programas', 'nombre_host', 'windows_serial', 'cpu_info', 'ram_gb', 'almacenamiento_gb', 'puerto_red', 'switch_red', 'modelo_so', 'version_office', 'fecha_act_antivirus'].includes(key)) return;
+            if (['id_bien', 'correos_usuario', 'tipo_equipo', 'nombre_usuario_resguardo', 'id_usuario_resguardo', 'monitores', 'mac_address', 'dir_ip', 'dir_ip_list', 'cuentasList', 'programas', 'nombre_host', 'windows_serial', 'cpu_info', 'ram_gb', 'almacenamiento_gb', 'puerto_red', 'switch_red', 'modelo_so', 'version_office', 'fecha_act_antivirus'].includes(key)) return;
 
             if (key === 'dir_ip_list') {
               const cIp = (formState.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean).join('/');
@@ -969,7 +969,7 @@ export default function Dashboard() {
   let currentDatosNuevos = {};
   if (isNew) {
     Object.keys(initialFormState).forEach(key => {
-      if (['correos_usuario', 'monitores', 'tipo_equipo', 'nombre_usuario_resguardo', 'mac_address', 'dir_ip', 'programas'].includes(key)) return;
+      if (['correos_usuario', 'monitores', 'tipo_equipo', 'nombre_usuario_resguardo', 'id_usuario_resguardo', 'mac_address', 'dir_ip', 'programas'].includes(key)) return;
       if (formState[key] !== '' && formState[key] !== undefined && formState[key] !== null) {
         currentDatosNuevos[key] = formState[key];
       }
@@ -977,7 +977,7 @@ export default function Dashboard() {
     currentDatosNuevos._esCreacion = true;
   } else {
     Object.keys(initialFormState).forEach(key => {
-      if (['id_bien', 'correos_usuario', 'monitores', 'tipo_equipo', 'nombre_usuario_resguardo', 'mac_address', 'dir_ip', 'dir_ip_list', 'cuentasList', 'programas', 'nombre_host', 'windows_serial', 'cpu_info', 'ram_gb', 'almacenamiento_gb', 'puerto_red', 'switch_red', 'modelo_so', 'version_office', 'fecha_act_antivirus'].includes(key)) return;
+      if (['id_bien', 'correos_usuario', 'monitores', 'tipo_equipo', 'nombre_usuario_resguardo', 'id_usuario_resguardo', 'mac_address', 'dir_ip', 'dir_ip_list', 'cuentasList', 'programas', 'nombre_host', 'windows_serial', 'cpu_info', 'ram_gb', 'almacenamiento_gb', 'puerto_red', 'switch_red', 'modelo_so', 'version_office', 'fecha_act_antivirus'].includes(key)) return;
       if (Array.isArray(formState[key])) {
         if (JSON.stringify(formState[key]) !== JSON.stringify(dbInfo[key])) {
           currentDatosNuevos[key] = formState[key];
@@ -1149,7 +1149,7 @@ export default function Dashboard() {
                 return (
                   <div key={stableKey} className={clsx(
                     "border rounded-xl overflow-hidden shadow-sm transition-colors",
-                    isChecked ? "border-[#006241] bg-[#F0FAF4]" : "border-[#E0E0E0] bg-[#F9FAFB]"
+                    isChecked ? "border-[#006241] bg-[#F0FAF4]" : (i === 0 ? "border-blue-400 bg-blue-50/50 shadow-blue-100" : "border-[#E0E0E0] bg-[#F9FAFB]")
                   )}>
                     <div className="flex items-center px-3 py-2 gap-2">
                       {/* Checkbox */}
@@ -1182,15 +1182,15 @@ export default function Dashboard() {
                         onClick={() => setSelectedCuentaIdx(isExpanded ? -1 : i)}
                         className="text-left flex-grow flex items-center justify-between min-w-0"
                       >
-                        <div className="overflow-hidden min-w-0 flex-grow">
-                          <span className={clsx("font-bold block text-xs mt-0.5 truncate", isChecked ? "text-[#006241]" : "text-[#333333]")}>
+                        <div className="overflow-hidden min-w-0 flex-grow flex items-center flex-wrap gap-1">
+                          <span className={clsx("font-bold block text-xs mt-0.5 truncate", i === 0 ? "text-blue-700" : (isChecked ? "text-[#006241]" : "text-[#333333]"))}>
                             {c.cuenta_windows || '—'}
                           </span>
+                          {i === 0 && (
+                            <span className="text-[9px] text-blue-700 font-bold bg-blue-100 px-1.5 py-0.5 rounded ml-1 border border-blue-300 shadow-sm">Sesión Actual</span>
+                          )}
                           {c.id_cuenta && !c._new && (
                             <span className="text-[9px] text-[#006241] font-semibold">● En BD</span>
-                          )}
-                          {formState.usuario_pc && (c.cuenta_windows || '').toLowerCase().includes(formState.usuario_pc.toLowerCase()) && (
-                            <span className="text-[9px] text-blue-600 font-semibold bg-blue-50 px-1.5 py-0.5 rounded ml-1 border border-blue-200">Cuenta en uso</span>
                           )}
                         </div>
                         <div className="mx-1 flex-shrink-0">
