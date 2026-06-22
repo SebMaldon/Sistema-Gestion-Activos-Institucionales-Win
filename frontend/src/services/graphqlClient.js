@@ -247,6 +247,17 @@ export const saveAsset = async (isNew, assetData) => {
   return finalIdBien;
 };
 
+export const updateUsuarioResguardo = async (id_bien, id_usuario_resguardo) => {
+  const mut = `
+    mutation {
+      updateUsuarioResguardo(id_bien: "${id_bien}", id_usuario_resguardo: ${id_usuario_resguardo || "null"}) {
+        id_bien
+      }
+    }
+  `;
+  return await queryGraphQL(mut);
+};
+
 export const saveDirectSpecsAndPrograms = async (id_bien, assetData) => {
   const N = (v) => v ? JSON.stringify(v) : "null";
   const I = (v) => v ? v : "null";
