@@ -474,6 +474,7 @@ export default function Dashboard() {
               id_ubicacion
               fecha_adquisicion
               fecha_actualizacion
+              tiene_cambios_pendientes
               usuarioResguardo {
                 matricula
                 nombre_completo
@@ -523,6 +524,7 @@ export default function Dashboard() {
               id_ubicacion
               fecha_adquisicion
               fecha_actualizacion
+              tiene_cambios_pendientes
               usuarioResguardo {
                 matricula
                 nombre_completo
@@ -578,6 +580,7 @@ export default function Dashboard() {
           id_ubicacion: bien.id_ubicacion ? String(bien.id_ubicacion) : '',
           fecha_adquisicion: bien.fecha_adquisicion ? bien.fecha_adquisicion.split('T')[0] : '',
           fecha_actualizacion: bien.fecha_actualizacion ? new Date(bien.fecha_actualizacion).toLocaleString() : '',
+          tiene_cambios_pendientes: bien.tiene_cambios_pendientes || false,
           nombre_host: esp.nombre_host || '',
           windows_serial: esp.windows_serial || '',
           cpu_info: esp.cpu_info || '',
@@ -1193,6 +1196,18 @@ export default function Dashboard() {
         <main className="flex-1 p-6 overflow-y-auto custom-scrollbar relative">
 
           <div className="max-w-[1400px] mx-auto flex flex-col gap-6">
+            {dbInfo?.tiene_cambios_pendientes && (
+              <div className="bg-yellow-50 border border-yellow-200 border-l-4 border-l-yellow-400 p-4 rounded-xl shadow-sm animate-fade-in flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="text-sm font-bold text-yellow-800">Cambios Pendientes de Aprobación</h3>
+                  <p className="text-xs text-yellow-700 mt-0.5">
+                    Este equipo ya tiene una solicitud de cambios enviada a los superiores. Los datos mostrados abajo corresponden a lo que está actualmente en la base de datos (sin los cambios pendientes). Si envías otra solicitud, reemplazará a la anterior.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
               {/* Sección 1: Generales */}
