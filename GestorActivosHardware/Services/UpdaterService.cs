@@ -37,8 +37,19 @@ namespace GestorActivosHardware.Services
                 var latestVersion = doc.GetProperty("LatestVersion").GetString();
                 var downloadUrl = doc.GetProperty("DownloadUrl").GetString();
 
-                if (!string.IsNullOrEmpty(latestVersion) && latestVersion != CurrentVersion)
+                if (Version.TryParse(latestVersion, out var vLatest) && Version.TryParse(CurrentVersion, out var vCurrent))
                 {
+                    // Comparar usando la clase Version para ignorar el .0 final (ej. 1.0.3 vs 1.0.3.0)
+                    if (vLatest > vCurrent)
+                    {
+                        _logger.LogInformation($"[Updater] Nueva versión encontrada: {latestVersion} (Actual: {CurrentVersion}). Descargando...");
+                        await DownloadAndApplyUpdateAsync(downloadUrl);
+                        return true;
+                    }
+                }
+                else if (!string.IsNullOrEmpty(latestVersion) && latestVersion != CurrentVersion)
+                {
+                    // Fallback por si usan versiones con letras que Version.TryParse no entienda
                     _logger.LogInformation($"[Updater] Nueva versión encontrada: {latestVersion}. Descargando...");
                     await DownloadAndApplyUpdateAsync(downloadUrl);
                     return true;

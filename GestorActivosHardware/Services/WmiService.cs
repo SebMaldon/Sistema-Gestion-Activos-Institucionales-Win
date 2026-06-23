@@ -411,8 +411,13 @@ namespace GestorActivosHardware.Services
                                                 lower.Contains("compatibility"))
                                                 continue;
 
-                                            var version = subkey.GetValue("DisplayVersion") as string;
-                                            info.version_office = string.IsNullOrEmpty(version) ? displayName : $"{displayName} ({version})";
+                                            string cleanName = displayName.Replace("Microsoft ", "").Trim();
+                                            System.Text.RegularExpressions.Match match = System.Text.RegularExpressions.Regex.Match(displayName, @"(365|20[0-9]{2})");
+                                            if (match.Success) {
+                                                info.version_office = "Office " + match.Value;
+                                            } else {
+                                                info.version_office = cleanName;
+                                            }
                                             break;
                                         }
                                     }
@@ -557,30 +562,33 @@ namespace GestorActivosHardware.Services
                 // Obtener todas las cuentas locales
                 System.Collections.Generic.HashSet<string> admins = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
                 System.Collections.Generic.HashSet<string> avanzados = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
-                try {
-                    using (var searcher = new ManagementObjectSearcher("SELECT PartComponent, GroupComponent FROM Win32_GroupUser WHERE GroupComponent = \"Win32_Group.Domain='" + Environment.MachineName + "',Name='Administradores'\" OR GroupComponent = \"Win32_Group.Domain='" + Environment.MachineName + "',Name='Administrators'\" OR GroupComponent = \"Win32_Group.Domain='" + Environment.MachineName + "',Name='Usuarios Avanzados'\" OR GroupComponent = \"Win32_Group.Domain='" + Environment.MachineName + "',Name='Power Users'\""))
-                    {
-                        foreach (ManagementObject o in searcher.Get())
-                        {
-                            string group = o["GroupComponent"]?.ToString() ?? "";
-                            string part = o["PartComponent"]?.ToString() ?? "";
-                            int nameIndex = part.IndexOf("Name=\"");
-                            if (nameIndex >= 0)
-                            {
-                                int endIndex = part.IndexOf("\"", nameIndex + 6);
-                                if (endIndex >= 0)
-                                {
-                                    string name = part.Substring(nameIndex + 6, endIndex - nameIndex - 6);
-                                    if (group.IndexOf("Administradores", System.StringComparison.OrdinalIgnoreCase) >= 0 || group.IndexOf("Administrators", System.StringComparison.OrdinalIgnoreCase) >= 0) {
-                                        admins.Add(name);
-                                    } else {
-                                        avanzados.Add(name);
-                                    }
+                
+                // Usar DirectoryEntry para obtener grupos de manera 100% confiable y sin caché de WMI
+                string[] adminGroups = { "Administradores", "Administrators" };
+                foreach (var g in adminGroups) {
+                    try {
+                        using (var group = new System.DirectoryServices.DirectoryEntry($"WinNT://{Environment.MachineName}/{g},group")) {
+                            foreach (object member in (System.Collections.IEnumerable)group.Invoke("Members")) {
+                                using (var memberEntry = new System.DirectoryServices.DirectoryEntry(member)) {
+                                    admins.Add(memberEntry.Name);
                                 }
                             }
                         }
-                    }
-                } catch {}
+                    } catch { }
+                }
+
+                string[] powerGroups = { "Usuarios Avanzados", "Power Users" };
+                foreach (var g in powerGroups) {
+                    try {
+                        using (var group = new System.DirectoryServices.DirectoryEntry($"WinNT://{Environment.MachineName}/{g},group")) {
+                            foreach (object member in (System.Collections.IEnumerable)group.Invoke("Members")) {
+                                using (var memberEntry = new System.DirectoryServices.DirectoryEntry(member)) {
+                                    avanzados.Add(memberEntry.Name);
+                                }
+                            }
+                        }
+                    } catch { }
+                }
 
                 // Obtener perfiles reales (con carpeta en C:\Users)
                 System.Collections.Generic.HashSet<string> validSids = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
