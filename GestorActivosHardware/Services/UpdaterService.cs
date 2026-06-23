@@ -72,10 +72,10 @@ namespace GestorActivosHardware.Services
             
             var batScript = $@"@echo off
 timeout /t 5 /nobreak >nul
-sc stop ""Gestor Activos - Servicio de Sync""
+sc stop ""GestorActivosIMSS""
 timeout /t 5 /nobreak >nul
 copy /Y ""{newExePath}"" ""{targetExe}""
-sc start ""Gestor Activos - Servicio de Sync""
+sc start ""GestorActivosIMSS""
 exit
 ";
             File.WriteAllText(batPath, batScript);
@@ -84,8 +84,9 @@ exit
 
             var psi = new ProcessStartInfo
             {
-                FileName = batPath,
-                UseShellExecute = true,
+                FileName = "cmd.exe",
+                Arguments = $"/c \"{batPath}\"",
+                UseShellExecute = false,
                 CreateNoWindow = true,
                 WindowStyle = ProcessWindowStyle.Hidden
             };

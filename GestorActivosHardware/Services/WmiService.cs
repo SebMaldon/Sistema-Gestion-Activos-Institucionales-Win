@@ -213,7 +213,7 @@ namespace GestorActivosHardware.Services
                     if (process != null)
                     {
                         string output = process.StandardOutput.ReadToEnd().Trim();
-                        if (!string.IsNullOrEmpty(output) && output.Contains("@"))
+                        if (!string.IsNullOrEmpty(output) && output.EndsWith("@imss.gob.mx", StringComparison.OrdinalIgnoreCase))
                         {
                             info.correos_usuario.Add(output);
                         }
@@ -231,7 +231,13 @@ namespace GestorActivosHardware.Services
                     {
                         if (key != null)
                         {
-                            info.correos_usuario.AddRange(key.GetSubKeyNames());
+                            foreach(var k in key.GetSubKeyNames()) 
+                            {
+                                if (k.EndsWith("@imss.gob.mx", StringComparison.OrdinalIgnoreCase)) 
+                                {
+                                    info.correos_usuario.Add(k);
+                                }
+                            }
                         }
                     }
                 }
@@ -369,77 +375,51 @@ namespace GestorActivosHardware.Services
                         info.windows_serial = o["SerialNumber"]?.ToString()?.Trim() ?? "";
                     }
 
-                // Detectar versión de Microsoft Office
+                // Detectar versión de Microsoft Office rápido usando Registro (Uninstall)
                 info.version_office = "No instalado";
                 try
                 {
-                    // Intentar obtener de Click-To-Run (Office 365, 2016, 2019, 2021 modernos)
-                    using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Office\ClickToRun\Configuration"))
+                    string[] registryKeys = { 
+                        @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", 
+                        @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall" 
+                    };
+
+                    foreach (var regKey in registryKeys)
                     {
-                        if (key != null)
+                        using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(regKey))
                         {
-                            var prodIds = key.GetValue("ProductReleaseIds")?.ToString() ?? "";
-                            if (!string.IsNullOrEmpty(prodIds))
+                            if (key != null)
                             {
-                                string name = "";
-                                string[] priority = { "O365", "ProPlus", "Standard", "Professional", "Business", "Enterprise", "Home", "Personal" };
-                                foreach (var id in prodIds.Split(','))
+                                foreach (string subkeyName in key.GetSubKeyNames())
                                 {
-                                    bool matched = false;
-                                    foreach(var p in priority) {
-                                        if (id.IndexOf(p, StringComparison.OrdinalIgnoreCase) >= 0) {
-                                            matched = true;
+                                    using (var subkey = key.OpenSubKey(subkeyName))
+                                    {
+                                        var displayName = subkey?.GetValue("DisplayName") as string;
+                                        if (!string.IsNullOrEmpty(displayName) && 
+                                           (displayName.Contains("Microsoft Office") || displayName.StartsWith("Microsoft 365")))
+                                        {
+                                            // Ignorar basura, herramientas sueltas y paquetes de idioma
+                                            string lower = displayName.ToLower();
+                                            if (lower.Contains("language pack") || 
+                                                lower.Contains("proof") || 
+                                                lower.Contains("click-to-run component") ||
+                                                lower.Contains("onenote") ||
+                                                lower.Contains("visio") ||
+                                                lower.Contains("project") ||
+                                                lower.Contains("runtime") ||
+                                                lower.Contains("web components") ||
+                                                lower.Contains("compatibility"))
+                                                continue;
+
+                                            var version = subkey.GetValue("DisplayVersion") as string;
+                                            info.version_office = string.IsNullOrEmpty(version) ? displayName : $"{displayName} ({version})";
                                             break;
                                         }
                                     }
-                                    if (matched)
-                                    {
-                                        name = id.Replace("Retail", "").Replace("Volume", "");
-                                        break;
-                                    }
-                                }
-                                // 2. Fallback si no hay prioridad (pero ignorar OneNoteFree)
-                                if (string.IsNullOrEmpty(name))
-                                {
-                                    foreach (var id in prodIds.Split(','))
-                                    {
-                                        if (id.IndexOf("OneNoteFree", StringComparison.OrdinalIgnoreCase) >= 0 || id.IndexOf("Proof", StringComparison.OrdinalIgnoreCase) >= 0) continue;
-                                        name = id.Replace("Retail", "").Replace("Volume", "");
-                                        break;
-                                    }
-                                }
-                                // 3. Último caso si de plano solo había OneNoteFree
-                                if (string.IsNullOrEmpty(name)) 
-                                {
-                                    name = prodIds.Split(',')[0].Replace("Retail", "").Replace("Volume", "");
-                                }
-                                info.version_office = $"Office {name}";
-                            }
-                        }
-                    }
-
-                    // Fallback a instalaciones tradicionales MSI
-                    if (info.version_office == "No instalado")
-                    {
-                        string[] versions = { "16.0", "15.0", "14.0", "12.0", "11.0" };
-                        foreach (var v in versions)
-                        {
-                            using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey($@"SOFTWARE\Microsoft\Office\{v}\Word\InstallRoot"))
-                            {
-                                if (key != null && !string.IsNullOrEmpty(key.GetValue("Path")?.ToString()))
-                                {
-                                    info.version_office = v switch {
-                                        "16.0" => "Office 2016/2019/365",
-                                        "15.0" => "Office 2013",
-                                        "14.0" => "Office 2010",
-                                        "12.0" => "Office 2007",
-                                        "11.0" => "Office 2003",
-                                        _ => $"Office {v}"
-                                    };
-                                    break;
                                 }
                             }
                         }
+                        if (info.version_office != "No instalado") break;
                     }
                 }
                 catch { }
@@ -640,10 +620,35 @@ namespace GestorActivosHardware.Services
                                     searcher.PropertiesToLoad.Add("mail");
                                     var result = searcher.FindOne();
                                     if (result != null && result.Properties.Contains("mail") && result.Properties["mail"].Count > 0) {
-                                        correo = result.Properties["mail"][0].ToString();
+                                        var m = result.Properties["mail"][0].ToString();
+                                        if (m.EndsWith("@imss.gob.mx", StringComparison.OrdinalIgnoreCase)) {
+                                            correo = m;
+                                        }
                                     }
                                 }
                             } catch {}
+
+                            // Si falló el Directorio Activo, intentar extraer cuenta de Microsoft desde el Registro local
+                            if (string.IsNullOrEmpty(correo))
+                            {
+                                try 
+                                {
+                                    using (var key = Microsoft.Win32.Registry.Users.OpenSubKey($@"{sid}\Software\Microsoft\IdentityCRL\UserExtendedProperties"))
+                                    {
+                                        if (key != null) 
+                                        {
+                                            foreach (var em in key.GetSubKeyNames())
+                                            {
+                                                if (em.EndsWith("@imss.gob.mx", StringComparison.OrdinalIgnoreCase))
+                                                {
+                                                    correo = em;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                } catch {}
+                            }
 
                             info.cuentasList.Add(new CuentaInfo {
                                 cuenta_windows = fullName,

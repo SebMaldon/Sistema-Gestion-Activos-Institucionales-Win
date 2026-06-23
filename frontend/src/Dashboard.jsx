@@ -1213,28 +1213,21 @@ export default function Dashboard() {
                           <span className="text-[#757575] font-semibold block uppercase text-[9px]">Tipo</span>
                           <span className="text-[#333333] font-medium block text-[11px] truncate">{c.tipo_user || '—'}</span>
                         </div>
-                        {c.correo && c._correo_detectado !== false ? (
-                          <div>
-                            <span className="text-[#757575] font-semibold block uppercase text-[9px]">Correo</span>
-                            <span className="text-[#333333] font-medium block text-[11px] break-all">{c.correo}</span>
-                          </div>
-                        ) : (
-                          <div>
-                            <span className="text-[#757575] font-semibold block uppercase text-[9px]">Correo</span>
-                            <input
-                              type="email"
-                              placeholder="Ingresar correo..."
-                              value={c.correo || ''}
-                              onChange={(e) => {
-                                const newC = formState.cuentasList.map((item, idx) =>
-                                  idx === i ? { ...item, correo: e.target.value, _correo_detectado: false } : item
-                                );
-                                updateForm('cuentasList', newC);
-                              }}
-                              className="w-full text-[11px] bg-white border border-[#E0E0E0] rounded px-1.5 py-0.5 mt-0.5 focus:outline-none focus:border-[#006241] focus:ring-1 focus:ring-[#006241]"
-                            />
-                          </div>
-                        )}
+                        <div>
+                          <span className="text-[#757575] font-semibold block uppercase text-[9px]">Correo</span>
+                          <input
+                            type="email"
+                            placeholder="Ingresar correo..."
+                            value={c.correo || ''}
+                            onChange={(e) => {
+                              const newC = formState.cuentasList.map((item, idx) =>
+                                idx === i ? { ...item, correo: e.target.value, _correo_detectado: false } : item
+                              );
+                              updateForm('cuentasList', newC);
+                            }}
+                            className="w-full text-[11px] bg-white border border-[#E0E0E0] rounded px-1.5 py-0.5 mt-0.5 focus:outline-none focus:border-[#006241] focus:ring-1 focus:ring-[#006241]"
+                          />
+                        </div>
                       </div>
                     )}
                   </div>

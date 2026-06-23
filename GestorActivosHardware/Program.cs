@@ -22,7 +22,7 @@ namespace GestorActivosHardware
             // Configurar para correr como Windows Service
             builder.Host.UseWindowsService(options =>
             {
-                options.ServiceName = "Gestor Activos - Servicio de Sync";
+                options.ServiceName = "GestorActivosIMSS";
             });
 
             // Usar puerto 6060
