@@ -396,7 +396,7 @@ namespace GestorActivosHardware.Services
                                     {
                                         var displayName = subkey?.GetValue("DisplayName") as string;
                                         if (!string.IsNullOrEmpty(displayName) && 
-                                           (displayName.Contains("Microsoft Office") || displayName.StartsWith("Microsoft 365")))
+                                           (displayName.Contains("Microsoft Office") || displayName.Contains("Microsoft 365")))
                                         {
                                             // Ignorar basura, herramientas sueltas y paquetes de idioma
                                             string lower = displayName.ToLower();
@@ -408,7 +408,16 @@ namespace GestorActivosHardware.Services
                                                 lower.Contains("project") ||
                                                 lower.Contains("runtime") ||
                                                 lower.Contains("web components") ||
-                                                lower.Contains("compatibility"))
+                                                lower.Contains("compatibility") ||
+                                                lower.Contains("teams") ||
+                                                lower.Contains("add-in") ||
+                                                lower.Contains("plugin") ||
+                                                lower.Contains("viewer") ||
+                                                lower.Contains("engine") ||
+                                                lower.Contains("mui") ||
+                                                lower.Contains("updater") ||
+                                                lower.Contains("companion") ||
+                                                lower.Contains("copilot"))
                                                 continue;
 
                                             string cleanName = displayName.Replace("Microsoft ", "").Trim();

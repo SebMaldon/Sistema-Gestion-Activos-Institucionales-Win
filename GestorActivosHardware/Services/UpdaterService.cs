@@ -65,7 +65,9 @@ namespace GestorActivosHardware.Services
 
         private async Task DownloadAndApplyUpdateAsync(string downloadUrl)
         {
-            var exePath = AppDomain.CurrentDomain.BaseDirectory;
+            var currentProcess = Process.GetCurrentProcess();
+            var targetExe = currentProcess.MainModule?.FileName ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "GestorActivosHardware.exe");
+            
             var tempFolder = @"C:\ProgramData\GestorActivosIMSS\TempUpdate";
             Directory.CreateDirectory(tempFolder);
 
@@ -79,13 +81,21 @@ namespace GestorActivosHardware.Services
             }
 
             var batPath = Path.Combine(tempFolder, "updater.bat");
-            var targetExe = Path.Combine(exePath, "GestorActivosHardware.exe");
             
             var batScript = $@"@echo off
-timeout /t 5 /nobreak >nul
+:stop_loop
 sc stop ""GestorActivosIMSS""
-timeout /t 5 /nobreak >nul
+timeout /t 2 /nobreak >nul
+sc query ""GestorActivosIMSS"" | find ""STOPPED""
+if errorlevel 1 goto stop_loop
+
+:copy_loop
 copy /Y ""{newExePath}"" ""{targetExe}""
+if errorlevel 1 (
+    timeout /t 2 /nobreak >nul
+    goto copy_loop
+)
+
 sc start ""GestorActivosIMSS""
 exit
 ";
@@ -103,7 +113,8 @@ exit
             };
             Process.Start(psi);
 
-            Environment.Exit(0);
+            // Let the bat script stop the service gracefully.
+            // Do not force Environment.Exit(0) here because it triggers SCM auto-restart.
         }
     }
 }
