@@ -66,12 +66,12 @@ namespace GestorActivosHardware.Services
         private async Task DownloadAndApplyUpdateAsync(string downloadUrl)
         {
             var currentProcess = Process.GetCurrentProcess();
-            var targetExe = currentProcess.MainModule?.FileName ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "GestorActivosHardware.exe");
+            var targetExe = currentProcess.MainModule?.FileName ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SGHI SERVICIO.exe");
             
-            var tempFolder = @"C:\ProgramData\GestorActivosIMSS\TempUpdate";
+            var tempFolder = @"C:\ProgramData\SGHI\TempUpdate";
             Directory.CreateDirectory(tempFolder);
 
-            var newExePath = Path.Combine(tempFolder, "GestorActivosHardware_new.exe");
+            var newExePath = Path.Combine(tempFolder, "SGHI SERVICIO.exe");
 
             var response = await _httpClient.GetAsync(downloadUrl);
             response.EnsureSuccessStatusCode();
@@ -84,9 +84,9 @@ namespace GestorActivosHardware.Services
             
             var batScript = $@"@echo off
 :stop_loop
-sc stop ""GestorActivosIMSS""
+sc stop ""SGHI""
 timeout /t 2 /nobreak >nul
-sc query ""GestorActivosIMSS"" | find ""STOPPED""
+sc query ""SGHI"" | find ""STOPPED""
 if errorlevel 1 goto stop_loop
 
 :copy_loop
@@ -96,7 +96,7 @@ if errorlevel 1 (
     goto copy_loop
 )
 
-sc start ""GestorActivosIMSS""
+sc start ""SGHI""
 exit
 ";
             File.WriteAllText(batPath, batScript);

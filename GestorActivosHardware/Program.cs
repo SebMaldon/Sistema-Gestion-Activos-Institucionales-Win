@@ -22,7 +22,7 @@ namespace GestorActivosHardware
             // Configurar para correr como Windows Service
             builder.Host.UseWindowsService(options =>
             {
-                options.ServiceName = "GestorActivosIMSS";
+                options.ServiceName = "SGHI";
             });
 
             // Usar puerto 6060
