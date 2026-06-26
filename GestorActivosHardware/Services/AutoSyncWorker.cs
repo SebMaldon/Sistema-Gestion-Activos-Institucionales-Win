@@ -23,8 +23,8 @@ namespace GestorActivosHardware.Services
         {
             _logger.LogInformation("[AutoSync] Background Worker iniciado.");
             
-            // Jitter inicial para no saturar al arrancar
-            var jitter = new Random().Next(10000, 30000);
+            // Jitter inicial (10 a 60 minutos) para evitar saturar red con miles de PCs
+            var jitter = new Random().Next(600000, 3600000);
             await Task.Delay(jitter, stoppingToken);
 
             while (!stoppingToken.IsCancellationRequested)

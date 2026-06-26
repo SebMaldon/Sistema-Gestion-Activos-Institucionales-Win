@@ -242,7 +242,32 @@ export default function Dashboard() {
     initDashboard();
   }, []);
 
-
+  // Polling para actualizaciones (5 mins)
+  useEffect(() => {
+    const checkUpdates = async () => {
+      if (!searchSerial || !dbInfo?.fecha_actualizacion) return;
+      try {
+        const query = `query { bienByTermino(termino: "${searchSerial}") { fecha_actualizacion } }`;
+        const data = await queryGraphQL(query);
+        const bien = Array.isArray(data?.bienByTermino) ? data.bienByTermino[0] : data?.bienByTermino;
+        if (bien?.fecha_actualizacion) {
+          const latestT = new Date(bien.fecha_actualizacion).getTime();
+          const currentT = new Date(dbInfo.fecha_actualizacion).getTime();
+          
+          if (latestT > currentT) {
+            if (document.visibilityState === 'hidden' || !document.hasFocus()) {
+              await loadWMI();
+            } else {
+              const yes = await showAlert('Se encontró una actualización de datos en el servidor. ¿Deseas recargar la vista?', 'confirm', 'Actualización Disponible');
+              if (yes) await loadWMI();
+            }
+          }
+        }
+      } catch (err) { }
+    };
+    const interval = setInterval(checkUpdates, 300000); // 5 min
+    return () => clearInterval(interval);
+  }, [searchSerial, dbInfo?.fecha_actualizacion]);
 
   const loadAllCatalogs = async () => {
     try {
@@ -1249,6 +1274,10 @@ export default function Dashboard() {
 
           <button onClick={handleSave} disabled={loadingAction} className="bg-white border-2 border-[#006241] text-[#006241] hover:bg-[#F9FAFB] py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-colors disabled:opacity-50 shadow-sm">
             <Save className="w-5 h-5" /> Guardar Cambios
+          </button>
+
+          <button onClick={handleFullUpdate} disabled={loadingAction} className="bg-white border-2 border-blue-500 text-blue-500 hover:bg-blue-50 py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-colors disabled:opacity-50 shadow-sm">
+            <Server className="w-5 h-5" /> Buscar Actualizaciones
           </button>
 
           <button onClick={handleLogout} className="border border-red-200 hover:border-red-300 bg-red-50/50 hover:bg-red-50 text-red-600 py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-colors text-sm shadow-sm">

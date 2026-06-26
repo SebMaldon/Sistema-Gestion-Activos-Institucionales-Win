@@ -53,12 +53,13 @@ function setupAutoUpdater() {
 
   autoUpdater.on('update-available', (info) => {
     console.log('Actualización disponible:', info.version);
-    // Siempre auto-descargar en segundo plano (sin interacción de usuario)
-    // Si la ventana está visible, notificar adicionalmente
+    // Si la ventana está visible, notificar y esperar confirmación del usuario
     if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
       sendToRenderer('update-available', info.version);
+    } else {
+      // Si está oculta en tray, descargar silenciosamente
+      autoUpdater.downloadUpdate();
     }
-    autoUpdater.downloadUpdate();
   });
 
   ipcMain.on('descargar-actualizacion', () => {
@@ -82,32 +83,14 @@ function setupAutoUpdater() {
   });
 
   autoUpdater.on('update-downloaded', () => {
-    console.log('Actualización descargada.');
+    console.log('Actualización descargada. Instalando y reiniciando...');
     sendToRenderer('update-downloaded', true);
-    // Solo marcar para mostrar ventana si el usuario lo pidió explícitamente
+    // Marcar reinicio si el usuario lo pidió
     if (userRequestedUpdate) {
       require('fs').writeFileSync(path.join(app.getPath('userData'), '.update-restart'), '1');
     }
-
-    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
-      const { dialog } = require('electron');
-      dialog.showMessageBox(mainWindow, {
-        type: 'info',
-        title: 'Actualización lista',
-        message: 'Se ha descargado una nueva actualización.',
-        detail: 'La aplicación debe reiniciarse para aplicar los cambios. ¿Deseas reiniciar ahora?',
-        buttons: ['Reiniciar Ahora', 'Más Tarde'],
-        defaultId: 0,
-        cancelId: 1
-      }).then(({ response }) => {
-        if (response === 0) {
-          autoUpdater.quitAndInstall(true, true);
-        }
-      });
-    } else {
-      console.log('App en segundo plano, instalando silenciosamente...');
-      autoUpdater.quitAndInstall(true, true);
-    }
+    // Cerrar e instalar de inmediato sin el segundo popup, ya que el usuario ya confirmó o estaba en background
+    autoUpdater.quitAndInstall(true, true);
   });
 
 
