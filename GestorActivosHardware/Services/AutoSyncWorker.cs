@@ -23,7 +23,7 @@ namespace GestorActivosHardware.Services
         {
             _logger.LogInformation("[AutoSync] Background Worker iniciado.");
             
-            // Jitter inicial (10 a 60 minutos) para evitar saturar red con miles de PCs
+            // Jitter inicial corto (10 a 60 mins) para que la PC sincronice hardware sin saturar
             var jitter = new Random().Next(600000, 3600000);
             await Task.Delay(jitter, stoppingToken);
 
@@ -31,7 +31,7 @@ namespace GestorActivosHardware.Services
             {
                 try
                 {
-                    // 0. Chequeo de actualizaciones de versión
+                    // 0. Chequeo de actualizaciones de versión (con jitter)
                     await _updaterService.CheckForUpdatesAsync();
 
                     // 1. Chequeo de banderas forzadas

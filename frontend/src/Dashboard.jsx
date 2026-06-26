@@ -949,35 +949,7 @@ export default function Dashboard() {
     }
   };
 
-  const handleFullUpdate = async () => {
-    setLoadingAction(true);
-    try {
-      // 1. Electron Frontend Update
-      if (window.require) {
-        const { ipcRenderer } = window.require('electron');
-        ipcRenderer.send('checar-actualizaciones');
-      }
 
-      // 2. C# Backend Update
-      const res = await fetch('http://localhost:6060/api/force-update', { method: 'POST' });
-      const data = await res.json();
-      if (res.ok) {
-        if (data.message.includes('Actualización encontrada')) {
-            await showAlert(data.message + ' La conexión local se perderá brevemente.', 'success', 'Actualizando Componentes');
-            await new Promise(r => setTimeout(r, 6000));
-            await loadWMI();
-        } else {
-            await showAlert('Se buscaron actualizaciones en ambos componentes (Servicio C# y UI Electron).', 'info', 'Búsqueda Completa');
-        }
-      } else {
-        await showAlert('El servicio local devolvió un error.', 'error');
-      }
-    } catch (err) {
-      await showAlert('No se pudo conectar con el Servicio Local. Frontend verificando en segundo plano.', 'warning');
-    } finally {
-      setLoadingAction(false);
-    }
-  };
 
   // Helper for discrepancy styling
   const getFieldStatus = (key) => {
@@ -1274,10 +1246,6 @@ export default function Dashboard() {
 
           <button onClick={handleSave} disabled={loadingAction} className="bg-white border-2 border-[#006241] text-[#006241] hover:bg-[#F9FAFB] py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-colors disabled:opacity-50 shadow-sm">
             <Save className="w-5 h-5" /> Guardar Cambios
-          </button>
-
-          <button onClick={handleFullUpdate} disabled={loadingAction} className="bg-white border-2 border-blue-500 text-blue-500 hover:bg-blue-50 py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-colors disabled:opacity-50 shadow-sm">
-            <Server className="w-5 h-5" /> Buscar Actualizaciones
           </button>
 
           <button onClick={handleLogout} className="border border-red-200 hover:border-red-300 bg-red-50/50 hover:bg-red-50 text-red-600 py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-colors text-sm shadow-sm">

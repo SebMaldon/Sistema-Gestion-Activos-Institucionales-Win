@@ -2,7 +2,7 @@
   "name": "frontend",
   "private": true,
   "productName": "SGHI",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "description": "Gestor de Activos Institucionales IMSS",
   "author": "IMSS",
   "type": "module",
@@ -72,7 +72,9 @@
       "target": [
         "nsis"
       ],
-      "icon": "public/IMSS_Logosímbolo_Blanco.png"
+      "icon": "public/IMSS_Logosímbolo_Blanco.png",
+      "cscLink": "C:\\IMSS\\CertificadoSGHI.pfx",
+      "cscKeyPassword": "1234"
     },
     "nsis": {
       "oneClick": true,

@@ -57,8 +57,14 @@ function setupAutoUpdater() {
     if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
       sendToRenderer('update-available', info.version);
     } else {
-      // Si está oculta en tray, descargar silenciosamente
-      autoUpdater.downloadUpdate();
+      // Si está oculta en tray, descargar silenciosamente con un Jitter de 30m a 6h
+      // para no saturar la red descargando el .exe pesado todos a la vez.
+      const downloadJitter = Math.floor(Math.random() * (21600000 - 1800000 + 1)) + 1800000;
+      console.log(`Actualización en background detectada. Esperando ${downloadJitter / 60000} minutos para iniciar descarga...`);
+      setTimeout(() => {
+        console.log('Iniciando descarga retrasada en background...');
+        autoUpdater.downloadUpdate();
+      }, downloadJitter);
     }
   });
 
@@ -95,29 +101,21 @@ function setupAutoUpdater() {
 
 
 
-  // Verificar al arrancar (solo en producción)
-  if (app.isPackaged) {
-    autoUpdater.checkForUpdates()
-      .catch(err => { console.error('Error al conectar con IIS:', err); })
-      .finally(() => {
-        // El check terminó (sea con update o sin él) — si alguien ya pidió ventana, abrirla ahora
-        if (!initialUpdateCheckDone) {
-          initialUpdateCheckDone = true;
-          if (pendingShowWindow) {
-            pendingShowWindow = false;
-            _doShowOrCreateWindow();
-          }
-        }
-      });
-
-    // Buscar actualizaciones cada hora (3600000 ms)
-    setInterval(() => {
+  // Ciclo de 3 horas para revisar si hay actualizaciones (.yml ligero)
+  setInterval(() => {
+    if (app.isPackaged) {
+      console.log('Revisión cíclica de 3 horas...');
       autoUpdater.checkForUpdates().catch(console.error);
-    }, 3600000);
-  } else {
-    // En dev no hay check, marcar como listo de inmediato
-    initialUpdateCheckDone = true;
+    }
+  }, 10800000); // 3 horas
+
+  // Revisión inicial (inmediata, pues el jitter pesado está en la descarga)
+  if (app.isPackaged) {
+    autoUpdater.checkForUpdates().catch(console.error);
   }
+
+  // Marcar como listo de inmediato para no bloquear la pantalla inicial
+  initialUpdateCheckDone = true;
 }
 
 // Expuesto para polling si se requiere

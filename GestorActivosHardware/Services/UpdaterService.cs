@@ -42,16 +42,24 @@ namespace GestorActivosHardware.Services
                     // Comparar usando la clase Version para ignorar el .0 final (ej. 1.0.3 vs 1.0.3.0)
                     if (vLatest > vCurrent)
                     {
-                        _logger.LogInformation($"[Updater] Nueva versión encontrada: {latestVersion} (Actual: {CurrentVersion}). Descargando...");
-                        await DownloadAndApplyUpdateAsync(downloadUrl);
+                        _logger.LogInformation($"[Updater] Nueva versión encontrada: {latestVersion} (Actual: {CurrentVersion}). Programando descarga en background con jitter (30m - 6h)...");
+                        var jitter = new Random().Next(1800000, 21600000);
+                        _ = Task.Run(async () => {
+                            await Task.Delay(jitter);
+                            await DownloadAndApplyUpdateAsync(downloadUrl);
+                        });
                         return true;
                     }
                 }
                 else if (!string.IsNullOrEmpty(latestVersion) && latestVersion != CurrentVersion)
                 {
                     // Fallback por si usan versiones con letras que Version.TryParse no entienda
-                    _logger.LogInformation($"[Updater] Nueva versión encontrada: {latestVersion}. Descargando...");
-                    await DownloadAndApplyUpdateAsync(downloadUrl);
+                    _logger.LogInformation($"[Updater] Nueva versión encontrada: {latestVersion}. Programando descarga con jitter...");
+                    var jitter = new Random().Next(1800000, 21600000);
+                    _ = Task.Run(async () => {
+                        await Task.Delay(jitter);
+                        await DownloadAndApplyUpdateAsync(downloadUrl);
+                    });
                     return true;
                 }
                 return false;
