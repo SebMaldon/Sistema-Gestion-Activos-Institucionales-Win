@@ -746,7 +746,20 @@ export default function Dashboard() {
         console.warn('Error al forzar sync de hardware:', e);
       }
 
-      const dbIps = (formState.dir_ip_list || []).map(x => (x.ip || '').trim()).filter(Boolean);
+      const dirIpList = formState.dir_ip_list || [];
+      const invalidIps = dirIpList.filter(x => (x.ip || '').trim() && !/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test((x.ip || '').trim()));
+      if (invalidIps.length > 0) {
+        setLoadingAction(false);
+        return showAlert(`La IP ${invalidIps[0].ip} está incompleta.`, 'warning', 'IP Inválida');
+      }
+
+      const invalidMacs = dirIpList.filter(x => (x.mac || '').trim() && !/^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/.test((x.mac || '').trim()));
+      if (invalidMacs.length > 0) {
+        setLoadingAction(false);
+        return showAlert(`La MAC ${invalidMacs[0].mac} está incompleta.`, 'warning', 'MAC Inválida');
+      }
+
+      const dbIps = dirIpList.map(x => (x.ip || '').trim()).filter(Boolean);
       for (const ip of dbIps) {
         const inUse = await checkIpUsage(ip, dbInfo?.id_bien);
         if (inUse) {
@@ -831,7 +844,7 @@ export default function Dashboard() {
         if (effectiveIsNew) {
           // Creación: enviar todos los campos con valor
           Object.keys(initialFormState).forEach(key => {
-            if (['correos_usuario', 'tipo_equipo', 'nombre_usuario_resguardo', 'id_usuario_resguardo'].includes(key)) return;
+            if (['correos_usuario', 'tipo_equipo', 'nombre_usuario_resguardo'].includes(key)) return; // id_usuario_resguardo sí se incluye en solicitud
             if (formState[key] !== '' && formState[key] !== undefined && formState[key] !== null) {
               datosNuevos[key] = formState[key];
             }
@@ -843,9 +856,8 @@ export default function Dashboard() {
           try {
             await saveDirectSpecsAndPrograms(idBienTarget, { ...formState, dir_ip: dirIpString, mac_address: macString });
             
-            if (formState.id_usuario_resguardo !== dbInfo?.id_usuario_resguardo) {
-              await updateUsuarioResguardo(idBienTarget, formState.id_usuario_resguardo ? parseInt(formState.id_usuario_resguardo) : null);
-            }
+            // Resguardo siempre directo, sin aprobación
+            await updateUsuarioResguardo(idBienTarget, formState.id_usuario_resguardo ? parseInt(formState.id_usuario_resguardo) : null);
 
             // Auto-guardar monitores
             const monitores = (formState.monitores || []).filter(m => m.num_serie);
@@ -1289,11 +1301,18 @@ export default function Dashboard() {
                       onChange={e => updateForm('estatus_operativo', e.target.value)}
                       className={clsx("w-full bg-white text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]", getBorderColor('estatus_operativo'))}
                     >
-                      <option value="ACTIVO">Activo</option>
-                      <option value="INACTIVO">Inactivo</option>
-                      <option value="EN REPARACION">En Reparación</option>
-                      <option value="PRESTAMO">Préstamo</option>
-                      <option value="BAJA">Baja</option>
+                      <option value="ACTIVO">ACTIVO</option>
+                      <option value="BAJA">BAJA</option>
+                      <option value="DAÑADO">DAÑADO</option>
+                      <option value="DEVOLUCION">DEVOLUCION</option>
+                      <option value="INACTIVO">INACTIVO</option>
+                      <option value="OTRO">OTRO</option>
+                      <option value="P_BAJA">P_BAJA</option>
+                      <option value="PRESTAMO">PRESTAMO</option>
+                      <option value="SINIESTRADO">SINIESTRADO</option>
+                      <option value="SUSTITUIDO">SUSTITUIDO</option>
+                      <option value="TRASPASO OOAD">TRASPASO OOAD</option>
+                      <option value="TRASPASO_FORANEO">TRASPASO_FORANEO</option>
                     </select>
                   </div>
 

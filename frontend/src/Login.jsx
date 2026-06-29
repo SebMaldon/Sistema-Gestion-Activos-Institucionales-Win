@@ -78,20 +78,9 @@ export default function Login() {
       return;
     }
 
-    try {
-      setUpdateMsg('Buscando actualizaciones...');
-      const { ipcRenderer } = window.require('electron');
-      ipcRenderer.send('checar-actualizaciones');
-
-      const res = await fetch('http://localhost:6060/api/force-update', { method: 'POST' });
-      const data = await res.json();
-      if (res.ok && data.message.includes('Actualización encontrada')) {
-        setUpdateMsg('Actualizando backend. La conexión local se perderá brevemente.');
-      }
-    } catch (e) {
-      console.warn('Error backend update check:', e);
-      // Falla silente si el backend no contesta, el frontend check sigue vivo
-    }
+    setUpdateMsg('Buscando actualizaciones...');
+    const { ipcRenderer } = window.require('electron');
+    ipcRenderer.send('checar-actualizaciones');
   };
 
   const handleLogin = async (e) => {

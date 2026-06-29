@@ -3,7 +3,7 @@
   "private": true,
   "productName": "SGHI",
   "version": "2.0.4",
-  "description": "Gestor de Activos Institucionales IMSS",
+  "description": "Sistema de Gestion de Hardware IMSS",
   "author": "IMSS",
   "type": "module",
   "scripts": {
@@ -77,13 +77,15 @@
       "cscKeyPassword": "1234"
     },
     "nsis": {
-      "oneClick": true,
-      "perMachine": false,
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "include": "electron/installer.nsh",
       "uninstallDisplayName": "SGHI",
       "createDesktopShortcut": false,
       "createStartMenuShortcut": true,
-      "shortcutName": "Gestor Activos IMSS",
-      "allowElevation": false
+      "shortcutName": "SGHI",
+      "allowElevation": true
     }
   }
 }

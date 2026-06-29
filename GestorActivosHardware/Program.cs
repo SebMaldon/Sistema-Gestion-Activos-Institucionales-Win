@@ -25,7 +25,7 @@ namespace GestorActivosHardware
                 options.ServiceName = "SGHI";
             });
 
-            // Usar puerto 6060
+            // Puerto local para comunicacion con Electron
             builder.WebHost.UseUrls("http://localhost:6060");
 
             builder.Services.AddCors(options =>
@@ -34,8 +34,6 @@ namespace GestorActivosHardware
                     builder => builder.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
             });
 
-            // Registrar Servicios de Sincronización
-            builder.Services.AddSingleton<UpdaterService>();
             builder.Services.AddSingleton<HardwareSyncService>();
             builder.Services.AddHostedService<AutoSyncWorker>();
 
@@ -43,43 +41,27 @@ namespace GestorActivosHardware
 
             app.UseCors("AllowAll");
 
+            // Hardware info para Electron
             app.MapGet("/api/hw-info", () =>
             {
                 var info = WmiService.GetHardwareInfo();
                 return Results.Json(info, new JsonSerializerOptions { PropertyNamingPolicy = null });
             });
 
-            // Nuevo endpoint para forzar sincronización desde Electron
+            // Forzar sincronización desde Electron
             app.MapPost("/api/force-sync", async (HardwareSyncService syncService) =>
             {
                 await syncService.PerformSyncAsync();
                 return Results.Ok(new { message = "Sincronización forzada completada." });
             });
 
-            // Nuevo endpoint para forzar actualización del backend
-            app.MapPost("/api/force-update", async (UpdaterService updaterService) =>
-            {
-                bool hasUpdate = await updaterService.CheckForUpdatesAsync();
-                if (hasUpdate)
-                {
-                    return Results.Ok(new { message = "Actualización encontrada. Descargando y reiniciando servicio..." });
-                }
-                return Results.Ok(new { message = "El servicio ya está en la última versión." });
-            });
-
-            // Endpoint para recibir la configuración (id_bien) desde React
+            // Guardar config (id_bien) enviada desde React
             app.MapPost("/api/config", async (HttpContext context) =>
             {
                 var body = await new StreamReader(context.Request.Body).ReadToEndAsync();
                 var configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
                 File.WriteAllText(configPath, body);
                 return Results.Ok(new { message = "Configuración guardada" });
-            });
-
-            app.MapPost("/api/shutdown", (IHostApplicationLifetime lifetime) =>
-            {
-                lifetime.StopApplication();
-                return Results.Ok(new { message = "Shutting down..." });
             });
 
             app.Run();

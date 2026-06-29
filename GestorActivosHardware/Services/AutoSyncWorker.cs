@@ -10,20 +10,18 @@ namespace GestorActivosHardware.Services
     {
         private readonly ILogger<AutoSyncWorker> _logger;
         private readonly HardwareSyncService _syncService;
-        private readonly UpdaterService _updaterService;
 
-        public AutoSyncWorker(ILogger<AutoSyncWorker> logger, HardwareSyncService syncService, UpdaterService updaterService)
+        public AutoSyncWorker(ILogger<AutoSyncWorker> logger, HardwareSyncService syncService)
         {
             _logger = logger;
             _syncService = syncService;
-            _updaterService = updaterService;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation("[AutoSync] Background Worker iniciado.");
             
-            // Jitter inicial corto (10 a 60 mins) para que la PC sincronice hardware sin saturar
+            // Jitter inicial (10 a 60 mins) para no saturar red en arranque
             var jitter = new Random().Next(600000, 3600000);
             await Task.Delay(jitter, stoppingToken);
 
@@ -31,13 +29,10 @@ namespace GestorActivosHardware.Services
             {
                 try
                 {
-                    // 0. Chequeo de actualizaciones de versión (con jitter)
-                    await _updaterService.CheckForUpdatesAsync();
-
-                    // 1. Chequeo de banderas forzadas
+                    // 1. Chequeo de banderas forzadas desde el servidor
                     await _syncService.CheckSyncPendingAsync();
 
-                    // 2. Chequeo de ciclo de vida regular (72h)
+                    // 2. Ciclo de vida regular (72-120h con jitter)
                     _syncService.CheckAndRunHourlySync();
 
                     // Esperar 1 hora
@@ -45,7 +40,7 @@ namespace GestorActivosHardware.Services
                 }
                 catch (System.Net.Http.HttpRequestException e)
                 {
-                    _logger.LogWarning(e, "[AutoSync] Red no disponible o error HTTP. Reintento en 5 minutos.");
+                    _logger.LogWarning(e, "[AutoSync] Red no disponible. Reintento en 5 minutos.");
                     await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
                 }
                 catch (Exception e)
