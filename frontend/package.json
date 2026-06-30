@@ -2,7 +2,7 @@
   "name": "frontend",
   "private": true,
   "productName": "SGHI",
-  "version": "2.0.4",
+  "version": "2.0.6",
   "description": "Sistema de Gestion de Hardware IMSS",
   "author": "IMSS",
   "type": "module",
@@ -48,7 +48,7 @@
     "compression": "maximum",
     "appId": "com.imss.gestoractivos",
     "productName": "SGHI",
-    "artifactName": "SGHI Setup.${ext}",
+    "artifactName": "SGHI_Setup.${ext}",
     "publish": {
       "provider": "generic",
       "url": "http://11.1.19.4/updates/"

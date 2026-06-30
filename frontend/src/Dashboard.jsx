@@ -1066,7 +1066,7 @@ export default function Dashboard() {
         >
           <div className="flex items-center gap-4">
             <img src="IMSS_Logosímbolo_Blanco.png" alt="IMSS" className="h-5 w-5 object-contain" />
-            <span className="text-xs font-semibold tracking-wide">Gestor de Activos — IMSS</span>
+            <span className="text-xs font-semibold tracking-wide">SGHI</span>
           </div>
         </header>
         <div className="flex flex-col items-center gap-4 mt-11">
@@ -1087,7 +1087,7 @@ export default function Dashboard() {
       >
         <div className="flex items-center gap-4">
           <img src="IMSS_Logosímbolo_Blanco.png" alt="IMSS" className="h-5 w-5 object-contain" />
-          <span className="text-xs font-semibold tracking-wide">Gestor de Activos — IMSS <span className="text-[10px] text-gray-300 ml-1 font-normal">v{pkg.version}</span></span>
+          <span className="text-xs font-semibold tracking-wide">SGHI <span className="text-[10px] text-gray-300 ml-1 font-normal">v{pkg.version}</span></span>
           {dbInfo && dbInfo.id_bien && (
             <div
               className="flex items-center gap-2 bg-[#008F59]/30 border border-[#008F59]/50 px-2 py-0.5 rounded-full"

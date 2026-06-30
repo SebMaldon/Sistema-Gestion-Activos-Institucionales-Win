@@ -15,8 +15,7 @@ namespace GestorActivosHardware
         {
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions
             {
-                Args = args,
-                WebRootPath = "wwwroot"
+                Args = args
             });
 
             // Configurar para correr como Windows Service
@@ -36,6 +35,10 @@ namespace GestorActivosHardware
 
             builder.Services.AddSingleton<HardwareSyncService>();
             builder.Services.AddHostedService<AutoSyncWorker>();
+            builder.Services.AddHttpClient("sghi", c =>
+            {
+                c.Timeout = TimeSpan.FromSeconds(30);
+            });
 
             var app = builder.Build();
 
@@ -59,6 +62,10 @@ namespace GestorActivosHardware
             app.MapPost("/api/config", async (HttpContext context) =>
             {
                 var body = await new StreamReader(context.Request.Body).ReadToEndAsync();
+                if (string.IsNullOrWhiteSpace(body))
+                    return Results.BadRequest(new { error = "Body vacío" });
+                try { JsonDocument.Parse(body); }
+                catch { return Results.BadRequest(new { error = "JSON inválido" }); }
                 var configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
                 File.WriteAllText(configPath, body);
                 return Results.Ok(new { message = "Configuración guardada" });

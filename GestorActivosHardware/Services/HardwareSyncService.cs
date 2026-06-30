@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using System.Linq;
 using System.Collections.Generic;
+using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 
 namespace GestorActivosHardware.Services
@@ -13,18 +14,16 @@ namespace GestorActivosHardware.Services
     public class HardwareSyncService
     {
         private readonly ILogger<HardwareSyncService> _logger;
-        private readonly HttpClient _httpClient;
+        private readonly IHttpClientFactory _httpClientFactory;
         
         private string User => Environment.GetEnvironmentVariable("VITE_AUTOSYNC_USER") ?? "AUTO_USER";
         private string Pass => Environment.GetEnvironmentVariable("VITE_AUTOSYNC_PASS") ?? "AUTO_PASS";
         private string GqlUrl => Environment.GetEnvironmentVariable("VITE_GQL_URL") ?? "http://11.1.19.4:4000/graphql";
 
-        public HardwareSyncService(ILogger<HardwareSyncService> logger)
+        public HardwareSyncService(ILogger<HardwareSyncService> logger, IHttpClientFactory httpClientFactory)
         {
             _logger = logger;
-            _httpClient = new HttpClient();
-            _httpClient.Timeout = TimeSpan.FromSeconds(30);
-            
+            _httpClientFactory = httpClientFactory;
             LoadEnv();
         }
 
@@ -32,7 +31,6 @@ namespace GestorActivosHardware.Services
         {
             var exePath = AppDomain.CurrentDomain.BaseDirectory;
             var frontendEnv = Path.GetFullPath(Path.Combine(exePath, "..", "..", "..", "frontend", ".env"));
-            
             if (File.Exists(frontendEnv))
                 DotNetEnv.Env.Load(frontendEnv);
             else if (File.Exists(Path.Combine(exePath, ".env")))
@@ -41,22 +39,25 @@ namespace GestorActivosHardware.Services
 
         private async Task<JsonElement> QueryGraphQLAsync(string query, string token = null)
         {
+            var client = _httpClientFactory.CreateClient("sghi");
             var req = new HttpRequestMessage(HttpMethod.Post, GqlUrl);
             req.Headers.Add("x-origen", "win");
             if (!string.IsNullOrEmpty(token))
-            {
                 req.Headers.Add("Authorization", $"Bearer {token}");
-            }
 
-            var body = new { query = query };
-            req.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-
-            var response = await _httpClient.SendAsync(req);
+            req.Content = new StringContent(JsonSerializer.Serialize(new { query }), Encoding.UTF8, "application/json");
+            var response = await client.SendAsync(req);
             response.EnsureSuccessStatusCode();
-            
-            var jsonStr = await response.Content.ReadAsStringAsync();
-            var doc = JsonDocument.Parse(jsonStr);
+            var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             return doc.RootElement.GetProperty("data");
+        }
+
+        // Fix #2: login solo una vez, reusar token
+        private async Task<string> LoginAsync(string numSerie)
+        {
+            var loginData = await QueryGraphQLAsync($"mutation {{ login(matricula: \"{User}\", password: \"{Pass}\", equipoInfo: \"{numSerie}\") {{ token }} }}");
+            if (!loginData.TryGetProperty("login", out var loginObj)) return null;
+            return loginObj.GetProperty("token").GetString();
         }
 
         public async Task<bool> CheckSyncPendingAsync()
@@ -67,22 +68,17 @@ namespace GestorActivosHardware.Services
                 if (wmiData == null || string.IsNullOrEmpty(wmiData.num_serie)) return false;
                 var numSerie = wmiData.num_serie;
 
-                var loginData = await QueryGraphQLAsync($"mutation {{ login(matricula: \"{User}\", password: \"{Pass}\", equipoInfo: \"{numSerie}\") {{ token }} }}");
-                if (!loginData.TryGetProperty("login", out var loginObj)) return false;
-                var token = loginObj.GetProperty("token").GetString();
+                var token = await LoginAsync(numSerie);  // 1 solo login
+                if (string.IsNullOrEmpty(token)) return false;
 
                 var checkData = await QueryGraphQLAsync($"query {{ checkSyncPending(num_serie: \"{numSerie}\") }}", token);
-                if (checkData.TryGetProperty("checkSyncPending", out var pendingEl))
+                if (checkData.TryGetProperty("checkSyncPending", out var pendingEl) && pendingEl.GetBoolean())
                 {
-                    bool isPending = pendingEl.GetBoolean();
-                    if (isPending)
-                    {
-                        _logger.LogInformation("[AutoSync] Forzar Sincronización detectado.");
-                        await PerformSyncAsync();
-                        await QueryGraphQLAsync($"mutation {{ clearSyncPending(num_serie: \"{numSerie}\") }}", token);
-                        _logger.LogInformation("[AutoSync] Bandera de forzar sync limpiada.");
-                        return true;
-                    }
+                    _logger.LogInformation("[AutoSync] Forzar Sincronización detectado.");
+                    await PerformSyncCoreAsync(token, wmiData);  // reusar token y datos WMI ya obtenidos
+                    await QueryGraphQLAsync($"mutation {{ clearSyncPending(num_serie: \"{numSerie}\") }}", token);
+                    _logger.LogInformation("[AutoSync] Bandera de forzar sync limpiada.");
+                    return true;
                 }
             }
             catch (Exception ex)
@@ -92,20 +88,21 @@ namespace GestorActivosHardware.Services
             return false;
         }
 
-        public async Task PerformSyncAsync()
+        public async Task PerformSyncAsync() => await PerformSyncCoreAsync(null, null);
+
+        // Acepta token y wmiData ya obtenidos para evitar doble login/escaneo
+        private async Task PerformSyncCoreAsync(string existingToken, HardwareInfo existingWmiData)
         {
             try
             {
-                var wmiData = WmiService.GetHardwareInfo();
+                HardwareInfo wmiData = existingWmiData ?? WmiService.GetHardwareInfo();
                 if (wmiData == null || string.IsNullOrEmpty(wmiData.num_serie)) return;
                 var numSerie = wmiData.num_serie;
 
-                // 1. Login
-                var loginData = await QueryGraphQLAsync($"mutation {{ login(matricula: \"{User}\", password: \"{Pass}\", equipoInfo: \"{numSerie}\") {{ token }} }}");
-                if (!loginData.TryGetProperty("login", out var loginObj)) return;
-                var token = loginObj.GetProperty("token").GetString();
+                var token = existingToken ?? await LoginAsync(numSerie);
+                if (string.IsNullOrEmpty(token)) return;
 
-                // 2. Obtener id_bien (Primero intentar local, si falla buscar en BD)
+                // 2. Obtener id_bien
                 string idBien = null;
                 var configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
                 if (File.Exists(configPath))
@@ -126,11 +123,10 @@ namespace GestorActivosHardware.Services
                     idBien = edges[0].GetProperty("node").GetProperty("id_bien").GetString();
                 }
 
-                // 3. Upsert
+                // 3. Upsert specs TI
+                string N(string v) => !string.IsNullOrEmpty(v) ? $"\"{v}\"" : "null";
                 var dirIpStr = string.Join("/", wmiData.adaptadores_red.Take(3).Select(a => a.ip).Where(x => !string.IsNullOrEmpty(x)));
-                var macStr = string.Join("/", wmiData.adaptadores_red.Take(3).Select(a => a.mac).Where(x => !string.IsNullOrEmpty(x)));
-
-                string N(string val) => !string.IsNullOrEmpty(val) ? $"\"{val}\"" : "null";
+                var macStr   = string.Join("/", wmiData.adaptadores_red.Take(3).Select(a => a.mac).Where(x => !string.IsNullOrEmpty(x)));
 
                 string mut = $@"mutation {{
                     upsertEspecificacionTI(
@@ -147,35 +143,64 @@ namespace GestorActivosHardware.Services
                         last_scan: {N(wmiData.fecha_act_antivirus)}
                     ) {{ id_bien }}
                 }}";
-
                 await QueryGraphQLAsync(mut, token);
                 _logger.LogInformation($"[AutoSync] Specs TI sincronizados para id_bien: {idBien}");
 
-                // 4. Programas
+                // 4. Programas — skip si hash idéntico
+                var hashes = LoadHashes();
                 if (wmiData.programas != null && wmiData.programas.Count > 0)
                 {
                     var progsList = wmiData.programas.Select(p => new {
-                        programa = string.IsNullOrEmpty(p.nombre_programa) ? "" : p.nombre_programa,
-                        version = string.IsNullOrEmpty(p.version) ? "" : p.version,
-                        fecha_instalacion = string.IsNullOrEmpty(p.fecha_instalacion) ? "" : p.fecha_instalacion
+                        programa          = p.nombre_programa ?? "",
+                        version           = p.version ?? "",
+                        fecha_instalacion = p.fecha_instalacion ?? ""
                     });
-                    string progsStr = JsonSerializer.Serialize(progsList).Replace("\"programa\":", "programa:").Replace("\"version\":", "version:").Replace("\"fecha_instalacion\":", "fecha_instalacion:");
-                    await QueryGraphQLAsync($"mutation {{ syncProgramasPC(id_bien: \"{idBien}\", programas: {progsStr}) }}", token);
+                    string progsStr = JsonSerializer.Serialize(progsList)
+                        .Replace("\"programa\":", "programa:")
+                        .Replace("\"version\":", "version:")
+                        .Replace("\"fecha_instalacion\":", "fecha_instalacion:");
+
+                    var newHash = ComputeMd5(progsStr);
+                    if (newHash != hashes.programs)
+                    {
+                        await QueryGraphQLAsync($"mutation {{ syncProgramasPC(id_bien: \"{idBien}\", programas: {progsStr}) }}", token);
+                        hashes = hashes with { programs = newHash };
+                        _logger.LogInformation("[AutoSync] Programas sincronizados (cambio detectado).");
+                    }
+                    else
+                    {
+                        _logger.LogInformation("[AutoSync] Programas sin cambios, omitiendo sync.");
+                    }
                 }
 
-                // 5. Monitores
+                // 5. Monitores — Fix #3: skip si hash idéntico
                 if (wmiData.monitores != null && wmiData.monitores.Count > 0)
                 {
                     var monsList = wmiData.monitores.Select(m => new {
-                        marca = string.IsNullOrEmpty(m.marca) ? "" : m.marca,
-                        modelo = string.IsNullOrEmpty(m.modelo) ? "" : m.modelo,
-                        num_serie = string.IsNullOrEmpty(m.num_serie) ? "" : m.num_serie
+                        marca     = m.marca ?? "",
+                        modelo    = m.modelo ?? "",
+                        num_serie = m.num_serie ?? ""
                     });
-                    string monsStr = JsonSerializer.Serialize(monsList).Replace("\"marca\":", "marca:").Replace("\"modelo\":", "modelo:").Replace("\"num_serie\":", "num_serie:");
-                    await QueryGraphQLAsync($"mutation {{ syncMonitoresPC(id_bien: \"{idBien}\", monitores: {monsStr}) }}", token);
+                    string monsStr = JsonSerializer.Serialize(monsList)
+                        .Replace("\"marca\":", "marca:")
+                        .Replace("\"modelo\":", "modelo:")
+                        .Replace("\"num_serie\":", "num_serie:");
+
+                    var newHash = ComputeMd5(monsStr);
+                    if (newHash != hashes.monitors)
+                    {
+                        await QueryGraphQLAsync($"mutation {{ syncMonitoresPC(id_bien: \"{idBien}\", monitores: {monsStr}) }}", token);
+                        hashes = hashes with { monitors = newHash };
+                        _logger.LogInformation("[AutoSync] Monitores sincronizados (cambio detectado).");
+                    }
+                    else
+                    {
+                        _logger.LogInformation("[AutoSync] Monitores sin cambios, omitiendo sync.");
+                    }
                 }
 
-                UpdateNextSyncFile();
+                // Fix #1: una sola escritura al final con ambos hashes
+                WriteAutosyncFile(hashes);
             }
             catch (Exception ex)
             {
@@ -187,7 +212,7 @@ namespace GestorActivosHardware.Services
         {
             var syncFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "autosync.json");
             long lastSync = 0;
-            long nextSyncInterval = 72L * 3600L * 1000L; // 3 días
+            long nextSyncInterval = 72L * 3600L * 1000L;
 
             if (File.Exists(syncFile))
             {
@@ -200,23 +225,47 @@ namespace GestorActivosHardware.Services
                 catch { }
             }
 
-            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            if (now - lastSync >= nextSyncInterval)
-            {
+            if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - lastSync >= nextSyncInterval)
                 _ = Task.Run(() => PerformSyncAsync());
-            }
         }
 
-        private void UpdateNextSyncFile()
+        // ── Helpers ──────────────────────────────────────────────────────────
+
+        private record SyncHashes(string programs, string monitors);
+
+        private SyncHashes LoadHashes()
+        {
+            var syncFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "autosync.json");
+            if (!File.Exists(syncFile)) return new SyncHashes("", "");
+            try
+            {
+                var doc = JsonDocument.Parse(File.ReadAllText(syncFile)).RootElement;
+                var p = doc.TryGetProperty("lastProgramsHash", out var ph) ? ph.GetString() ?? "" : "";
+                var m = doc.TryGetProperty("lastMonitorsHash",  out var mh) ? mh.GetString() ?? "" : "";
+                return new SyncHashes(p, m);
+            }
+            catch { return new SyncHashes("", ""); }
+        }
+
+        // Fix #1: una sola escritura, sin lecturas redundantes
+        private void WriteAutosyncFile(SyncHashes hashes)
         {
             var syncFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "autosync.json");
             var nextIntervalHours = new Random().Next(72, 121);
             var json = JsonSerializer.Serialize(new {
-                lastSync = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                nextSyncInterval = nextIntervalHours * 3600000L
+                lastSync          = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                nextSyncInterval  = nextIntervalHours * 3600000L,
+                lastProgramsHash  = hashes.programs,
+                lastMonitorsHash  = hashes.monitors
             });
             File.WriteAllText(syncFile, json);
-            _logger.LogInformation($"[AutoSync Main] Éxito. Próximo escaneo en {nextIntervalHours} horas.");
+            _logger.LogInformation($"[AutoSync] Éxito. Próximo escaneo en {nextIntervalHours} horas.");
+        }
+
+        private static string ComputeMd5(string input)
+        {
+            var bytes = MD5.HashData(Encoding.UTF8.GetBytes(input));
+            return Convert.ToHexString(bytes).ToLowerInvariant();
         }
     }
 }
