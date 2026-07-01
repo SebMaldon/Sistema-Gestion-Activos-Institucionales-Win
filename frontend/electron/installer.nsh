@@ -21,7 +21,7 @@
   ExecWait 'sc start "SGHI"'
 
   ; 7. Autoarranque del frontend (bandeja) para TODOS los usuarios (HKLM)
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Run" "SGHI_Frontend" '"$INSTDIR\SGHI.exe"'
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Run" "SGHI_Frontend" '"$INSTDIR\SGHI.exe" --hidden'
 !macroend
 
 !macro customUnInstall

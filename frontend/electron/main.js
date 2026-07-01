@@ -30,7 +30,8 @@ if (!gotTheLock) {
   app.quit();
 }
 
-app.on('second-instance', () => {
+app.on('second-instance', (event, commandLine) => {
+  if (commandLine && commandLine.includes('--hidden')) return;
   showOrCreateWindow();
 });
 
@@ -245,11 +246,17 @@ app.whenReady().then(() => {
   // Si reiniciamos desde una actualización, mostrar ventana
   const fs = require('fs');
   const updateRestartFlag = path.join(app.getPath('userData'), '.update-restart');
+  let shouldOpen = false;
   if (fs.existsSync(updateRestartFlag)) {
     try { fs.unlinkSync(updateRestartFlag); } catch(e) {}
+    shouldOpen = true;
+  } else if (!process.argv.includes('--hidden')) {
+    shouldOpen = true; // Arranque manual por el usuario
+  }
+
+  if (shouldOpen) {
     showOrCreateWindow();
   }
-  // Si no es reinicio post-update: no abrir ventana (queda en tray)
 
   // macOS: al hacer click en el dock volver a abrir
   app.on('activate', () => showOrCreateWindow());
