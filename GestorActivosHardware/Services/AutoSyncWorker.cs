@@ -19,7 +19,7 @@ namespace GestorActivosHardware.Services
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("[AutoSync] Background Worker iniciado.");
+            _logger.LogInformation("[AutoSync] Background Worker iniciado. v1.0.7");
             
             // Jitter inicial (10 a 60 mins) para no saturar red en arranque
             var jitter = new Random().Next(600000, 3600000);

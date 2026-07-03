@@ -357,3 +357,5 @@ FodyWeavers.xsd
 skills-lock.json
 skills-remote.json
 .md
+
+.publish_out/*
