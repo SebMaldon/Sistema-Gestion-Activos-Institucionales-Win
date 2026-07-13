@@ -1,5 +1,6 @@
 using System;
 using System.Management;
+using System.Threading.Tasks;
 
 namespace GestorActivosHardware.Services
 {
@@ -145,11 +146,9 @@ namespace GestorActivosHardware.Services
                                 foreach (var p in packages)
                                 {
                                     if (string.IsNullOrEmpty(p.Name)) continue;
-                                    // Ignorar paquetes puramente internos del sistema para no hacer spam, pero dejar apps
                                     if (p.Name.StartsWith("MicrosoftWindows.") || p.Name.StartsWith("Microsoft.UI.") || p.Name.StartsWith("Microsoft.VCLibs") || p.Name.StartsWith("Microsoft.NET")) continue;
                                     
                                     string cleanName = p.Name;
-                                    // Mejorar nombres de algunas apps comunes
                                     if (cleanName == "Microsoft.WindowsNotepad") cleanName = "Bloc de notas";
                                     else if (cleanName == "Microsoft.Paint") cleanName = "Paint";
                                     else if (cleanName == "Microsoft.BingWeather") cleanName = "El Tiempo";
@@ -173,116 +172,11 @@ namespace GestorActivosHardware.Services
             catch { }
         }
 
-        public static HardwareInfo GetHardwareInfo()
+        // ────────────────────────────────────────────────────────────────────────
+        // TAREA 1: WMI hardware puro (sin cuentas, programas ni antivirus)
+        // ────────────────────────────────────────────────────────────────────────
+        private static void FillHardware(HardwareInfo info)
         {
-            var info = new HardwareInfo
-            {
-                nom_pc = Environment.MachineName,
-                usuario_pc = Environment.UserName
-            };
-
-            try
-            {
-                using (var identity = System.Security.Principal.WindowsIdentity.GetCurrent())
-                {
-                    if (identity != null && !string.IsNullOrEmpty(identity.Name))
-                    {
-                        info.usuario_pc = identity.Name;
-                    }
-                    var principal = new System.Security.Principal.WindowsPrincipal(identity);
-                    info.tipo_usuario_pc = principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator) 
-                        ? "Administrador" 
-                        : (principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.PowerUser) ? "Avanzado" : "Estándar");
-                }
-            }
-            catch { }
-
-            // 1. Intentar obtener correo desde Active Directory usando COM ADSystemInfo y ADSI
-            try
-            {
-                var psi = new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = "powershell.exe",
-                    Arguments = "-NoProfile -Command \"$s = New-Object -ComObject ADSystemInfo; $u = $s.GetType().InvokeMember('UserName', 'GetProperty', $null, $s, $null); ([ADSI]('LDAP://' + $u)).mail\"",
-                    RedirectStandardOutput = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-                using (var process = System.Diagnostics.Process.Start(psi))
-                {
-                    if (process != null)
-                    {
-                        string output = process.StandardOutput.ReadToEnd().Trim();
-                        if (!string.IsNullOrEmpty(output) && output.EndsWith("@imss.gob.mx", StringComparison.OrdinalIgnoreCase))
-                        {
-                            info.correos_usuario.Add(output);
-                        }
-                    }
-                }
-            }
-            catch { }
-
-            // 2. Si no se obtuvo correo de AD, intentar desde el Registro
-            if (info.correos_usuario.Count == 0)
-            {
-                try
-                {
-                    using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\IdentityCRL\UserExtendedProperties"))
-                    {
-                        if (key != null)
-                        {
-                            foreach(var k in key.GetSubKeyNames()) 
-                            {
-                                if (k.EndsWith("@imss.gob.mx", StringComparison.OrdinalIgnoreCase)) 
-                                {
-                                    info.correos_usuario.Add(k);
-                                }
-                            }
-                        }
-                    }
-                }
-                catch { }
-            }
-
-            try
-            {
-                using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows Defender\Signature Updates"))
-                {
-                    if (key != null)
-                    {
-                        var binaryData = key.GetValue("SignaturesLastUpdated") as byte[];
-                        if (binaryData != null && binaryData.Length >= 8)
-                        {
-                            long fileTime = BitConverter.ToInt64(binaryData, 0);
-                            if (fileTime > 0)
-                            {
-                                info.fecha_act_antivirus = DateTime.FromFileTime(fileTime).ToString("yyyy-MM-dd HH:mm:ss");
-                            }
-                        }
-                    }
-                }
-            }
-            catch { }
-
-            if (string.IsNullOrEmpty(info.fecha_act_antivirus))
-            {
-                try
-                {
-                    using (var searcher = new ManagementObjectSearcher(@"root\Microsoft\Windows\Defender", "SELECT AntivirusSignatureLastUpdated FROM MSFT_MpComputerStatus"))
-                    {
-                        foreach (ManagementObject o in searcher.Get())
-                        {
-                            var dateStr = o["AntivirusSignatureLastUpdated"]?.ToString();
-                            if (!string.IsNullOrEmpty(dateStr))
-                            {
-                                info.fecha_act_antivirus = ManagementDateTimeConverter.ToDateTime(dateStr).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
-                            }
-                        }
-                    }
-                }
-                catch { }
-            }
-
             try
             {
                 using (var searcher = new ManagementObjectSearcher("SELECT SerialNumber FROM Win32_BIOS"))
@@ -318,10 +212,7 @@ namespace GestorActivosHardware.Services
                         if (!string.IsNullOrEmpty(speedRaw) && double.TryParse(speedRaw, out double mhz))
                         {
                             double ghz = Math.Round(mhz / 1000.0, 2);
-                            if (!name.Contains("@"))
-                            {
-                                name += $" @ {ghz} GHz";
-                            }
+                            if (!name.Contains("@")) name += $" @ {ghz} GHz";
                         }
                         info.cpu_info = name;
                     }
@@ -330,11 +221,10 @@ namespace GestorActivosHardware.Services
                 using (var searcher = new ManagementObjectSearcher("SELECT Capacity FROM Win32_PhysicalMemory"))
                     foreach (ManagementObject o in searcher.Get())
                         ramBytes += Convert.ToInt64(o["Capacity"]);
-                
                 info.ram_gb = ramBytes > 0 ? (ramBytes / (1024L * 1024 * 1024)).ToString() : "0";
 
                 long diskBytes = 0;
-                try 
+                try
                 {
                     using (var searcher = new ManagementObjectSearcher("ASSOCIATORS OF {Win32_LogicalDisk.DeviceID='C:'} WHERE AssocClass=Win32_LogicalDiskToPartition"))
                     {
@@ -354,16 +244,14 @@ namespace GestorActivosHardware.Services
                             if (diskBytes > 0) break;
                         }
                     }
-                } 
-                catch 
+                }
+                catch
                 {
-                    // Fallback
                     using (var searcher = new ManagementObjectSearcher("SELECT Size FROM Win32_DiskDrive WHERE Index=0"))
                         foreach (ManagementObject o in searcher.Get())
                             if (o["Size"] != null)
                                 diskBytes = Convert.ToInt64(o["Size"]);
                 }
-                             
                 info.almacenamiento_gb = diskBytes > 0 ? (diskBytes / (1024L * 1024 * 1024)).ToString() : "256";
 
                 using (var searcher = new ManagementObjectSearcher("SELECT Caption, SerialNumber, OSArchitecture FROM Win32_OperatingSystem"))
@@ -375,15 +263,14 @@ namespace GestorActivosHardware.Services
                         info.windows_serial = o["SerialNumber"]?.ToString()?.Trim() ?? "";
                     }
 
-                // Detectar versión de Microsoft Office rápido usando Registro (Uninstall)
+                // Office desde Registro (rápido)
                 info.version_office = "No instalado";
                 try
                 {
-                    string[] registryKeys = { 
-                        @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", 
-                        @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall" 
+                    string[] registryKeys = {
+                        @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+                        @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
                     };
-
                     foreach (var regKey in registryKeys)
                     {
                         using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(regKey))
@@ -395,38 +282,24 @@ namespace GestorActivosHardware.Services
                                     using (var subkey = key.OpenSubKey(subkeyName))
                                     {
                                         var displayName = subkey?.GetValue("DisplayName") as string;
-                                        if (!string.IsNullOrEmpty(displayName) && 
+                                        if (!string.IsNullOrEmpty(displayName) &&
                                            (displayName.Contains("Microsoft Office") || displayName.Contains("Microsoft 365")))
                                         {
-                                            // Ignorar basura, herramientas sueltas y paquetes de idioma
                                             string lower = displayName.ToLower();
-                                            if (lower.Contains("language pack") || 
-                                                lower.Contains("proof") || 
-                                                lower.Contains("click-to-run component") ||
-                                                lower.Contains("onenote") ||
-                                                lower.Contains("visio") ||
-                                                lower.Contains("project") ||
-                                                lower.Contains("runtime") ||
-                                                lower.Contains("web components") ||
-                                                lower.Contains("compatibility") ||
-                                                lower.Contains("teams") ||
-                                                lower.Contains("add-in") ||
-                                                lower.Contains("plugin") ||
-                                                lower.Contains("viewer") ||
-                                                lower.Contains("engine") ||
-                                                lower.Contains("mui") ||
-                                                lower.Contains("updater") ||
-                                                lower.Contains("companion") ||
-                                                lower.Contains("copilot"))
+                                            if (lower.Contains("language pack") || lower.Contains("proof") ||
+                                                lower.Contains("click-to-run component") || lower.Contains("onenote") ||
+                                                lower.Contains("visio") || lower.Contains("project") ||
+                                                lower.Contains("runtime") || lower.Contains("web components") ||
+                                                lower.Contains("compatibility") || lower.Contains("teams") ||
+                                                lower.Contains("add-in") || lower.Contains("plugin") ||
+                                                lower.Contains("viewer") || lower.Contains("engine") ||
+                                                lower.Contains("mui") || lower.Contains("updater") ||
+                                                lower.Contains("companion") || lower.Contains("copilot"))
                                                 continue;
 
                                             string cleanName = displayName.Replace("Microsoft ", "").Trim();
-                                            System.Text.RegularExpressions.Match match = System.Text.RegularExpressions.Regex.Match(displayName, @"(365|20[0-9]{2})");
-                                            if (match.Success) {
-                                                info.version_office = "Office " + match.Value;
-                                            } else {
-                                                info.version_office = cleanName;
-                                            }
+                                            var match = System.Text.RegularExpressions.Regex.Match(displayName, @"(365|20[0-9]{2})");
+                                            info.version_office = match.Success ? "Office " + match.Value : cleanName;
                                             break;
                                         }
                                     }
@@ -438,7 +311,7 @@ namespace GestorActivosHardware.Services
                 }
                 catch { }
 
-                // Determinar si es PC o Laptop usando Win32_SystemEnclosure
+                // Tipo equipo
                 info.tipo_equipo = "Desktop";
                 try
                 {
@@ -451,7 +324,6 @@ namespace GestorActivosHardware.Services
                                 ushort[] types = (ushort[])o["ChassisTypes"];
                                 foreach (ushort type in types)
                                 {
-                                    // 8=Portable, 9=Laptop, 10=Notebook, 14=Sub Notebook, 31=Convertible
                                     if (type == 8 || type == 9 || type == 10 || type == 14 || type == 31)
                                     {
                                         info.tipo_equipo = "Laptop";
@@ -463,24 +335,19 @@ namespace GestorActivosHardware.Services
                     }
                 } catch { }
 
-                // Intentar extraer información de monitores conectados
+                // Monitores
                 try
                 {
-                    // Primero, mapeamos qué monitores son internos vs externos usando WmiMonitorConnectionParams
-                    System.Collections.Generic.HashSet<string> monitoresInternos = new System.Collections.Generic.HashSet<string>();
+                    var monitoresInternos = new System.Collections.Generic.HashSet<string>();
                     using (var searcherCon = new ManagementObjectSearcher("root\\WMI", "SELECT InstanceName, VideoOutputTechnology FROM WmiMonitorConnectionParams"))
                     {
                         foreach (ManagementObject o in searcherCon.Get())
                         {
                             string instanceName = o["InstanceName"]?.ToString() ?? "";
-                            // VideoOutputTechnology: 0x80000000 = 2147483648 (Internal)
                             if (o["VideoOutputTechnology"] != null)
                             {
                                 uint tech = Convert.ToUInt32(o["VideoOutputTechnology"]);
-                                if (tech == 2147483648) 
-                                {
-                                    monitoresInternos.Add(instanceName);
-                                }
+                                if (tech == 2147483648) monitoresInternos.Add(instanceName);
                             }
                         }
                     }
@@ -490,72 +357,45 @@ namespace GestorActivosHardware.Services
                         foreach (ManagementObject o in searcher.Get())
                         {
                             string instanceName = o["InstanceName"]?.ToString() ?? "";
-                            
-                            // Si es laptop y el monitor es interno, lo saltamos
-                            if (info.tipo_equipo == "Laptop" && monitoresInternos.Contains(instanceName))
-                            {
-                                continue;
-                            }
+                            if (info.tipo_equipo == "Laptop" && monitoresInternos.Contains(instanceName)) continue;
 
                             MonitorInfo mInfo = new MonitorInfo();
-
-                            // Extraer la marca del monitor (Fabricante)
                             string rawMarca = "";
                             if (o["ManufacturerName"] != null)
                             {
                                 ushort[] mfgArray = (ushort[])o["ManufacturerName"];
                                 string mfg = "";
-                                foreach (ushort c in mfgArray)
-                                    if (c > 0 && c < 256) mfg += (char)c;
+                                foreach (ushort c in mfgArray) if (c > 0 && c < 256) mfg += (char)c;
                                 rawMarca = mfg.Trim();
                             }
 
-                            // Traducir marca PNP a Comercial
                             var pnpMarcas = new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase)
                             {
-                                { "HPN", "HP" },
-                                { "HWP", "HP" },
-                                { "DEL", "Dell" },
-                                { "BNQ", "BenQ" },
-                                { "SAM", "Samsung" },
-                                { "LGD", "LG" },
-                                { "ACR", "Acer" },
-                                { "ASU", "Asus" },
-                                { "LEN", "Lenovo" },
-                                { "APP", "Apple" }
+                                { "HPN", "HP" }, { "HWP", "HP" }, { "DEL", "Dell" }, { "BNQ", "BenQ" },
+                                { "SAM", "Samsung" }, { "LGD", "LG" }, { "ACR", "Acer" }, { "ASU", "Asus" },
+                                { "LEN", "Lenovo" }, { "APP", "Apple" }
                             };
-
                             mInfo.marca = pnpMarcas.TryGetValue(rawMarca, out var marcaComercial) ? marcaComercial : rawMarca;
 
-                            // Extraer el modelo del monitor
                             if (o["UserFriendlyName"] != null)
                             {
                                 ushort[] nameArray = (ushort[])o["UserFriendlyName"];
                                 string name = "";
-                                foreach (ushort c in nameArray)
-                                    if (c > 0 && c < 256) name += (char)c;
+                                foreach (ushort c in nameArray) if (c > 0 && c < 256) name += (char)c;
                                 string rawModelo = name.Trim();
-
-                                // Limpiar prefijo PNP o comercial en modelo
                                 string cleanedMarca = mInfo.marca ?? rawMarca;
                                 if (!string.IsNullOrEmpty(cleanedMarca) && rawModelo.StartsWith(cleanedMarca, System.StringComparison.OrdinalIgnoreCase))
-                                {
                                     rawModelo = rawModelo.Substring(cleanedMarca.Length).Trim();
-                                }
                                 else if (!string.IsNullOrEmpty(rawMarca) && rawModelo.StartsWith(rawMarca, System.StringComparison.OrdinalIgnoreCase))
-                                {
                                     rawModelo = rawModelo.Substring(rawMarca.Length).Trim();
-                                }
                                 mInfo.modelo = rawModelo;
                             }
 
-                            // Extraer el número de serie del monitor
                             if (o["SerialNumberID"] != null)
                             {
                                 ushort[] serialArray = (ushort[])o["SerialNumberID"];
                                 string serial = "";
-                                foreach (ushort c in serialArray)
-                                    if (c > 0 && c < 256) serial += (char)c;
+                                foreach (ushort c in serialArray) if (c > 0 && c < 256) serial += (char)c;
                                 mInfo.num_serie = serial.Trim();
                             }
 
@@ -563,141 +403,278 @@ namespace GestorActivosHardware.Services
                         }
                     }
                 }
-                catch (Exception ex)
+                catch (Exception ex) { Console.WriteLine($"Error retrieving Monitor info: {ex.Message}"); }
+            }
+            catch (Exception ex) { Console.WriteLine($"Error retrieving WMI info: {ex.Message}"); }
+        }
+
+        // ────────────────────────────────────────────────────────────────────────
+        // TAREA 2: Fecha de actualización de antivirus
+        // ────────────────────────────────────────────────────────────────────────
+        private static string GetAntivirusDate()
+        {
+            try
+            {
+                using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows Defender\Signature Updates"))
                 {
-                    Console.WriteLine($"Error retrieving Monitor info: {ex.Message}");
-                }
-
-                // Obtener todas las cuentas locales
-                System.Collections.Generic.HashSet<string> admins = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
-                System.Collections.Generic.HashSet<string> avanzados = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
-                
-                // Usar DirectoryEntry para obtener grupos de manera 100% confiable y sin caché de WMI
-                string[] adminGroups = { "Administradores", "Administrators" };
-                foreach (var g in adminGroups) {
-                    try {
-                        using (var group = new System.DirectoryServices.DirectoryEntry($"WinNT://{Environment.MachineName}/{g},group")) {
-                            foreach (object member in (System.Collections.IEnumerable)group.Invoke("Members")) {
-                                using (var memberEntry = new System.DirectoryServices.DirectoryEntry(member)) {
-                                    admins.Add(memberEntry.Name);
-                                }
-                            }
-                        }
-                    } catch { }
-                }
-
-                string[] powerGroups = { "Usuarios Avanzados", "Power Users" };
-                foreach (var g in powerGroups) {
-                    try {
-                        using (var group = new System.DirectoryServices.DirectoryEntry($"WinNT://{Environment.MachineName}/{g},group")) {
-                            foreach (object member in (System.Collections.IEnumerable)group.Invoke("Members")) {
-                                using (var memberEntry = new System.DirectoryServices.DirectoryEntry(member)) {
-                                    avanzados.Add(memberEntry.Name);
-                                }
-                            }
-                        }
-                    } catch { }
-                }
-
-                // Obtener perfiles reales (con carpeta en C:\Users)
-                System.Collections.Generic.HashSet<string> validSids = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
-                try {
-                    using (var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_UserProfile WHERE Special=False"))
+                    if (key != null)
                     {
-                        foreach (ManagementObject o in searcher.Get())
+                        var binaryData = key.GetValue("SignaturesLastUpdated") as byte[];
+                        if (binaryData != null && binaryData.Length >= 8)
                         {
-                            string sid = o["SID"]?.ToString() ?? "";
-                            string localPath = o["LocalPath"]?.ToString() ?? "";
-                            if (!string.IsNullOrEmpty(sid) && localPath.StartsWith(@"C:\Users\", System.StringComparison.OrdinalIgnoreCase)) validSids.Add(sid);
+                            long fileTime = BitConverter.ToInt64(binaryData, 0);
+                            if (fileTime > 0) return DateTime.FromFileTime(fileTime).ToString("yyyy-MM-dd HH:mm:ss");
                         }
                     }
-                } catch {}
+                }
+            }
+            catch { }
 
-                try {
-                    foreach (string sid in validSids)
+            // Fallback WMI Defender
+            try
+            {
+                using (var searcher = new ManagementObjectSearcher(@"root\Microsoft\Windows\Defender", "SELECT AntivirusSignatureLastUpdated FROM MSFT_MpComputerStatus"))
+                {
+                    foreach (ManagementObject o in searcher.Get())
                     {
-                        try {
-                            var secId = new System.Security.Principal.SecurityIdentifier(sid);
-                            var acc = (System.Security.Principal.NTAccount)secId.Translate(typeof(System.Security.Principal.NTAccount));
-                            string fullName = acc.Value; // DOMINIO\Nombre
-                            string name = fullName;
-                            
-                            int slashIdx = fullName.IndexOf('\\');
-                            if (slashIdx >= 0) {
-                                name = fullName.Substring(slashIdx + 1);
-                            }
+                        var dateStr = o["AntivirusSignatureLastUpdated"]?.ToString();
+                        if (!string.IsNullOrEmpty(dateStr))
+                            return ManagementDateTimeConverter.ToDateTime(dateStr).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
+                    }
+                }
+            }
+            catch { }
 
-                            string tipo = admins.Contains(name) ? "Administrador" : (avanzados.Contains(name) ? "Avanzado" : "Estándar");
-                            
-                            string correo = "";
-                            try {
-                                using (var searcher = new System.DirectoryServices.DirectorySearcher($"samaccountname={name}")) {
-                                    searcher.ClientTimeout = TimeSpan.FromSeconds(1);
-                                    searcher.ServerTimeLimit = TimeSpan.FromSeconds(1);
-                                    searcher.PropertiesToLoad.Add("mail");
-                                    var result = searcher.FindOne();
-                                    if (result != null && result.Properties.Contains("mail") && result.Properties["mail"].Count > 0) {
-                                        var m = result.Properties["mail"][0].ToString();
-                                        if (m.EndsWith("@imss.gob.mx", StringComparison.OrdinalIgnoreCase)) {
-                                            correo = m;
-                                        }
-                                    }
+            return "";
+        }
+
+        // ────────────────────────────────────────────────────────────────────────
+        // TAREA 3: Email del usuario actual (AD → Registro)
+        // ────────────────────────────────────────────────────────────────────────
+        private static string GetCurrentUserEmail()
+        {
+            // Intento 1: PowerShell ADSI
+            try
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "powershell.exe",
+                    Arguments = "-NoProfile -Command \"$s = New-Object -ComObject ADSystemInfo; $u = $s.GetType().InvokeMember('UserName', 'GetProperty', $null, $s, $null); ([ADSI]('LDAP://' + $u)).mail\"",
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                using (var process = System.Diagnostics.Process.Start(psi))
+                {
+                    if (process != null)
+                    {
+                        string output = process.StandardOutput.ReadToEnd().Trim();
+                        if (!string.IsNullOrEmpty(output) && output.EndsWith("@imss.gob.mx", StringComparison.OrdinalIgnoreCase))
+                            return output;
+                    }
+                }
+            }
+            catch { }
+
+            // Intento 2: Registro
+            try
+            {
+                using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\IdentityCRL\UserExtendedProperties"))
+                {
+                    if (key != null)
+                        foreach (var k in key.GetSubKeyNames())
+                            if (k.EndsWith("@imss.gob.mx", StringComparison.OrdinalIgnoreCase))
+                                return k;
+                }
+            }
+            catch { }
+
+            return "";
+        }
+
+        // ────────────────────────────────────────────────────────────────────────
+        // TAREA 4: Cuentas locales con roles y correos
+        // ────────────────────────────────────────────────────────────────────────
+        private static System.Collections.Generic.List<CuentaInfo> GetCuentas()
+        {
+            var result = new System.Collections.Generic.List<CuentaInfo>();
+
+            var admins  = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+            var avanzados = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+
+            foreach (var g in new[] { "Administradores", "Administrators" })
+            {
+                try
+                {
+                    using (var group = new System.DirectoryServices.DirectoryEntry($"WinNT://{Environment.MachineName}/{g},group"))
+                        foreach (object member in (System.Collections.IEnumerable)group.Invoke("Members"))
+                            using (var memberEntry = new System.DirectoryServices.DirectoryEntry(member))
+                                admins.Add(memberEntry.Name);
+                } catch { }
+            }
+
+            foreach (var g in new[] { "Usuarios Avanzados", "Power Users" })
+            {
+                try
+                {
+                    using (var group = new System.DirectoryServices.DirectoryEntry($"WinNT://{Environment.MachineName}/{g},group"))
+                        foreach (object member in (System.Collections.IEnumerable)group.Invoke("Members"))
+                            using (var memberEntry = new System.DirectoryServices.DirectoryEntry(member))
+                                avanzados.Add(memberEntry.Name);
+                } catch { }
+            }
+
+            var validSids = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                using (var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_UserProfile WHERE Special=False"))
+                    foreach (ManagementObject o in searcher.Get())
+                    {
+                        string sid = o["SID"]?.ToString() ?? "";
+                        string localPath = o["LocalPath"]?.ToString() ?? "";
+                        if (!string.IsNullOrEmpty(sid) && localPath.StartsWith(@"C:\Users\", System.StringComparison.OrdinalIgnoreCase) && System.IO.Directory.Exists(localPath))
+                            validSids.Add(sid);
+                    }
+            } catch {}
+
+            // Buscar correos en AD en paralelo por cada SID
+            var cuentaTasks = new System.Collections.Generic.List<Task<CuentaInfo>>();
+            foreach (string sid in validSids)
+            {
+                string capturedSid = sid;
+                cuentaTasks.Add(Task.Run(() =>
+                {
+                    try
+                    {
+                        var secId = new System.Security.Principal.SecurityIdentifier(capturedSid);
+                        var acc = (System.Security.Principal.NTAccount)secId.Translate(typeof(System.Security.Principal.NTAccount));
+                        string fullName = acc.Value;
+                        string name = fullName;
+                        int slashIdx = fullName.IndexOf('\\');
+                        if (slashIdx >= 0) name = fullName.Substring(slashIdx + 1);
+
+                        string tipo = admins.Contains(name) ? "Administrador" : (avanzados.Contains(name) ? "Avanzado" : "Estándar");
+                        string correo = "";
+
+                        // AD lookup con timeout corto
+                        try
+                        {
+                            using (var ds = new System.DirectoryServices.DirectorySearcher($"samaccountname={name}"))
+                            {
+                                ds.ClientTimeout = TimeSpan.FromSeconds(1);
+                                ds.ServerTimeLimit = TimeSpan.FromSeconds(1);
+                                ds.PropertiesToLoad.Add("mail");
+                                var r = ds.FindOne();
+                                if (r != null && r.Properties.Contains("mail") && r.Properties["mail"].Count > 0)
+                                {
+                                    var m = r.Properties["mail"][0].ToString();
+                                    if (m.EndsWith("@imss.gob.mx", StringComparison.OrdinalIgnoreCase)) correo = m;
+                                }
+                            }
+                        } catch {}
+
+                        // Fallback Registro por SID
+                        if (string.IsNullOrEmpty(correo))
+                        {
+                            try
+                            {
+                                using (var key = Microsoft.Win32.Registry.Users.OpenSubKey($@"{capturedSid}\Software\Microsoft\IdentityCRL\UserExtendedProperties"))
+                                {
+                                    if (key != null)
+                                        foreach (var em in key.GetSubKeyNames())
+                                            if (em.EndsWith("@imss.gob.mx", StringComparison.OrdinalIgnoreCase))
+                                            { correo = em; break; }
                                 }
                             } catch {}
+                        }
 
-                            // Si falló el Directorio Activo, intentar extraer cuenta de Microsoft desde el Registro local
-                            if (string.IsNullOrEmpty(correo))
-                            {
-                                try 
-                                {
-                                    using (var key = Microsoft.Win32.Registry.Users.OpenSubKey($@"{sid}\Software\Microsoft\IdentityCRL\UserExtendedProperties"))
-                                    {
-                                        if (key != null) 
-                                        {
-                                            foreach (var em in key.GetSubKeyNames())
-                                            {
-                                                if (em.EndsWith("@imss.gob.mx", StringComparison.OrdinalIgnoreCase))
-                                                {
-                                                    correo = em;
-                                                    break;
-                                                }
-                                            }
-                                        }
-                                    }
-                                } catch {}
-                            }
-
-                            info.cuentasList.Add(new CuentaInfo {
-                                cuenta_windows = fullName,
-                                tipo_user = tipo,
-                                correo = correo
-                            });
-                        } catch {}
+                        return new CuentaInfo { cuenta_windows = fullName, tipo_user = tipo, correo = correo };
                     }
-                } catch {}
-
-                // Extraer programas instalados
-                System.Collections.Generic.HashSet<string> seenProgs = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
-                GetProgramsFromRegistry(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", Microsoft.Win32.Registry.LocalMachine, info.programas, seenProgs);
-                GetProgramsFromRegistry(@"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall", Microsoft.Win32.Registry.LocalMachine, info.programas, seenProgs);
-                GetProgramsFromRegistry(@"Software\Microsoft\Windows\CurrentVersion\Uninstall", Microsoft.Win32.Registry.CurrentUser, info.programas, seenProgs);
-
-                // Obtener aplicaciones modernas (AppX/UWP)
-                GetAppxPackages(info.programas, seenProgs);
-
+                    catch { return null; }
+                }));
             }
-            catch (Exception ex)
+
+            Task.WaitAll(cuentaTasks.ToArray());
+            foreach (var t in cuentaTasks)
+                if (t.Result != null) result.Add(t.Result);
+
+            return result;
+        }
+
+        // ────────────────────────────────────────────────────────────────────────
+        // TAREA 5: Programas instalados (Registro + AppX)
+        // ────────────────────────────────────────────────────────────────────────
+        private static System.Collections.Generic.List<ProgramaInfo> GetProgramas()
+        {
+            var list = new System.Collections.Generic.List<ProgramaInfo>();
+            var seen = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+
+            GetProgramsFromRegistry(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", Microsoft.Win32.Registry.LocalMachine, list, seen);
+            GetProgramsFromRegistry(@"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall", Microsoft.Win32.Registry.LocalMachine, list, seen);
+            GetProgramsFromRegistry(@"Software\Microsoft\Windows\CurrentVersion\Uninstall", Microsoft.Win32.Registry.CurrentUser, list, seen);
+            GetAppxPackages(list, seen);
+
+            return list;
+        }
+
+        // ────────────────────────────────────────────────────────────────────────
+        // Entry point — corre las 5 tareas en paralelo
+        // ────────────────────────────────────────────────────────────────────────
+        public static HardwareInfo GetHardwareInfo()
+        {
+            var info = new HardwareInfo
             {
-                Console.WriteLine($"Error retrieving WMI info: {ex.Message}");
-            }
+                nom_pc = Environment.MachineName,
+                usuario_pc = Environment.UserName
+            };
 
-            try {
-                using (var searcher = new ManagementObjectSearcher("SELECT UserName FROM Win32_ComputerSystem")) {
-                    foreach (ManagementObject o in searcher.Get()) {
+            // Rol del usuario actual (instantáneo, sin red)
+            try
+            {
+                using (var identity = System.Security.Principal.WindowsIdentity.GetCurrent())
+                {
+                    if (identity != null && !string.IsNullOrEmpty(identity.Name))
+                        info.usuario_pc = identity.Name;
+                    var principal = new System.Security.Principal.WindowsPrincipal(identity);
+                    info.tipo_usuario_pc = principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator)
+                        ? "Administrador"
+                        : (principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.PowerUser) ? "Avanzado" : "Estándar");
+                }
+            }
+            catch { }
+
+            // Lanzar las 5 tareas en paralelo
+            var t1 = Task.Run(() => FillHardware(info));
+            var t2 = Task.Run(() => GetAntivirusDate());
+            var t3 = Task.Run(() => GetCurrentUserEmail());
+            var t4 = Task.Run(() => GetCuentas());
+            var t5 = Task.Run(() => GetProgramas());
+
+            Task.WaitAll(t1, t2, t3, t4, t5);
+
+            info.fecha_act_antivirus = t2.Result;
+
+            string email = t3.Result;
+            if (!string.IsNullOrEmpty(email)) info.correos_usuario.Add(email);
+
+            info.cuentasList = t4.Result;
+            info.programas   = t5.Result;
+
+            // Promover usuario logueado actualmente al top de la lista
+            try
+            {
+                using (var searcher = new ManagementObjectSearcher("SELECT UserName FROM Win32_ComputerSystem"))
+                {
+                    foreach (ManagementObject o in searcher.Get())
+                    {
                         string loggedUser = o["UserName"]?.ToString();
-                        if (!string.IsNullOrEmpty(loggedUser)) {
-                            var idx = info.cuentasList.FindIndex(c => c.cuenta_windows.Equals(loggedUser, StringComparison.OrdinalIgnoreCase) || c.cuenta_windows.EndsWith("\\" + loggedUser.Split('\\').Last(), StringComparison.OrdinalIgnoreCase));
-                            if (idx > 0) {
+                        if (!string.IsNullOrEmpty(loggedUser))
+                        {
+                            var idx = info.cuentasList.FindIndex(c =>
+                                c.cuenta_windows.Equals(loggedUser, StringComparison.OrdinalIgnoreCase) ||
+                                c.cuenta_windows.EndsWith("\\" + loggedUser.Split('\\')[loggedUser.Split('\\').Length - 1], StringComparison.OrdinalIgnoreCase));
+                            if (idx > 0)
+                            {
                                 var item = info.cuentasList[idx];
                                 info.cuentasList.RemoveAt(idx);
                                 info.cuentasList.Insert(0, item);

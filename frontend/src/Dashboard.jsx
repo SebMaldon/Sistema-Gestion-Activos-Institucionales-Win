@@ -15,6 +15,7 @@ import {
   createNotaBien,
   saveDirectSpecsAndPrograms,
   checkIpUsage,
+  liberarIpEquipo,
   updateUsuarioResguardo
 } from './services/graphqlClient';
 import { LogOut, RefreshCcw, Save, Server, Monitor, HardDrive, Cpu, MapPin, Network, Activity, Plus, ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertTriangle, HelpCircle, Search, MessageSquare, Trash2 } from 'lucide-react';
@@ -274,13 +275,14 @@ export default function Dashboard() {
       const data = await getCatalogs();
       if (data) {
         if (data.segmentos) {
-          setCatUnidades(data.segmentos.map(s => ({ 
-            value: String(s.id_segmento), 
-            label: s.ip ? `${s.ip}/${s.bits} - ${s.nombre}` : s.nombre, 
-            clave: s.clave,
-            ip: s.ip,
-            bits: s.bits
-          })));
+          const unidadMap = {};
+          (data.unidades || []).forEach(u => { unidadMap[u.clave] = u.desc_corta || u.descripcion; });
+          setCatUnidades(data.segmentos.map(s => { 
+            const base = s.ip ? `${s.ip}/${s.bits} - ${s.nombre}` : s.nombre;
+            const unidadNombre = s.clave ? (unidadMap[s.clave] || s.clave) : null;
+            const label = unidadNombre ? `${base} (Propiedad de: ${unidadNombre})` : base;
+            return { value: String(s.id_segmento), label, clave: s.clave, ip: s.ip, bits: s.bits };
+          }));
         }
         if (data.unidades) {
           setCatInmuebles(data.unidades.map(u => ({ value: u.clave, label: u.desc_corta || u.descripcion })));
@@ -297,23 +299,16 @@ export default function Dashboard() {
     }
   };
 
-  // Watch Unidad Change -> Fetch Ubicaciones & Clear invalid Segmento
+  // Watch Unidad Change -> Fetch Ubicaciones
   useEffect(() => {
     if (formState.clave_unidad_ref) {
       getUbicacionesPorUnidad(formState.clave_unidad_ref).then(data => {
         setCatUbicaciones(data.map(u => ({ value: String(u.id_ubicacion), label: u.nombre_ubicacion })));
       });
-      if (formState.id_segmento) {
-        const currentSeg = catUnidades.find(s => String(s.value) === String(formState.id_segmento));
-        if (currentSeg && currentSeg.clave !== formState.clave_unidad_ref) {
-          updateForm('id_segmento', '');
-        }
-      }
     } else {
       setCatUbicaciones([]);
-      updateForm('id_segmento', '');
     }
-  }, [formState.clave_unidad_ref, catUnidades]);
+  }, [formState.clave_unidad_ref]);
 
   // Watch IP changes -> Auto assign Segmento
   useEffect(() => {
@@ -761,11 +756,18 @@ export default function Dashboard() {
 
       const dbIps = dirIpList.map(x => (x.ip || '').trim()).filter(Boolean);
       for (const ip of dbIps) {
-        const inUse = await checkIpUsage(ip, dbInfo?.id_bien);
-        if (inUse) {
-          setLoadingAction(false);
-          await showAlert(`La dirección IP ${ip} ya se encuentra registrada en otro activo.`, 'error', 'IP Duplicada');
-          return;
+        const inUseObj = await checkIpUsage(ip, dbInfo?.id_bien);
+        if (inUseObj.inUse) {
+          const confirmar = await showAlert(`La dirección IP ${ip} ya se encuentra registrada en otro activo.\n\n¿Deseas asignarla a este equipo y dejar al otro sin IP?`, 'confirm', 'IP Duplicada');
+          if (confirmar) {
+            for (const c of inUseObj.conflictos) {
+              await liberarIpEquipo(c.id_bien, ip);
+            }
+          } else {
+            setLoadingAction(false);
+            showAlert('Operación cancelada. No se guardaron los cambios.', 'info', 'Cancelado');
+            return;
+          }
         }
       }
 
@@ -803,8 +805,10 @@ export default function Dashboard() {
             // Mezclar: los WMI ya tienen marca/modelo, solo aseguramos que todos los de WMI estén
             setFormState(prev => ({ ...prev, monitores }));
             return true; // conflict resolved
+          } else {
+            showAlert('Operación cancelada. No se vincularon los monitores en conflicto.', 'info', 'Cancelado');
+            return false;
           }
-          return false;
         }
         return result.ok;
       };
@@ -978,9 +982,7 @@ export default function Dashboard() {
     return 'border-[#E0E0E0]';
   };
 
-  const filteredSegmentos = formState.clave_unidad_ref
-    ? catUnidades.filter(s => s.clave === formState.clave_unidad_ref)
-    : [];
+  const filteredSegmentos = catUnidades;
 
   const isNew = !dbInfo || !dbInfo.id_bien;
   let currentDatosNuevos = {};
@@ -1331,8 +1333,7 @@ export default function Dashboard() {
                         updateForm('id_segmento', v);
                         updateForm('id_ubicacion', '');
                       }}
-                      disabled={!formState.clave_unidad_ref}
-                      placeholder={formState.clave_unidad_ref ? "Buscar segmento..." : "Seleccione unidad primero"}
+                      placeholder="Buscar segmento..."
                     />
                   </div>
 

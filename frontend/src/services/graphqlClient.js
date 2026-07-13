@@ -409,7 +409,7 @@ export const createNotaBien = async (idBien, contenidoNota) => {
 };
 
 export const checkIpUsage = async (ip, excludeIdBien) => {
-  if (!ip || ip.trim() === '') return false;
+  if (!ip || ip.trim() === '') return { inUse: false, conflictos: [] };
   const q = `
     query checkIp($ip: String) {
       bienes(filter: { dir_ip: $ip }) {
@@ -425,12 +425,44 @@ export const checkIpUsage = async (ip, excludeIdBien) => {
     }
   `;
   const data = await queryGraphQL(q, { ip });
-  if (!data?.bienes?.edges) return false;
+  if (!data?.bienes?.edges) return { inUse: false, conflictos: [] };
 
-  const inUse = data.bienes.edges.some(({ node: b }) => {
-    if (excludeIdBien && b.id_bien === excludeIdBien) return false;
-    const ips = (b.especificacionTI?.dir_ip || '').split('/').map(x => x.trim()).filter(Boolean);
-    return ips.includes(ip.trim());
-  });
-  return inUse;
+  const conflictos = data.bienes.edges
+    .map(e => e.node)
+    .filter(b => {
+      if (excludeIdBien && b.id_bien === excludeIdBien) return false;
+      const ips = (b.especificacionTI?.dir_ip || '').split('/').map(x => x.trim()).filter(Boolean);
+      return ips.includes(ip.trim());
+    });
+
+  return { inUse: conflictos.length > 0, conflictos };
+};
+
+export const liberarIpEquipo = async (idBien, ipToRemove) => {
+  const q = `query { bien(id_bien: "${idBien}") { especificacionTI { cpu_info ram_gb almacenamiento_gb mac_address dir_ip puerto_red switch_red modelo_so windows_serial version_office last_scan } } }`;
+  const data = await queryGraphQL(q);
+  const spec = data?.bien?.especificacionTI;
+  if (!spec) return;
+  const currentIps = (spec.dir_ip || '').split('/').map(x => x.trim()).filter(Boolean);
+  const newIps = currentIps.filter(x => x !== ipToRemove.trim());
+  const newDirIp = newIps.join(' / ');
+  const N = val => (val === null || val === undefined) ? 'null' : `"${val}"`;
+  const I = val => (val === null || val === undefined || isNaN(val)) ? 'null' : val;
+  const mut = `
+      mutation { upsertEspecificacionTI(
+        id_bien: "${idBien}"
+        cpu_info: ${N(spec.cpu_info)}
+        ram_gb: ${I(spec.ram_gb)}
+        almacenamiento_gb: ${I(spec.almacenamiento_gb)}
+        mac_address: ${N(spec.mac_address)}
+        dir_ip: ${N(newDirIp)}
+        puerto_red: ${N(spec.puerto_red)}
+        switch_red: ${N(spec.switch_red)}
+        modelo_so: ${N(spec.modelo_so)}
+        last_scan: ${N(spec.last_scan)}
+        windows_serial: ${N(spec.windows_serial)}
+        version_office: ${N(spec.version_office)}
+      ) { id_bien } }
+  `;
+  await queryGraphQL(mut);
 };
