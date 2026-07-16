@@ -276,3 +276,8 @@ ipcMain.on('checar-actualizaciones', () => {
     autoUpdater.checkForUpdates().catch(console.error);
   }
 });
+
+ipcMain.on('instalar-actualizacion', () => {
+  console.log('Instalación solicitada por renderer countdown.');
+  autoUpdater.quitAndInstall(true, true);
+});

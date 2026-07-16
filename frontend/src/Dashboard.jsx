@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useToast, useToastQueue } from './ToastContext';
 import { fetchHardwareInfo } from './services/wmiClient';
 import {
   getCatalogs,
@@ -18,7 +19,7 @@ import {
   liberarIpEquipo,
   updateUsuarioResguardo
 } from './services/graphqlClient';
-import { LogOut, RefreshCcw, Save, Server, Monitor, HardDrive, Cpu, MapPin, Network, Activity, Plus, ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertTriangle, HelpCircle, Search, MessageSquare, Trash2 } from 'lucide-react';
+import { LogOut, RefreshCcw, Save, Server, Monitor, HardDrive, Cpu, MapPin, Network, Activity, Plus, ChevronDown, ChevronUp, Search, MessageSquare, Trash2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import SearchableSelect from './components/SearchableSelect';
 import { ModalUbicacion, ModalModeloMarca } from './components/Modals';
@@ -35,7 +36,8 @@ const initialFormState = {
   tipo_equipo: '', monitores: [], cuentasList: [], programas: []
 };
 
-const NotasBienSection = ({ idBien, title, showAlert }) => {
+const NotasBienSection = ({ idBien, title }) => {
+  const showAlert = useToast();
   const [isOpen, setIsOpen] = useState(false);
   const [notas, setNotas] = useState([]);
   const [nuevaNota, setNuevaNota] = useState('');
@@ -154,45 +156,41 @@ export default function Dashboard() {
   useEffect(() => {
     if (!isElectron) return;
     const { ipcRenderer } = window.require('electron');
-    const onAvailable = (_, version) => setUpdateInfo({ version, countdown: null });
-    const onCountdown = (_, seconds) => setUpdateInfo(prev => prev ? { ...prev, countdown: seconds } : { version: '?', countdown: seconds });
-    ipcRenderer.on('update-available', onAvailable);
-    ipcRenderer.on('update-countdown', onCountdown);
+    const onAvailable  = (_, version) => setUpdateInfo({ version, countdown: null, downloading: false });
+    const onCountdown  = (_, seconds) => setUpdateInfo(prev => prev ? { ...prev, countdown: seconds } : { version: '?', countdown: seconds, downloading: false });
+    const onProgress   = (_, pct)     => setUpdateInfo(prev => prev ? { ...prev, downloading: true, progress: pct } : null);
+    const onDownloaded = ()           => setUpdateInfo(prev => prev ? { ...prev, downloading: false, downloaded: true, countdown: 5 } : null);
+    const onNotAvail   = ()           => setUpdateInfo(null);
+    const onError      = ()           => setUpdateInfo(null);
+    ipcRenderer.on('update-available',     onAvailable);
+    ipcRenderer.on('update-countdown',     onCountdown);
+    ipcRenderer.on('update-progress',      onProgress);
+    ipcRenderer.on('update-downloaded',    onDownloaded);
+    ipcRenderer.on('update-not-available', onNotAvail);
+    ipcRenderer.on('update-error',         onError);
     return () => {
-      ipcRenderer.removeListener('update-available', onAvailable);
-      ipcRenderer.removeListener('update-countdown', onCountdown);
+      ipcRenderer.removeListener('update-available',     onAvailable);
+      ipcRenderer.removeListener('update-countdown',     onCountdown);
+      ipcRenderer.removeListener('update-progress',      onProgress);
+      ipcRenderer.removeListener('update-downloaded',    onDownloaded);
+      ipcRenderer.removeListener('update-not-available', onNotAvail);
+      ipcRenderer.removeListener('update-error',         onError);
     };
   }, [isElectron]);
 
-  const [alertState, setAlertState] = useState(null); // { type, title, message, onConfirm, onCancel }
-  const [updateInfo, setUpdateInfo] = useState(null);
+  const showAlert    = useToast();
+  const alertQueue   = useToastQueue();
 
-  const showAlert = (message, type = 'info', title = '') => {
-    return new Promise((resolve) => {
-      setAlertState({
-        type,
-        title: title || (type === 'success' ? 'Éxito' : type === 'error' ? 'Error' : type === 'confirm' ? 'Confirmación' : 'Información'),
-        message,
-        onConfirm: () => {
-          setAlertState(null);
-          resolve(true);
-        },
-        onCancel: type === 'confirm' ? () => {
-          setAlertState(null);
-          resolve(false);
-        } : null
-      });
-    });
-  };
-
+  // Bug fix #1: countdown ticker — main emits update-downloaded, renderer counts down then installs
   useEffect(() => {
-    if (alertState && alertState.type !== 'confirm') {
-      const timer = setTimeout(() => {
-        alertState.onConfirm();
-      }, 5000);
-      return () => clearTimeout(timer);
+    if (!updateInfo?.downloaded || updateInfo.countdown === null) return;
+    if (updateInfo.countdown <= 0) {
+      if (isElectron) window.require('electron').ipcRenderer.send('instalar-actualizacion');
+      return;
     }
-  }, [alertState]);
+    const t = setTimeout(() => setUpdateInfo(prev => prev ? { ...prev, countdown: prev.countdown - 1 } : null), 1000);
+    return () => clearTimeout(t);
+  }, [updateInfo?.downloaded, updateInfo?.countdown]);
 
   // Catalogs
   const [catUnidades, setCatUnidades] = useState([]);
@@ -258,7 +256,8 @@ export default function Dashboard() {
           if (latestT > currentT) {
             if (document.visibilityState === 'hidden' || !document.hasFocus()) {
               await loadWMI();
-            } else {
+            } else if (alertQueue.length === 0) {
+              // Fix: skip confirm if another alert already open
               const yes = await showAlert('Se encontró una actualización de datos en el servidor. ¿Deseas recargar la vista?', 'confirm', 'Actualización Disponible');
               if (yes) await loadWMI();
             }
@@ -1379,7 +1378,7 @@ export default function Dashboard() {
                       </div>
                       {mon.id_bien && (
                         <div className="mt-2 border-t border-gray-200 pt-3">
-                          <NotasBienSection idBien={mon.id_bien} title={`Notas del Monitor ${mon.num_serie}`} showAlert={showAlert} />
+                          <NotasBienSection idBien={mon.id_bien} title={`Notas del Monitor ${mon.num_serie}`} />
                         </div>
                       )}
                     </div>
@@ -1501,7 +1500,7 @@ export default function Dashboard() {
               {/* Sección 3: Notas de Seguimiento */}
               {formState.id_bien && (
                 <section className="lg:col-span-2 bg-white border border-[#E0E0E0] border-t-4 border-t-[#006241] rounded-2xl p-5 shadow-sm">
-                  <NotasBienSection idBien={formState.id_bien} title="Notas de Seguimiento del Equipo" showAlert={showAlert} />
+                  <NotasBienSection idBien={formState.id_bien} title="Notas de Seguimiento del Equipo" />
                 </section>
               )}
 
@@ -1548,19 +1547,19 @@ export default function Dashboard() {
               <svg className="w-5 h-5 text-green-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
             </div>
             <div className="flex-1">
-              <p className="text-sm font-bold">Nueva actualizacion disponible (v{updateInfo.version})</p>
-              
-              {updateInfo.countdown !== null ? (
+              <p className="text-sm font-bold">Nueva actualización disponible (v{updateInfo.version})</p>
+
+              {updateInfo.downloaded ? (
                 <p className="text-xs text-green-200 mt-0.5">Instalando en <span className="font-bold text-white text-base">{updateInfo.countdown}</span>s...</p>
               ) : updateInfo.downloading ? (
-                <p className="text-xs text-green-200 mt-0.5">Descargando actualizacion...</p>
+                <p className="text-xs text-green-200 mt-0.5">
+                  Descargando{updateInfo.progress != null ? ` ${updateInfo.progress}%` : '...'}
+                </p>
               ) : (
                 <button
                   onClick={() => {
-                    setUpdateInfo(prev => ({...prev, downloading: true}));
-                    if (isElectron) {
-                      window.require('electron').ipcRenderer.send('descargar-actualizacion');
-                    }
+                    setUpdateInfo(prev => ({ ...prev, downloading: true }));
+                    if (isElectron) window.require('electron').ipcRenderer.send('descargar-actualizacion');
                   }}
                   className="mt-2 text-xs font-semibold bg-white text-[#006241] px-3 py-1.5 rounded-full hover:bg-green-100 transition-colors"
                 >
@@ -1568,78 +1567,34 @@ export default function Dashboard() {
                 </button>
               )}
             </div>
+            {/* Botón cerrar — solo cuando no está en proceso */}
+            {!updateInfo.downloading && !updateInfo.downloaded && (
+              <button
+                onClick={() => setUpdateInfo(null)}
+                className="flex-shrink-0 text-white/60 hover:text-white transition-colors text-lg leading-none"
+                aria-label="Cerrar"
+              >
+                ×
+              </button>
+            )}
           </div>
-          {updateInfo.countdown !== null && (
+          {/* Barra de progreso: descarga o countdown */}
+          {(updateInfo.downloading || updateInfo.downloaded) && (
             <div className="mt-3 w-full bg-[#008F59]/40 rounded-full h-1.5">
-              <div className="bg-white h-1.5 rounded-full transition-all duration-1000" style={{ width: `${(updateInfo.countdown / 5) * 100}%` }} />
+              <div
+                className="bg-white h-1.5 rounded-full transition-all duration-500"
+                style={{
+                  width: updateInfo.downloaded
+                    ? `${(updateInfo.countdown / 5) * 100}%`
+                    : `${updateInfo.progress ?? 0}%`
+                }}
+              />
             </div>
           )}
         </div>
       )}
 
-      {alertState && (
-        <div className="fixed top-14 right-4 z-50 animate-fade-in max-w-xs sm:max-w-sm w-full">
-          <div
-            onClick={() => alertState.type !== 'confirm' && alertState.onConfirm()}
-            className={clsx(
-              "bg-white rounded-xl p-4 shadow-xl border border-gray-250 relative overflow-hidden transform scale-100 transition-all animate-scale-up select-none",
-              alertState.type !== 'confirm' && "cursor-pointer hover:bg-gray-50/80 active:scale-[0.99]"
-            )}
-          >
-            <div className="flex items-start gap-3">
-              <div className={clsx(
-                "p-2 rounded-full flex-shrink-0",
-                alertState.type === 'success' && "bg-green-50 text-green-600",
-                alertState.type === 'error' && "bg-red-50 text-red-600",
-                alertState.type === 'warning' && "bg-amber-50 text-amber-600",
-                alertState.type === 'confirm' && "bg-emerald-50 text-emerald-600",
-                alertState.type === 'info' && "bg-blue-50 text-blue-600"
-              )}>
-                {alertState.type === 'success' && <CheckCircle2 className="w-5 h-5" />}
-                {alertState.type === 'error' && <XCircle className="w-5 h-5" />}
-                {alertState.type === 'warning' && <AlertTriangle className="w-5 h-5" />}
-                {alertState.type === 'confirm' && <HelpCircle className="w-5 h-5" />}
-                {alertState.type === 'info' && <HelpCircle className="w-5 h-5" />}
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="text-xs font-bold text-gray-900 mb-0.5">{alertState.title}</h3>
-                <p className="text-[11px] text-gray-600 whitespace-pre-line leading-relaxed">{alertState.message}</p>
-              </div>
-            </div>
-            {alertState.type === 'confirm' && (
-              <div className="mt-3 flex justify-end gap-2">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    alertState.onCancel();
-                  }}
-                  className="px-3 py-1 text-[10px] font-semibold text-gray-500 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    alertState.onConfirm();
-                  }}
-                  className="px-4 py-1 text-[10px] font-semibold text-white rounded-lg shadow-sm bg-[#006241] hover:bg-[#008F59] transition-colors cursor-pointer"
-                >
-                  Aceptar
-                </button>
-              </div>
-            )}
-            {alertState.type !== 'confirm' && (
-              <div className={clsx(
-                "absolute bottom-0 left-0 h-[3px] animate-shrink-width",
-                alertState.type === 'success' && "bg-green-600",
-                alertState.type === 'error' && "bg-red-600",
-                alertState.type === 'warning' && "bg-amber-600",
-                alertState.type === 'info' && "bg-[#006241]"
-              )} />
-            )}
-          </div>
-        </div>
-      )}
+
 
     </div>
   );

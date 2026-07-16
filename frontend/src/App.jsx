@@ -1,6 +1,7 @@
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './Login';
 import Dashboard from './Dashboard';
+import { ToastProvider } from './ToastContext';
 
 function PrivateRoute({ children }) {
   return localStorage.getItem('jwtToken') ? children : <Navigate to="/login" replace />;
@@ -12,13 +13,15 @@ function PublicRoute({ children }) {
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-        <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
-    </Router>
+    <ToastProvider>
+      <Router>
+        <Routes>
+          <Route path="/login"     element={<PublicRoute><Login /></PublicRoute>} />
+          <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+          <Route path="*"          element={<Navigate to="/login" replace />} />
+        </Routes>
+      </Router>
+    </ToastProvider>
   );
 }
 

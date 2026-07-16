@@ -74,4 +74,32 @@ body {
   animation: shrinkWidth 5s linear forwards;
 }
 
+/* Toast slide-in from right */
+@keyframes slideInRight {
+  from { transform: translateX(110%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
 
+/* Toast slide-out to right */
+@keyframes slideOutRight {
+  from { transform: translateX(0);    opacity: 1; }
+  to   { transform: translateX(110%); opacity: 0; }
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slide-out-right {
+  animation: slideOutRight 0.2s ease-in forwards;
+}
+
+/* Progress bar with variable duration (set --shrink-duration inline) */
+@keyframes shrinkWidthVar {
+  from { width: 100%; }
+  to   { width: 0%; }
+}
+
+.animate-shrink-width-var {
+  animation: shrinkWidthVar var(--shrink-duration, 5s) linear forwards;
+}
