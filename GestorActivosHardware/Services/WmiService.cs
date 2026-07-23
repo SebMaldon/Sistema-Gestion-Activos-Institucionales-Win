@@ -57,8 +57,16 @@ namespace GestorActivosHardware.Services
         public System.Collections.Generic.List<ProgramaInfo> programas { get; set; } = new System.Collections.Generic.List<ProgramaInfo>();
     }
 
+    /// <summary>
+    /// Servicio estático que encapsula todas las llamadas de bajo nivel a WMI, Registro y PowerShell
+    /// para extraer la telemetría y especificaciones técnicas del hardware.
+    /// </summary>
     public static class WmiService
     {
+        /// <summary>
+        /// Busca programas instalados (clásicos Win32) explorando las llaves del Registro de Windows.
+        /// Filtra actualizaciones y paquetes redistribuibles.
+        /// </summary>
         private static void GetProgramsFromRegistry(string registryKeyPath, Microsoft.Win32.RegistryKey rootKey, System.Collections.Generic.List<ProgramaInfo> list, System.Collections.Generic.HashSet<string> seen)
         {
             try
@@ -120,6 +128,9 @@ namespace GestorActivosHardware.Services
             public string Publisher { get; set; }
         }
 
+        /// <summary>
+        /// Extrae las aplicaciones de la Tienda de Windows (UWP/Appx) utilizando un script de PowerShell.
+        /// </summary>
         private static void GetAppxPackages(System.Collections.Generic.List<ProgramaInfo> list, System.Collections.Generic.HashSet<string> seen)
         {
             try
@@ -175,6 +186,9 @@ namespace GestorActivosHardware.Services
         // ────────────────────────────────────────────────────────────────────────
         // TAREA 1: WMI hardware puro (sin cuentas, programas ni antivirus)
         // ────────────────────────────────────────────────────────────────────────
+        /// <summary>
+        /// Recopila información base del hardware: Número de serie, MAC, IPs, CPU, RAM, Almacenamiento, OS y Monitores conectados.
+        /// </summary>
         private static void FillHardware(HardwareInfo info)
         {
             try
@@ -411,6 +425,9 @@ namespace GestorActivosHardware.Services
         // ────────────────────────────────────────────────────────────────────────
         // TAREA 2: Fecha de actualización de antivirus
         // ────────────────────────────────────────────────────────────────────────
+        /// <summary>
+        /// Obtiene la última fecha en que Windows Defender actualizó sus firmas de seguridad.
+        /// </summary>
         private static string GetAntivirusDate()
         {
             try
@@ -451,6 +468,10 @@ namespace GestorActivosHardware.Services
         // ────────────────────────────────────────────────────────────────────────
         // TAREA 3: Email del usuario actual (AD → Registro)
         // ────────────────────────────────────────────────────────────────────────
+        /// <summary>
+        /// Resuelve el correo institucional (@imss.gob.mx) del usuario logueado actualmente.
+        /// Intenta a través de Active Directory y luego como respaldo desde el Registro.
+        /// </summary>
         private static string GetCurrentUserEmail()
         {
             // Intento 1: PowerShell ADSI
@@ -495,6 +516,9 @@ namespace GestorActivosHardware.Services
         // ────────────────────────────────────────────────────────────────────────
         // TAREA 4: Cuentas locales con roles y correos
         // ────────────────────────────────────────────────────────────────────────
+        /// <summary>
+        /// Enumera todas las cuentas de usuario de la estación de trabajo y determina sus privilegios (Admin, Estándar).
+        /// </summary>
         private static System.Collections.Generic.List<CuentaInfo> GetCuentas()
         {
             var result = new System.Collections.Generic.List<CuentaInfo>();
@@ -604,6 +628,9 @@ namespace GestorActivosHardware.Services
         // ────────────────────────────────────────────────────────────────────────
         // TAREA 5: Programas instalados (Registro + AppX)
         // ────────────────────────────────────────────────────────────────────────
+        /// <summary>
+        /// Agrupa los programas clásicos de Registro (x64 y x86) y los de Windows Store (Appx).
+        /// </summary>
         private static System.Collections.Generic.List<ProgramaInfo> GetProgramas()
         {
             var list = new System.Collections.Generic.List<ProgramaInfo>();
@@ -620,6 +647,10 @@ namespace GestorActivosHardware.Services
         // ────────────────────────────────────────────────────────────────────────
         // Entry point — corre las 5 tareas en paralelo
         // ────────────────────────────────────────────────────────────────────────
+        /// <summary>
+        /// Punto de entrada unificado. Dispara todas las funciones de recolección en paralelo
+        /// utilizando tareas asíncronas (Task.Run) para acelerar el barrido WMI y consolidar el payload final.
+        /// </summary>
         public static HardwareInfo GetHardwareInfo()
         {
             var info = new HardwareInfo
