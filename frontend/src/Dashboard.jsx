@@ -1,31 +1,43 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// IMPORTS
+// ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+// Sistema de notificaciones Toast (alertas tipo popup que aparecen en esquina)
 import { useToast, useToastQueue } from './ToastContext';
+// Cliente que llama al servicio C# local (localhost:6060) para extraer datos WMI del hardware
 import { fetchHardwareInfo } from './services/wmiClient';
 import {
-  getCatalogs,
-  getUbicacionesPorUnidad,
-  saveAsset,
-  queryGraphQL,
-  logout,
-  searchUsuarios,
-  solicitarActualizacionBien,
-  getUserRole,
-  procesarMonitoresEquipo,
-  getNotasBien,
-  createNotaBien,
-  saveDirectSpecsAndPrograms,
-  checkIpUsage,
-  liberarIpEquipo,
-  updateUsuarioResguardo
+  getCatalogs,              // Carga listas desplegables: unidades, modelos, marcas, segmentos
+  getUbicacionesPorUnidad,  // Ubica físicamente el bien dentro de un edificio/unidad médica
+  saveAsset,                // Crea/actualiza un bien (equipo) en la BD central
+  queryGraphQL,             // Petición GraphQL genérica para consultas ad hoc
+  logout,                   // Limpia token JWT y sesión local
+  searchUsuarios,           // Buscador AJAX de usuarios por nombre o matrícula
+  solicitarActualizacionBien, // Marca el bien para revisión por parte del técnico
+  getUserRole,              // Obtiene el rol del usuario logueado (Técnico, Admin, etc.)
+  procesarMonitoresEquipo,  // Sincroniza la lista de monitores físicos vinculados al equipo
+  getNotasBien,             // Lee notas/comentarios históricos del bien
+  createNotaBien,           // Agrega una nueva nota/comentario al historial del bien
+  saveDirectSpecsAndPrograms, // Guarda especificaciones TI y lista de programas directamente
+  checkIpUsage,             // Verifica si una IP ya está asignada a otro bien en BD
+  liberarIpEquipo,          // Desvincula una IP de un bien antes de reasignarla
+  updateUsuarioResguardo    // Cambia el usuario responsable del equipo
 } from './services/graphqlClient';
+// Íconos vectoriales de la librería lucide-react (SVG en React)
 import { LogOut, RefreshCcw, Save, Server, Monitor, HardDrive, Cpu, MapPin, Network, Activity, Plus, ChevronDown, ChevronUp, Search, MessageSquare, Trash2 } from 'lucide-react';
+// Utilidad para combinar clases de CSS condicionalmente (similar a classnames)
 import { clsx } from 'clsx';
-import SearchableSelect from './components/SearchableSelect';
-import { ModalUbicacion, ModalModeloMarca } from './components/Modals';
-import { IpInput, MacInput } from './components/MaskedInputs';
-import pkg from '../package.json';
+import SearchableSelect from './components/SearchableSelect'; // Select con búsqueda integrada
+import { ModalUbicacion, ModalModeloMarca } from './components/Modals'; // Modales para crear registros en catálogos
+import { IpInput, MacInput } from './components/MaskedInputs'; // Inputs con máscara para IP y MAC
+import pkg from '../package.json'; // Para mostrar la versión del frontend
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ESTADO INICIAL DEL FORMULARIO
+// Sirve como plantilla vacía para el formulario de alta/edición de un activo.
+// Todos los campos reflejan columnas de la tabla 'bienes' + 'especificaciones_TI' en la BD.
+// ─────────────────────────────────────────────────────────────────────────────
 const initialFormState = {
   num_serie: '', num_inv: '', estatus_operativo: 'ACTIVO',
   clave_unidad_ref: '', clave_modelo: '', id_usuario_resguardo: '',
@@ -36,28 +48,37 @@ const initialFormState = {
   tipo_equipo: '', monitores: [], cuentasList: [], programas: []
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// COMPONENTE: NotasBienSection
+// Sub-componente reutilizable que muestra y gestiona el historial de notas
+// de un activo específico (como bitácora de comentarios del técnico).
+// Recibe: idBien (UUID del activo) y title (texto del encabezado acordeón).
+// ─────────────────────────────────────────────────────────────────────────────
 const NotasBienSection = ({ idBien, title }) => {
-  const showAlert = useToast();
-  const [isOpen, setIsOpen] = useState(false);
-  const [notas, setNotas] = useState([]);
-  const [nuevaNota, setNuevaNota] = useState('');
-  const [loadingNotas, setLoadingNotas] = useState(false);
-  const [loadingAction, setLoadingAction] = useState(false);
+  const showAlert = useToast(); // Accede al sistema de alertas del contexto global
+  const [isOpen, setIsOpen] = useState(false);      // Controla si el acordeón está abierto
+  const [notas, setNotas] = useState([]);            // Lista de notas ya existentes en la BD
+  const [nuevaNota, setNuevaNota] = useState('');    // Texto del input para nueva nota
+  const [loadingNotas, setLoadingNotas] = useState(false);  // Spinner mientras carga notas
+  const [loadingAction, setLoadingAction] = useState(false); // Spinner mientras guarda nueva
 
+  // Carga automáticamente las notas cada vez que cambia el idBien (se selecciona otro equipo)
   useEffect(() => {
     if (idBien) {
       loadNotas(idBien);
     }
   }, [idBien]);
 
+  // Alterna apertura/cierre del acordeón de notas
   const toggleOpen = () => {
     setIsOpen(!isOpen);
   };
 
+  // Consulta vía GraphQL el historial de notas del bien y lo guarda en estado local
   const loadNotas = async (id) => {
     try {
       setLoadingNotas(true);
-      const data = await getNotasBien(id);
+      const data = await getNotasBien(id); // Llama al cliente GraphQL
       setNotas(data);
     } catch (err) {
       console.error('Error al cargar notas:', err);
@@ -66,15 +87,16 @@ const NotasBienSection = ({ idBien, title }) => {
     }
   };
 
+  // Crea la nota nueva en BD, limpia el input y recarga la lista
   const handleAddNota = async () => {
-    if (!nuevaNota.trim()) return;
+    if (!nuevaNota.trim()) return; // No envía si el input está vacío o solo tiene espacios
     try {
       setLoadingAction(true);
-      await createNotaBien(idBien, nuevaNota.trim());
-      setNuevaNota('');
-      await loadNotas(idBien);
+      await createNotaBien(idBien, nuevaNota.trim()); // Mutación GraphQL
+      setNuevaNota('');             // Limpia el campo de texto
+      await loadNotas(idBien);      // Refresca la lista de notas
       showAlert('Nota agregada correctamente.', 'success');
-      if (!isOpen) setIsOpen(true);
+      if (!isOpen) setIsOpen(true); // Abre el acordeón automáticamente si estaba cerrado
     } catch (err) {
       showAlert('Error al agregar nota: ' + err.message, 'error');
     } finally {
@@ -148,18 +170,31 @@ const NotasBienSection = ({ idBien, title }) => {
   );
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// COMPONENTE PRINCIPAL: Dashboard
+// Pantalla central de la app. Permite al técnico de TI ver, editar y registrar
+// la información de un equipo de cómputo (activo institucional IMSS).
+// Fusiona datos del escaneo local WMI (hardware real) con la BD central (GraphQL).
+// ─────────────────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const navigate = useNavigate();
+  // Detecta si la app corre dentro de Electron (instalado en el equipo) o en un browser web
   const isElectron = typeof window !== 'undefined' && !!window.process?.versions?.electron;
 
-  // Listeners de auto-actualizacion
+  // ── Listeners OTA (Over-The-Air Updates via Electron) ──────────────────────
+  // Suscribe eventos del main process de Electron para manejar el flujo de actualización.
   useEffect(() => {
-    if (!isElectron) return;
+    if (!isElectron) return; // Si es web, no hay IPC disponible
     const { ipcRenderer } = window.require('electron');
+    // Guarda info de la actualización disponible (versión, estado de descarga, cuenta regresiva)
     const onAvailable  = (_, version) => setUpdateInfo({ version, countdown: null, downloading: false });
+    // Actualiza contador de segundos restantes para la instalación automática
     const onCountdown  = (_, seconds) => setUpdateInfo(prev => prev ? { ...prev, countdown: seconds } : { version: '?', countdown: seconds, downloading: false });
+    // Actualiza porcentaje de progreso de la descarga en tiempo real
     const onProgress   = (_, pct)     => setUpdateInfo(prev => prev ? { ...prev, downloading: true, progress: pct } : null);
+    // Marca que la descarga finalizó, inicia la cuenta regresiva de 5s para instalar
     const onDownloaded = ()           => setUpdateInfo(prev => prev ? { ...prev, downloading: false, downloaded: true, countdown: 5 } : null);
+    // Limpia el estado de update si no hay ninguna disponible o si hubo error
     const onNotAvail   = ()           => setUpdateInfo(null);
     const onError      = ()           => setUpdateInfo(null);
     ipcRenderer.on('update-available',     onAvailable);
@@ -168,6 +203,7 @@ export default function Dashboard() {
     ipcRenderer.on('update-downloaded',    onDownloaded);
     ipcRenderer.on('update-not-available', onNotAvail);
     ipcRenderer.on('update-error',         onError);
+    // Limpieza de listeners al desmontar para evitar fugas de memoria
     return () => {
       ipcRenderer.removeListener('update-available',     onAvailable);
       ipcRenderer.removeListener('update-countdown',     onCountdown);
@@ -178,62 +214,66 @@ export default function Dashboard() {
     };
   }, [isElectron]);
 
-  const showAlert    = useToast();
-  const alertQueue   = useToastQueue();
+  const showAlert    = useToast();     // Hook para disparar alertas visuales (success/error/confirm)
+  const alertQueue   = useToastQueue(); // Cola de alertas activas (para no apilar modales)
 
-  // Bug fix #1: countdown ticker — main emits update-downloaded, renderer counts down then installs
+  // ── Cuenta regresiva automática de instalación ────────────────────────────
+  // Cuando Electron ya bajó la actualización, este efecto cuenta regresiva de 5s
+  // y luego envía la señal al Main Process para cerrar la app e instalar el parche.
   useEffect(() => {
     if (!updateInfo?.downloaded || updateInfo.countdown === null) return;
     if (updateInfo.countdown <= 0) {
+      // Llegó a cero: instruye a Electron para reiniciar e instalar la actualización
       if (isElectron) window.require('electron').ipcRenderer.send('instalar-actualizacion');
       return;
     }
+    // Decrementa el contador cada 1 segundo (tick)
     const t = setTimeout(() => setUpdateInfo(prev => prev ? { ...prev, countdown: prev.countdown - 1 } : null), 1000);
-    return () => clearTimeout(t);
+    return () => clearTimeout(t); // Limpia el timeout si el componente se desmonta antes
   }, [updateInfo?.downloaded, updateInfo?.countdown]);
 
-  // Catalogs
-  const [catUnidades, setCatUnidades] = useState([]);
-  const [catInmuebles, setCatInmuebles] = useState([]);
-  const [catModelos, setCatModelos] = useState([]);
-  const [catMarcas, setCatMarcas] = useState([]);
-  const [catTiposDisp, setCatTiposDisp] = useState([]);
-  const [catUbicaciones, setCatUbicaciones] = useState([]);
+  // ── Estados para catálogos/listas desplegables ───────────────────────────
+  const [catUnidades, setCatUnidades] = useState([]);   // Segmentos de red de todas las unidades médicas
+  const [catInmuebles, setCatInmuebles] = useState([]); // Unidades médicas / inmuebles
+  const [catModelos, setCatModelos] = useState([]);     // Modelos de equipo disponibles en catálogo
+  const [catMarcas, setCatMarcas] = useState([]);       // Marcas (HP, DELL, Lenovo, etc.)
+  const [catTiposDisp, setCatTiposDisp] = useState([]); // Tipos de dispositivo (PC, Laptop, Servidor)
+  const [catUbicaciones, setCatUbicaciones] = useState([]); // Ubicaciones físicas (aulas, oficinas)
 
-  // States
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const [formState, setFormState] = useState(initialFormState);
-  const [dbInfo, setDbInfo] = useState(null); // Reference to check discrepancies
-  const [wmiInfo, setWmiInfo] = useState(null); // Reference to check discrepancies with physical HW
-  const [lastSubmitted, setLastSubmitted] = useState(null); // Reference to check discrepancies
+  // ── Estados principales del formulario y datos ───────────────────────────
+  const [isInitialLoading, setIsInitialLoading] = useState(true); // Muestra pantalla de carga inicial
+  const [formState, setFormState] = useState(initialFormState);   // Datos actuales en el formulario
+  const [dbInfo, setDbInfo] = useState(null);       // Snapshot de BD para detectar discrepancias
+  const [wmiInfo, setWmiInfo] = useState(null);     // Snapshot WMI para comparar con datos guardados
+  const [lastSubmitted, setLastSubmitted] = useState(null); // Último guardado para detectar cambios no guardados
 
-  const [searchSerial, setSearchSerial] = useState('');
-  const [loadingAction, setLoadingAction] = useState(false);
-  const [selectedCuentaIdx, setSelectedCuentaIdx] = useState(0);
+  const [searchSerial, setSearchSerial] = useState(''); // Número de serie buscado manualmente
+  const [loadingAction, setLoadingAction] = useState(false); // Bloquea botones mientras se hace petición
+  const [selectedCuentaIdx, setSelectedCuentaIdx] = useState(0); // Índice de la cuenta seleccionada en tabla
 
+  // Estado que controla qué secciones del acordeón están colapsadas (plegadas)
   const [collapsed, setCollapsed] = useState({
     generales: false,
     seguridad: false,
     especificaciones: false
   });
+  // Alterna collapsed/expanded para una sección específica
   const toggleCollapse = (section) => {
     setCollapsed(prev => ({ ...prev, [section]: !prev[section] }));
   };
 
-  // Modals
-  const [showModalUbicacion, setShowModalUbicacion] = useState(false);
-  const [showModalModelo, setShowModalModelo] = useState(false);
+  // Estados para los modales de creación de datos en catálogos
+  const [showModalUbicacion, setShowModalUbicacion] = useState(false); // Modal para nueva ubicación
+  const [showModalModelo, setShowModalModelo] = useState(false);       // Modal para nuevo modelo
 
-  // Notes state (moved to NotasBienSection component)
-
-  // Load Catalogs on Mount
+  // ── Inicialización al montar ──────────────────────────────────────────────
+  // Al abrir el Dashboard, primero carga los catálogos y luego escanea el hardware local.
   useEffect(() => {
     const initDashboard = async () => {
       setIsInitialLoading(true);
       try {
-        await loadAllCatalogs();
-        // Disparar carga local automáticamente simulando el botón
-        await loadWMI();
+        await loadAllCatalogs(); // Trae listas desplegables desde el servidor GraphQL
+        await loadWMI();         // Escanea hardware local vía servicio C# y busca en BD
       } finally {
         setIsInitialLoading(false);
       }
@@ -241,10 +281,12 @@ export default function Dashboard() {
     initDashboard();
   }, []);
 
-  // Polling para actualizaciones (5 mins)
+  // ── Polling de sincronización con BD (cada 5 minutos) ────────────────────
+  // Si alguien más edita este mismo equipo en otra terminal o en la web,
+  // detecta el cambio comparando `fecha_actualizacion` y ofrece recargar la vista.
   useEffect(() => {
     const checkUpdates = async () => {
-      if (!searchSerial || !dbInfo?.fecha_actualizacion) return;
+      if (!searchSerial || !dbInfo?.fecha_actualizacion) return; // Solo si ya hay un equipo cargado
       try {
         const query = `query { bienByTermino(termino: "${searchSerial}") { fecha_actualizacion } }`;
         const data = await queryGraphQL(query);
@@ -254,10 +296,11 @@ export default function Dashboard() {
           const currentT = new Date(dbInfo.fecha_actualizacion).getTime();
           
           if (latestT > currentT) {
+            // Si la ventana no está activa, recarga silenciosamente sin preguntar
             if (document.visibilityState === 'hidden' || !document.hasFocus()) {
               await loadWMI();
             } else if (alertQueue.length === 0) {
-              // Fix: skip confirm if another alert already open
+              // Muestra confirmación solo si no hay otro modal/alerta abierta ya
               const yes = await showAlert('Se encontró una actualización de datos en el servidor. ¿Deseas recargar la vista?', 'confirm', 'Actualización Disponible');
               if (yes) await loadWMI();
             }
@@ -265,20 +308,25 @@ export default function Dashboard() {
         }
       } catch (err) { }
     };
-    const interval = setInterval(checkUpdates, 300000); // 5 min
-    return () => clearInterval(interval);
+    const interval = setInterval(checkUpdates, 300000); // Dispara cada 5 minutos
+    return () => clearInterval(interval); // Limpia el intervalo al desmontar componente
   }, [searchSerial, dbInfo?.fecha_actualizacion]);
 
+  // ── Carga de catálogos desde el servidor GraphQL ──────────────────────────
+  // Trae todas las listas desplegables en una sola llamada para evitar múltiples requests.
+  // Luego transforma los objetos crudos en el formato { value, label } que esperan los Selects.
   const loadAllCatalogs = async () => {
     try {
       const data = await getCatalogs();
       if (data) {
         if (data.segmentos) {
+          // Crea un mapa de clave_unidad -> nombre para enriquecer la etiqueta de cada segmento
           const unidadMap = {};
           (data.unidades || []).forEach(u => { unidadMap[u.clave] = u.desc_corta || u.descripcion; });
           setCatUnidades(data.segmentos.map(s => { 
             const base = s.ip ? `${s.ip}/${s.bits} - ${s.nombre}` : s.nombre;
             const unidadNombre = s.clave ? (unidadMap[s.clave] || s.clave) : null;
+            // Etiqueta final incluye a qué unidad médica pertenece el segmento
             const label = unidadNombre ? `${base} (Propiedad de: ${unidadNombre})` : base;
             return { value: String(s.id_segmento), label, clave: s.clave, ip: s.ip, bits: s.bits };
           }));
@@ -288,6 +336,7 @@ export default function Dashboard() {
         } else {
           setCatInmuebles([]);
         }
+        // Solo muestra modelos de tipo 3 y 4 (computadoras de escritorio y laptops)
         setCatModelos(data.catModelos.filter(m => m.tipo_disp === 3 || m.tipo_disp === 4).map(m => ({ value: m.clave_modelo, label: m.descrip_disp })));
         setCatMarcas(data.marcas.map(m => ({ value: String(m.clave_marca), label: m.marca })));
         setCatTiposDisp(data.tiposDispositivo.map(t => ({ value: String(t.tipo_disp), label: t.nombre_tipo })));
@@ -298,106 +347,123 @@ export default function Dashboard() {
     }
   };
 
-  // Watch Unidad Change -> Fetch Ubicaciones
+  // ── Efecto reactivo: cambio de unidad médica → recargar ubicaciones ───────
+  // Cuando el técnico selecciona una unidad médica diferente, actualiza automáticamente
+  // la lista de ubicaciones físicas (cuartos, oficinas) disponibles dentro de ese inmueble.
   useEffect(() => {
     if (formState.clave_unidad_ref) {
       getUbicacionesPorUnidad(formState.clave_unidad_ref).then(data => {
         setCatUbicaciones(data.map(u => ({ value: String(u.id_ubicacion), label: u.nombre_ubicacion })));
       });
     } else {
-      setCatUbicaciones([]);
+      setCatUbicaciones([]); // Si no hay unidad seleccionada, vacía la lista
     }
   }, [formState.clave_unidad_ref]);
 
-  // Watch IP changes -> Auto assign Segmento
+  // ── Efecto reactivo: cambio de IP → Auto-asignar Segmento de Red ──────────
+  // Cuando el técnico escribe o cambia la IP del equipo, este efecto busca automáticamente
+  // a qué segmento de red (subred) pertenece esa IP usando operaciones bitwise de CIDR.
+  // Si encuentra match, pre-selecciona el segmento y su unidad médica asociada.
   useEffect(() => {
     if (formState.dir_ip && catUnidades.length > 0) {
-      const primaryIp = formState.dir_ip.split('/')[0].trim();
+      const primaryIp = formState.dir_ip.split('/')[0].trim(); // Toma solo la IP (sin máscara)
       
+      // Convierte una IP string (ej: "10.1.2.3") a un entero de 32 bits para hacer aritmética binaria
       const ip2long = (ip) => {
         const parts = ip.split('.');
         if (parts.length !== 4) return null;
         return parts.reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
       };
 
+      // Verifica si una IP pertenece a una subred usando su dirección base y máscara en bits (CIDR)
       const isIpInSubnet = (ip, subnetIp, bits) => {
         if (!subnetIp || !bits) return false;
         const ipLong = ip2long(ip);
         const subLong = ip2long(subnetIp);
         if (ipLong === null || subLong === null) return false;
-        const mask = ~((1 << (32 - bits)) - 1) >>> 0;
-        return (ipLong & mask) === (subLong & mask);
+        const mask = ~((1 << (32 - bits)) - 1) >>> 0; // Crea máscara binaria de bits CIDR
+        return (ipLong & mask) === (subLong & mask);   // Compara la porción de red
       };
 
+      // Busca el primer segmento del catálogo que contenga la IP ingresada
       const matchedSegment = catUnidades.find(s => isIpInSubnet(primaryIp, s.ip, s.bits));
       if (matchedSegment) {
         if (formState.id_segmento !== matchedSegment.value) {
-          updateForm('id_segmento', matchedSegment.value);
+          updateForm('id_segmento', matchedSegment.value); // Pre-selecciona el segmento
           if (matchedSegment.clave && !formState.clave_unidad_ref) {
-            updateForm('clave_unidad_ref', matchedSegment.clave);
+            updateForm('clave_unidad_ref', matchedSegment.clave); // Pre-selecciona la unidad médica
           }
         }
       } else if (formState.id_segmento) {
-        updateForm('id_segmento', '');
+        updateForm('id_segmento', ''); // Si la IP no pertenece a ninguna subred conocida, limpia
       }
     } else if (!formState.dir_ip && formState.id_segmento) {
-      updateForm('id_segmento', '');
+      updateForm('id_segmento', ''); // Si borraron la IP, limpia el segmento también
     }
   }, [formState.dir_ip, catUnidades]);
 
+  // Helper genérico para actualizar un campo del formulario sin mutar el estado directamente
   const updateForm = (key, value) => {
     setFormState(prev => ({ ...prev, [key]: value }));
   };
 
+  // Limpia la sesión JWT local y redirige a la pantalla de login
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
 
-  // Load WMI
+  // ── loadWMI: Carga datos físicos del hardware + fusión con BD ─────────────
+  // Función crítica. Hace dos cosas en secuencia:
+  // 1. Llama al servicio C# local (localhost:6060) para obtener telemetría WMI real.
+  // 2. Busca ese equipo en la BD central (syncDB) y fusiona datos de BD con los de WMI.
   const loadWMI = async () => {
     setLoadingAction(true);
     try {
-      // 1. Traer datos WMI
+      // 1. Extrae hardware info del servicio C# local corriendo en Windows
       const data = await fetchHardwareInfo();
-      setWmiInfo(data);
+      setWmiInfo(data); // Guarda snapshot de WMI para detectar discrepancias después
 
       const scannedSerial = data.num_serie || '';
+      // Rellena el buscador de número de serie solo si aún está vacío
       if (scannedSerial && !searchSerial) setSearchSerial(scannedSerial);
 
-      // 2. Volcar datos locales al state primero
+      // 2. Vuelca datos WMI al formulario como punto de partida
       setFormState(prev => {
-        // Siempre resetear al estado inicial para limpiar datos de una búsqueda anterior
+        // Siempre parte del estado vacío para limpiar datos de búsquedas previas
         const baseState = initialFormState;
         const newData = { ...baseState, ...data };
 
+        // Normaliza campos que vienen con nombres diferentes entre C# y la BD
         if (data.windows_serial || data.serial_number) {
           newData.windows_serial = data.windows_serial || data.serial_number;
         }
-        if (data.nom_pc) newData.nombre_host = data.nom_pc;
+        if (data.nom_pc) newData.nombre_host = data.nom_pc; // C# usa 'nom_pc', BD usa 'nombre_host'
 
-        // Cuentas locales (WMI)
-        const norm = (s) => (s || '').trim().toLowerCase();
+        // ── Procesamiento de cuentas de Windows ──
+        // WMI devuelve una lista de usuarios del sistema. Se enriquecen con el correo
+        // del usuario actualmente logueado si coincide el nombre de cuenta.
         const wmiCuentas = data.cuentasList || [];
         const finalCuentas = [];
         
         wmiCuentas.forEach(wmiC => {
-          let cWin = (wmiC.cuenta_windows || '').replace(/\\\\/g, '\\');
+          let cWin = (wmiC.cuenta_windows || '').replace(/\\\\/g, '\\'); // Normaliza backslashes dobles
           let cCorreo = wmiC.correo || '';
           
+          // Si la cuenta no tiene correo pero es la del usuario logueado actualmente, intenta asignárselo
           if (!cCorreo && data.usuario_pc && cWin.toLowerCase().includes(data.usuario_pc.toLowerCase())) {
              cCorreo = (data.correos_usuario?.length > 0) ? data.correos_usuario[0] : '';
           }
 
           finalCuentas.push({
-            _new: true, _editing: false, _selected: false,
+            _new: true, _editing: false, _selected: false, // Flags de UI para manejo de tabla
             cuenta_windows: cWin,
             correo: cCorreo,
             tipo_user: wmiC.tipo_user || ''
           });
         });
 
-        // Fallback si WMI no trae cuentasList pero sí usuario_pc
+        // Fallback: si WMI no devolvió lista de cuentas pero sí sabe quién está logueado
         if (finalCuentas.length === 0 && data.usuario_pc) {
           finalCuentas.push({
             _new: true, _editing: false, _selected: false,
@@ -407,6 +473,7 @@ export default function Dashboard() {
           });
         }
 
+        // Ordena las cuentas poniendo al usuario actual al inicio de la lista
         const isCurrent = (c) => data.usuario_pc && (c.cuenta_windows || '').toLowerCase().includes(data.usuario_pc.toLowerCase());
         newData.cuentasList = finalCuentas.sort((a, b) => {
           if (isCurrent(a) && !isCurrent(b)) return -1;
@@ -414,6 +481,8 @@ export default function Dashboard() {
           return 0;
         });
 
+        // ── Procesamiento de adaptadores de red ──
+        // Toma los primeros 3 adaptadores (wired/wifi) y los normaliza en dir_ip_list
         if (data.adaptadores_red?.length > 0) {
           newData.dir_ip_list = data.adaptadores_red.slice(0, 3).map(a => ({ ip: a.ip, mac: a.mac, adapter: a.descripcion }));
           newData.dir_ip = data.dir_ip;
@@ -422,7 +491,9 @@ export default function Dashboard() {
           newData.dir_ip_list = [{ ip: data.dir_ip, mac: data.mac_address || '', adapter: 'WMI' }];
         }
 
-        // --- Calcular segmento localmente aquí mismo ---
+        // ── Auto-detección de Segmento de Red ──
+        // Realiza el cálculo CIDR aquí mismo (sin esperar al useEffect) para que el
+        // segmento quede asignado desde la primera carga sin renderización intermedia.
         if (newData.dir_ip && catUnidades && catUnidades.length > 0) {
           const primaryIp = Array.isArray(newData.dir_ip) ? newData.dir_ip[0] : (newData.dir_ip ? String(newData.dir_ip).split('/')[0].trim() : '');
           
@@ -449,14 +520,13 @@ export default function Dashboard() {
             }
           }
         }
-        // ----------------------------------------------
 
-        return newData;
+        return newData; // Retorna el estado actualizado con todos los datos WMI procesados
       });
 
-      // 3. Ahora que el state tiene WMI, buscar en BD todo el registro y fusionarlo (syncDB)
+      // 3. Con el número de serie ya conocido, busca en la BD central y fusiona datos
+      // 'preserveLocal=true' indica que los campos WMI prevalecen sobre los de BD cuando hay conflicto
       if (scannedSerial) {
-        // Ejecutamos syncDB asíncronamente y preservamos la data WMI local
         await syncDB(scannedSerial, true);
       }
 
