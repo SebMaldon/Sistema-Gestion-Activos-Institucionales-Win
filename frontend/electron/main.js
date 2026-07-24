@@ -41,6 +41,22 @@ autoUpdater.logger.transports.file.level = 'info';
 autoUpdater.autoDownload = false;
 autoUpdater.requestHeaders = { "Cache-Control": "no-cache" };
 
+async function asignarServidorMasRapido() {
+  const urls = ['http://11.1.19.4/updates/', 'http://11.1.19.9/updates/'];
+  try {
+    const masRapido = await Promise.any(
+      urls.map(async (url) => {
+        const req = await fetch(url + 'latest.yml', { method: 'HEAD', signal: AbortSignal.timeout(3000) });
+        if (!req.ok) throw new Error('Bad HTTP status');
+        return url;
+      })
+    );
+    autoUpdater.setFeedURL({ provider: 'generic', url: masRapido });
+  } catch (e) {
+    console.log('Todos los servidores de update caídos.');
+  }
+}
+
 function setupAutoUpdater() {
   const sendToRenderer = (channel, payload) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -103,16 +119,19 @@ function setupAutoUpdater() {
 
 
   // Ciclo de 3 horas para revisar si hay actualizaciones (.yml ligero)
-  setInterval(() => {
+  setInterval(async () => {
     if (app.isPackaged) {
       console.log('Revisión cíclica de 3 horas...');
+      await asignarServidorMasRapido();
       autoUpdater.checkForUpdates().catch(console.error);
     }
   }, 10800000); // 3 horas
 
   // Revisión inicial (inmediata, pues el jitter pesado está en la descarga)
   if (app.isPackaged) {
-    autoUpdater.checkForUpdates().catch(console.error);
+    asignarServidorMasRapido().then(() => {
+      autoUpdater.checkForUpdates().catch(console.error);
+    });
   }
 
   // Marcar como listo de inmediato para no bloquear la pantalla inicial
@@ -120,8 +139,9 @@ function setupAutoUpdater() {
 }
 
 // Expuesto para polling si se requiere
-ipcMain.on('checar-actualizaciones', () => {
+ipcMain.on('checar-actualizaciones', async () => {
   if (app.isPackaged) {
+    await asignarServidorMasRapido();
     autoUpdater.checkForUpdates().catch(console.error);
   }
 });
@@ -154,7 +174,7 @@ function createWindow() {
     minWidth: 1200,
     minHeight: 800,
     show: true,
-    title: 'Gestor Activos - IMSS',
+    title: 'SGH - Sistema Gestor de Hardware',
     icon: !app.isPackaged
       ? path.join(__dirname, '../public/IMSS_logo_blanco.png')
       : path.join(__dirname, '../dist/IMSS_logo_blanco.png'),
@@ -224,7 +244,7 @@ function createTray() {
     }
   ]);
 
-  tray.setToolTip(`Gestor Activos - IMSS v${app.getVersion()}`);
+  tray.setToolTip(`SGH - Sistema Gestor de Hardware v${app.getVersion()}`);
   tray.setContextMenu(contextMenu);
 
   tray.on('click', () => showOrCreateWindow());
@@ -270,9 +290,10 @@ app.on('window-all-closed', () => {
   // No hacemos nada aqui
 });
 
-ipcMain.on('checar-actualizaciones', () => {
+ipcMain.on('checar-actualizaciones', async () => {
   if (app.isPackaged) {
     console.log('Verificación manual de actualizaciones solicitada.');
+    await asignarServidorMasRapido();
     autoUpdater.checkForUpdates().catch(console.error);
   }
 });

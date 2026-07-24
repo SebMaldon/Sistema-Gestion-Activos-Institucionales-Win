@@ -31,10 +31,10 @@ namespace GestorActivosHardware
             });
 
             // Configura el host para que pueda ejecutarse como un Servicio de Windows real (services.msc).
-            // Le asigna el nombre "SGHI" (Sistema de Gestión de Hardware IMSS) en el registro de Windows.
+            // Le asigna el nombre "SGH" (Sistema Gestor de Hardware) en el registro de Windows.
             builder.Host.UseWindowsService(options =>
             {
-                options.ServiceName = "SGHI";
+                options.ServiceName = "SGH";
             });
 
             // Fuerza al servidor web interno Kestrel a escuchar únicamente en localhost por el puerto 6060.
@@ -59,9 +59,9 @@ namespace GestorActivosHardware
             // que estará vivo mientras el servicio de Windows siga en ejecución.
             builder.Services.AddHostedService<AutoSyncWorker>();
 
-            // Registra y configura un cliente HTTP con el nombre "sghi" para inyección de dependencias.
+            // Registra y configura un cliente HTTP con el nombre "sgh" para inyección de dependencias.
             // Establece un Timeout global de 30 segundos para evitar colgar el agente si el backend no responde.
-            builder.Services.AddHttpClient("sghi", c =>
+            builder.Services.AddHttpClient("sgh", c =>
             {
                 c.Timeout = TimeSpan.FromSeconds(30);
             });

@@ -1,0 +1,15 @@
+<linker>
+  <!-- Tipos propios del proyecto: HardwareInfo, SyncHashes, etc. los usa JsonSerializer por reflection -->
+  <assembly fullname="GestorActivosHardware" preserve="all" />
+  <!-- JsonSerializer reflection support -->
+  <assembly fullname="System.Text.Json" preserve="all" />
+  <!-- WMI usa reflection masiva, conservar completo -->
+  <assembly fullname="System.Management" preserve="all" />
+  <!-- DirectoryServices también -->
+  <assembly fullname="System.DirectoryServices" preserve="all" />
+  <!-- DotNetEnv lee archivos por nombre, necesita conservar -->
+  <assembly fullname="DotNetEnv" preserve="all" />
+  <!-- ASP.NET Core minimal API usa reflection para binding de endpoints -->
+  <assembly fullname="Microsoft.AspNetCore" preserve="all" />
+  <assembly fullname="Microsoft.AspNetCore.Http" preserve="all" />
+</linker>

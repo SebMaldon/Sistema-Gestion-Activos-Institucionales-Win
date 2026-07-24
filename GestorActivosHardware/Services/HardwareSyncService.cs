@@ -64,8 +64,8 @@ namespace GestorActivosHardware.Services
         /// </summary>
         private async Task<JsonElement> QueryGraphQLAsync(string query, string token = null)
         {
-            // Crea un cliente HTTP usando la configuración nombrada "sghi" (tiene timeout de 30s).
-            var client = _httpClientFactory.CreateClient("sghi");
+            // Crea un cliente HTTP usando la configuración nombrada "sgh" (tiene timeout de 30s).
+            var client = _httpClientFactory.CreateClient("sgh");
             var req = new HttpRequestMessage(HttpMethod.Post, GqlUrl);
             
             // Firma la petición identificando al Agente Windows.

@@ -2,9 +2,9 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <AssemblyName>SGHI SERVICIO</AssemblyName>
-    <AssemblyTitle>Sistema de Gestión de Hardware IMSS</AssemblyTitle>
-    <Description>Sistema de Gestión de Hardware IMSS</Description>
+    <AssemblyName>SGH SERVICIO</AssemblyName>
+    <AssemblyTitle>Sistema Gestor de Hardware</AssemblyTitle>
+    <Description>Sistema Gestor de Hardware</Description>
     <Company>IMSS</Company>
     <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
@@ -13,6 +13,11 @@
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
     <PublishReadyToRun>true</PublishReadyToRun>
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimmerRootDescriptor>trimmer-roots.xml</TrimmerRootDescriptor>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
+    <NoWarn>IL2026;IL2104</NoWarn>
     <Version>1.0.7</Version>
     <AssemblyVersion>1.0.7</AssemblyVersion>
     <FileVersion>1.0.7</FileVersion>

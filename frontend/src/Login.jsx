@@ -188,7 +188,7 @@ export default function Login() {
         style={{ WebkitAppRegion: 'drag' }}
       >
         <img src="IMSS_Logosímbolo_Blanco.png" alt="IMSS" className="h-5 w-5 object-contain mr-2" />
-        <span>SGHI</span>
+        <span>SGH</span>
       </div>
 
       {/* Contenedor centralizado para la tarjeta blanca del formulario */}
@@ -200,7 +200,7 @@ export default function Login() {
           {/* Cabecera (Logo IMSS y Títulos) */}
           <div className="flex flex-col items-center mb-10">
             <img src="imssFavicon.png" alt="IMSS Logo" className="w-20 h-20 object-contain mb-4" />
-            <h1 className="text-3xl font-bold text-[#333333] tracking-tight">SGHI</h1>
+            <h1 className="text-3xl font-bold text-[#333333] tracking-tight">SGH</h1>
             <p className="text-[#757575] mt-2 text-sm uppercase tracking-widest font-medium">Hardware &amp; Red — IMSS</p>
           </div>
 

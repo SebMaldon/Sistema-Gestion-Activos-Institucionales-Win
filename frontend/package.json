@@ -1,8 +1,8 @@
 {
   "name": "frontend",
   "private": true,
-  "productName": "SGHI",
-  "version": "2.0.7",
+  "productName": "SGH",
+  "version": "2.0.8",
   "description": "Sistema de Gestion de Hardware IMSS",
   "author": "IMSS",
   "type": "module",
@@ -47,8 +47,8 @@
   "build": {
     "compression": "maximum",
     "appId": "com.imss.gestoractivos",
-    "productName": "SGHI",
-    "artifactName": "SGHI_Setup.${ext}",
+    "productName": "SGH",
+    "artifactName": "SGH_Setup.${ext}",
     "publish": {
       "provider": "generic",
       "url": "http://11.1.19.4/updates/"
@@ -81,11 +81,12 @@
       "perMachine": true,
       "allowToChangeInstallationDirectory": true,
       "include": "electron/installer.nsh",
-      "uninstallDisplayName": "SGHI",
+      "uninstallDisplayName": "SGH",
       "createDesktopShortcut": false,
       "createStartMenuShortcut": true,
-      "shortcutName": "SGHI",
-      "allowElevation": true
+      "shortcutName": "SGH",
+      "allowElevation": true,
+      "differentialPackage": true
     }
   }
 }
