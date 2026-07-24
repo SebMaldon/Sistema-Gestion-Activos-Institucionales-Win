@@ -180,6 +180,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   // Detecta si la app corre dentro de Electron (instalado en el equipo) o en un browser web
   const isElectron = typeof window !== 'undefined' && !!window.process?.versions?.electron;
+  const [updateInfo, setUpdateInfo] = useState(null);
 
   // ── Listeners OTA (Over-The-Air Updates via Electron) ──────────────────────
   // Suscribe eventos del main process de Electron para manejar el flujo de actualización.

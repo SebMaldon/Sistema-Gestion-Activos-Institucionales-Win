@@ -1,6 +1,6 @@
 <linker>
   <!-- Tipos propios del proyecto: HardwareInfo, SyncHashes, etc. los usa JsonSerializer por reflection -->
-  <assembly fullname="GestorActivosHardware" preserve="all" />
+  <assembly fullname="SGH SERVICIO" preserve="all" />
   <!-- JsonSerializer reflection support -->
   <assembly fullname="System.Text.Json" preserve="all" />
   <!-- WMI usa reflection masiva, conservar completo -->

@@ -17,6 +17,9 @@
   ; Detener servicio SGH si ya existe (actualización normal)
   ExecWait 'sc stop "SGH"'
   Sleep 2000
+
+  ; Forzar carpeta de destino a C:\Program Files\SGH (64-bit)
+  StrCpy $INSTDIR "$PROGRAMFILES64\SGH"
 !macroend
 
 !macro customInstall
