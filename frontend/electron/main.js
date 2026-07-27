@@ -193,7 +193,7 @@ function createWindow() {
 
   mainWindow.setMenuBarVisibility(false);
   
-  if (process.env.VITE_SHOW_DEVTOOLS === 'true' || app.isPackaged) {
+  if (process.env.VITE_SHOW_DEVTOOLS === 'true') {
     mainWindow.webContents.openDevTools();
   }
   

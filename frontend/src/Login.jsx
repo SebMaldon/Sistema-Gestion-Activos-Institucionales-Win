@@ -130,7 +130,7 @@ export default function Login() {
       return;
     }
     setError(''); // Limpia errores anteriores
-    
+    setLoading(true); // Activa el spinner visual inmediatamente
     let equipoInfo = null;
     // Controlador de aborto para no quedarse colgado esperando al servicio de Windows WMI
     const ctrl = new AbortController();
@@ -152,8 +152,6 @@ export default function Login() {
       // Cancela el temporizador para no dejar fugas de memoria
       clearTimeout(wmiTimeout);
     }
-
-    setLoading(true); // Activa el spinner visual en el botón
 
     try {
       // Llama al servicio GraphQL pasando credenciales y número de serie (si se obtuvo)
