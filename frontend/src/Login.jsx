@@ -145,7 +145,7 @@ export default function Login() {
         const data = await wmiRes.json();
         if (data.num_serie) equipoInfo = data.num_serie;
       }
-    } catch (e) {
+    } catch {
       // Si el servicio de Windows está caído o tardó más de 3 segundos, ignoramos silenciosamente
       // y procedemos a hacer el login con equipoInfo en null.
     } finally {
@@ -164,7 +164,7 @@ export default function Login() {
       } else {
         setError('Credenciales incorrectas');
       }
-    } catch (err) {
+    } catch {
       setError('Error de conexión o credenciales inválidas');
     } finally {
       setLoading(false); // Apaga el spinner sea éxito o fracaso

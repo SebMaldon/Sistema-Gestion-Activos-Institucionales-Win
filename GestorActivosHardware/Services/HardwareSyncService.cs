@@ -62,7 +62,7 @@ namespace GestorActivosHardware.Services
         /// Prepara la cabecera 'x-origen' para que el backend sepa que la llamada viene de Windows,
         /// e inyecta el token Bearer si se provee. Retorna el nodo 'data' de la respuesta JSON.
         /// </summary>
-        private async Task<JsonElement> QueryGraphQLAsync(string query, string token = null)
+        private async Task<JsonElement> QueryGraphQLAsync(string query, string? token = null)
         {
             // Crea un cliente HTTP usando la configuración nombrada "sgh" (tiene timeout de 30s).
             var client = _httpClientFactory.CreateClient("sgh");

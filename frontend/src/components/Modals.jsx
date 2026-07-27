@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { X, Loader2, Save } from 'lucide-react';
 import SearchableSelect from './SearchableSelect';
 import { createUbicacion, createModelo, createMarca } from '../services/graphqlClient';

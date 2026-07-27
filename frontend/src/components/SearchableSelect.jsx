@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { clsx } from 'clsx';
 import { ChevronDown, Loader2, X } from 'lucide-react';
 
@@ -35,6 +35,7 @@ export default function SearchableSelect({
 
   useEffect(() => {
     if (!isOpen) {
+      // eslint-disable-next-line
       setSearchTerm(selectedOption ? selectedOption.label : '');
     }
   }, [isOpen, selectedOption]);
@@ -43,6 +44,7 @@ export default function SearchableSelect({
     if (isOpen && !prevIsOpen.current) {
       setSearchTerm('');
       if (asyncSearch) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setAsyncOptions([]);
       }
     }

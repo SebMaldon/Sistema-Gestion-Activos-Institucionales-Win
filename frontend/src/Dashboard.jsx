@@ -25,7 +25,7 @@ import {
   updateUsuarioResguardo    // Cambia el usuario responsable del equipo
 } from './services/graphqlClient';
 // Íconos vectoriales de la librería lucide-react (SVG en React)
-import { LogOut, RefreshCcw, Save, Server, Monitor, HardDrive, Cpu, MapPin, Network, Activity, Plus, ChevronDown, ChevronUp, Search, MessageSquare, Trash2 } from 'lucide-react';
+import { LogOut, RefreshCcw, Save, Server, Monitor, HardDrive, Cpu, MapPin, Network, Activity, Plus, ChevronDown, ChevronUp, Search, MessageSquare, Trash2, XCircle, AlertTriangle } from 'lucide-react';
 // Utilidad para combinar clases de CSS condicionalmente (similar a classnames)
 import { clsx } from 'clsx';
 import SearchableSelect from './components/SearchableSelect'; // Select con búsqueda integrada
@@ -366,8 +366,12 @@ export default function Dashboard() {
   // a qué segmento de red (subred) pertenece esa IP usando operaciones bitwise de CIDR.
   // Si encuentra match, pre-selecciona el segmento y su unidad médica asociada.
   useEffect(() => {
-    if (formState.dir_ip && catUnidades.length > 0) {
-      const primaryIp = formState.dir_ip.split('/')[0].trim(); // Toma solo la IP (sin máscara)
+    // Obtenemos la primera IP ingresada en la lista dinámica
+    const currentPrimaryIp = (formState.dir_ip_list && formState.dir_ip_list.length > 0 && formState.dir_ip_list[0].ip)
+      ? formState.dir_ip_list[0].ip.split('/')[0].trim()
+      : '';
+
+    if (currentPrimaryIp && catUnidades.length > 0) {
       
       // Convierte una IP string (ej: "10.1.2.3") a un entero de 32 bits para hacer aritmética binaria
       const ip2long = (ip) => {
@@ -387,21 +391,23 @@ export default function Dashboard() {
       };
 
       // Busca el primer segmento del catálogo que contenga la IP ingresada
-      const matchedSegment = catUnidades.find(s => isIpInSubnet(primaryIp, s.ip, s.bits));
+      const matchedSegment = catUnidades.find(s => isIpInSubnet(currentPrimaryIp, s.ip, s.bits));
       if (matchedSegment) {
         if (formState.id_segmento !== matchedSegment.value) {
           updateForm('id_segmento', matchedSegment.value); // Pre-selecciona el segmento
-          if (matchedSegment.clave && !formState.clave_unidad_ref) {
+          if (matchedSegment.clave) {
             updateForm('clave_unidad_ref', matchedSegment.clave); // Pre-selecciona la unidad médica
           }
         }
       } else if (formState.id_segmento) {
         updateForm('id_segmento', ''); // Si la IP no pertenece a ninguna subred conocida, limpia
+        updateForm('clave_unidad_ref', ''); // Limpia también la unidad
       }
-    } else if (!formState.dir_ip && formState.id_segmento) {
+    } else if (!currentPrimaryIp && formState.id_segmento) {
       updateForm('id_segmento', ''); // Si borraron la IP, limpia el segmento también
+      updateForm('clave_unidad_ref', ''); // Limpia también la unidad
     }
-  }, [formState.dir_ip, catUnidades]);
+  }, [formState.dir_ip_list, catUnidades]);
 
   // Helper genérico para actualizar un campo del formulario sin mutar el estado directamente
   const updateForm = (key, value) => {
@@ -430,7 +436,7 @@ export default function Dashboard() {
       if (scannedSerial && !searchSerial) setSearchSerial(scannedSerial);
 
       // 2. Vuelca datos WMI al formulario como punto de partida
-      setFormState(prev => {
+      setFormState(() => {
         // Siempre parte del estado vacío para limpiar datos de búsquedas previas
         const baseState = initialFormState;
         const newData = { ...baseState, ...data };
@@ -531,7 +537,7 @@ export default function Dashboard() {
         await syncDB(scannedSerial, true);
       }
 
-    } catch (err) {
+    } catch {
       showAlert('Error obteniendo WMI del backend C#. Asegúrate de que el backend C# esté corriendo.', 'error');
     } finally {
       setLoadingAction(false);
@@ -792,7 +798,7 @@ export default function Dashboard() {
           setFormState(prev => ({ ...prev, id_bien: undefined }));
         }
       }
-    } catch (err) {
+    } catch {
       showAlert('Error conectando a la base de datos (GraphQL).', 'error');
     } finally {
       setLoadingAction(false);
@@ -1017,6 +1023,7 @@ export default function Dashboard() {
     }
   };
 
+  // eslint-disable-next-line no-unused-vars
   const handleForceSync = async () => {
     setLoadingAction(true);
     try {
@@ -1028,7 +1035,7 @@ export default function Dashboard() {
       } else {
         await showAlert('El servicio local devolvió un error.', 'error');
       }
-    } catch (err) {
+    } catch {
       await showAlert('No se pudo conectar con el Servicio Local. Asegúrate de que el servicio esté ejecutándose.', 'error');
     } finally {
       setLoadingAction(false);
@@ -1127,6 +1134,7 @@ export default function Dashboard() {
 
   const hasDbChanges = Object.keys(currentDatosNuevos).filter(k => k !== '_esCreacion').length > 0;
   const hasPendingChanges = lastSubmitted !== JSON.stringify(formState);
+  // eslint-disable-next-line no-unused-vars
   const canSave = (hasDbChanges || monitorsChanged || tiFieldsChanged) && hasPendingChanges;
 
   if (isInitialLoading) {
@@ -1370,7 +1378,14 @@ export default function Dashboard() {
                     <label className="text-xs font-bold text-[#757575] uppercase tracking-wider block mb-1">Estatus Operativo</label>
                     <select
                       value={formState.estatus_operativo}
-                      onChange={e => updateForm('estatus_operativo', e.target.value)}
+                      onChange={e => {
+                        const val = e.target.value;
+                        updateForm('estatus_operativo', val);
+                        if (val === 'INACTIVO') {
+                          updateForm('id_usuario_resguardo', null);
+                          updateForm('nombre_usuario_resguardo', '');
+                        }
+                      }}
                       className={clsx("w-full bg-white text-[#333333] rounded-xl py-2 px-3 border shadow-sm focus:outline-none focus:ring-1 focus:ring-[#006241]", getBorderColor('estatus_operativo'))}
                     >
                       <option value="ACTIVO">ACTIVO</option>

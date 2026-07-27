@@ -1,11 +1,12 @@
 import React, { useRef, useState, useEffect } from 'react';
 
-export const IpInput = ({ value, onChange, className }) => {
+export const IpInput = ({ value, onChange, onBlur, className }) => {
   const [octets, setOctets] = useState(['', '', '', '']);
   const refs = [useRef(), useRef(), useRef(), useRef()];
 
   useEffect(() => {
     const parts = (value || '').split('.');
+    // eslint-disable-next-line
     setOctets([
       parts[0] || '',
       parts[1] || '',
@@ -78,6 +79,7 @@ export const IpInput = ({ value, onChange, className }) => {
             onChange={(e) => handleChange(e, idx)}
             onKeyDown={(e) => handleKeyDown(e, idx)}
             onPaste={(e) => handlePaste(e, idx)}
+            onBlur={onBlur}
             className="w-8 text-center bg-transparent focus:outline-none text-[#333333] placeholder-gray-300"
             maxLength={3}
             placeholder="0"
@@ -95,6 +97,7 @@ export const MacInput = ({ value, onChange, className }) => {
 
   useEffect(() => {
     const parts = (value || '').split(':');
+    // eslint-disable-next-line
     setHexes([
       parts[0] || '', parts[1] || '', parts[2] || '',
       parts[3] || '', parts[4] || '', parts[5] || ''
