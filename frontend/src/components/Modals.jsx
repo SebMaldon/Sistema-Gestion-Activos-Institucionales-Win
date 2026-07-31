@@ -1,16 +1,19 @@
 import { useState } from 'react';
-import { X, Loader2, Save } from 'lucide-react';
+import { X, Loader2, Save, IdCard, User, Mail, Building2, ShieldAlert } from 'lucide-react';
 import SearchableSelect from './SearchableSelect';
-import { createUbicacion, createModelo, createMarca } from '../services/graphqlClient';
+import { createUbicacion, createModelo, createMarca, createUsuario } from '../services/graphqlClient';
 
 function ModalWrapper({ title, onClose, children }) {
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white border border-[#E0E0E0] rounded-3xl w-full max-w-md shadow-2xl flex flex-col animate-in fade-in zoom-in duration-200">
-        <div className="flex items-center justify-between p-5 border-b border-[#E0E0E0]">
-          <h2 className="text-xl font-bold text-[#333333]">{title}</h2>
-          <button onClick={onClose} className="text-[#757575] hover:text-red-500 transition-colors">
-            <X className="w-6 h-6" />
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl flex flex-col" style={{boxShadow: '0 25px 60px rgba(0,0,0,0.3)'}}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#F0F0F0]">
+          <div>
+            <h2 className="text-lg font-bold text-[#1a1a1a] tracking-tight">{title}</h2>
+            <p className="text-xs text-[#9e9e9e] mt-0.5">Completa todos los campos requeridos</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full text-[#9e9e9e] hover:bg-[#F5F5F5] hover:text-[#333] transition-colors">
+            <X className="w-5 h-5" />
           </button>
         </div>
         <div className="p-6">
@@ -169,6 +172,121 @@ export function ModalModeloMarca({ marcas, tiposDispositivo, onClose, onSuccess 
         >
           {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
           Guardar Modelo y Marca
+        </button>
+      </div>
+    </ModalWrapper>
+  );
+}
+
+export function ModalUsuario({ onClose, onSuccess, unidadesFisicas = [] }) {
+  const [matricula, setMatricula] = useState('');
+  const [nombre, setNombre] = useState('');
+  const [correo, setCorreo] = useState('');
+  const [claveUnidad, setClaveUnidad] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSave = async () => {
+    if (!matricula.trim()) return alert('La matrícula es obligatoria');
+    if (!nombre.trim()) return alert('El nombre completo es obligatorio');
+    if (!claveUnidad) return alert('La Unidad Física es obligatoria');
+    setLoading(true);
+    try {
+      const res = await createUsuario(
+        matricula.trim().toUpperCase(),
+        nombre.trim(),
+        correo.trim() || null,
+        claveUnidad || null
+      );
+      onSuccess(res);
+    } catch (err) {
+      alert('Error creando usuario: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <ModalWrapper title="Nuevo Usuario" onClose={onClose}>
+      <div className="space-y-6">
+        
+        {/* Banner Informativo */}
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-3">
+          <ShieldAlert className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-amber-800">Rol por defecto: SIN ACCESO</p>
+            <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
+              El usuario se creará en el sistema solo para fines de resguardo. No tendrá credenciales ni acceso a la plataforma web.
+            </p>
+          </div>
+        </div>
+
+        {/* Formulario Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="sm:col-span-1">
+            <label className="flex items-center gap-1.5 text-xs font-semibold text-[#757575] uppercase tracking-wider mb-1.5">
+              <IdCard className="w-3.5 h-3.5" /> Matrícula *
+            </label>
+            <input
+              type="text"
+              value={matricula}
+              onChange={e => setMatricula(e.target.value)}
+              className="w-full bg-[#FAFAFA] border border-[#E0E0E0] text-[#333333] rounded-xl py-2.5 px-3.5 focus:outline-none focus:border-[#006241] focus:ring-1 focus:ring-[#006241] focus:bg-white uppercase transition-all"
+              placeholder="Ej. 99012345"
+              maxLength={20}
+            />
+          </div>
+
+          <div className="sm:col-span-1">
+            <label className="flex items-center gap-1.5 text-xs font-semibold text-[#757575] uppercase tracking-wider mb-1.5">
+              <User className="w-3.5 h-3.5" /> Nombre Completo *
+            </label>
+            <input
+              type="text"
+              value={nombre}
+              onChange={e => setNombre(e.target.value)}
+              className="w-full bg-[#FAFAFA] border border-[#E0E0E0] text-[#333333] rounded-xl py-2.5 px-3.5 focus:outline-none focus:border-[#006241] focus:ring-1 focus:ring-[#006241] focus:bg-white transition-all"
+              placeholder="Ej. Juan Pérez"
+              maxLength={150}
+            />
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="flex items-center gap-1.5 text-xs font-semibold text-[#757575] uppercase tracking-wider mb-1.5">
+              <Building2 className="w-3.5 h-3.5" /> Unidad Física *
+            </label>
+            <SearchableSelect
+              options={[
+                { value: '', label: '— Selecciona una unidad —' },
+                ...unidadesFisicas.map(u => ({ value: u.value, label: u.label }))
+              ]}
+              value={claveUnidad}
+              onChange={val => setClaveUnidad(val || '')}
+              placeholder="Buscar clínica, hospital o delegación..."
+            />
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="flex items-center gap-1.5 text-xs font-semibold text-[#757575] uppercase tracking-wider mb-1.5">
+              <Mail className="w-3.5 h-3.5" /> Correo Electrónico <span className="text-[10px] text-gray-400 normal-case ml-1">(Opcional)</span>
+            </label>
+            <input
+              type="email"
+              value={correo}
+              onChange={e => setCorreo(e.target.value)}
+              className="w-full bg-[#FAFAFA] border border-[#E0E0E0] text-[#333333] rounded-xl py-2.5 px-3.5 focus:outline-none focus:border-[#006241] focus:ring-1 focus:ring-[#006241] focus:bg-white transition-all"
+              placeholder="Ej. juan.perez@imss.gob.mx"
+              maxLength={100}
+            />
+          </div>
+        </div>
+
+        <button
+          onClick={handleSave}
+          disabled={loading}
+          className="w-full bg-[#006241] hover:bg-[#008F59] text-white font-bold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 shadow-md hover:shadow-lg mt-2"
+        >
+          {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+          Crear Usuario de Resguardo
         </button>
       </div>
     </ModalWrapper>

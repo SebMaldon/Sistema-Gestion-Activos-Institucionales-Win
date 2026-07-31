@@ -108,11 +108,14 @@ function setupAutoUpdater() {
   autoUpdater.on('update-downloaded', () => {
     console.log('Actualización descargada. Instalando y reiniciando...');
     sendToRenderer('update-downloaded', true);
-    // Marcar reinicio si el usuario lo pidió
+    const fs = require('fs');
     if (userRequestedUpdate) {
-      require('fs').writeFileSync(path.join(app.getPath('userData'), '.update-restart'), '1');
+      // El usuario pidió la actualización → abrir ventana al reiniciar
+      fs.writeFileSync(path.join(app.getPath('userData'), '.update-restart'), '1');
+    } else {
+      // Update silencioso en background → NO abrir ventana al reiniciar
+      fs.writeFileSync(path.join(app.getPath('userData'), '.update-silent'), '1');
     }
-    // Cerrar e instalar de inmediato sin el segundo popup, ya que el usuario ya confirmó o estaba en background
     autoUpdater.quitAndInstall(true, true);
   });
 
@@ -266,10 +269,16 @@ app.whenReady().then(() => {
   // Si reiniciamos desde una actualización, mostrar ventana
   const fs = require('fs');
   const updateRestartFlag = path.join(app.getPath('userData'), '.update-restart');
+  const updateSilentFlag  = path.join(app.getPath('userData'), '.update-silent');
   let shouldOpen = false;
   if (fs.existsSync(updateRestartFlag)) {
+    // El usuario pidió la actualización → mostrar ventana
     try { fs.unlinkSync(updateRestartFlag); } catch(e) {}
     shouldOpen = true;
+  } else if (fs.existsSync(updateSilentFlag)) {
+    // Update silencioso en background → quedarse oculto en tray
+    try { fs.unlinkSync(updateSilentFlag); } catch(e) {}
+    shouldOpen = false;
   } else if (!process.argv.includes('--hidden')) {
     shouldOpen = true; // Arranque manual por el usuario
   }

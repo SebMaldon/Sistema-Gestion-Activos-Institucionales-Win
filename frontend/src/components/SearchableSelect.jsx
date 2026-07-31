@@ -87,12 +87,12 @@ export default function SearchableSelect({
     if (asyncSearch) return asyncOptions;
     
     const searchTokens = normalizeStr(searchTerm).split(' ').filter(Boolean);
-    if (searchTokens.length === 0) return options;
-    
-    return options.filter(option => {
+    const base = searchTokens.length === 0 ? options : options.filter(option => {
       const labelStr = normalizeStr(option.label);
       return searchTokens.every(token => labelStr.includes(token));
     });
+    // Limitar a 50 para evitar lag con catálogos grandes
+    return base.slice(0, 50);
   }, [options, asyncOptions, searchTerm, asyncSearch]);
 
   const handleSelect = (optValue) => {
@@ -113,6 +113,7 @@ export default function SearchableSelect({
       {label && <label className="text-xs font-semibold text-[#757575] uppercase tracking-wider block mb-1">{label}</label>}
       
       <div 
+        title={selectedOption && !isOpen ? selectedOption.label : searchTerm}
         onClick={() => {
           if (!disabled && !isOpen) setIsOpen(true);
         }}
@@ -122,15 +123,24 @@ export default function SearchableSelect({
           disabled ? "opacity-50 cursor-not-allowed bg-[#F5F5F5]" : "cursor-text"
         )}
       >
-        <input
-          type="text"
-          disabled={disabled}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          onFocus={() => setIsOpen(true)}
-          placeholder={selectedOption && !isOpen ? selectedOption.label : placeholder}
-          className="w-full bg-transparent border-none text-[#333333] text-sm focus:outline-none placeholder:text-[#9e9e9e] truncate"
-        />
+        <div className="flex-1 w-full min-w-0">
+          {!isOpen && selectedOption ? (
+            <div className="w-full text-[#333333] text-sm break-words whitespace-normal leading-tight py-0.5">
+              {selectedOption.label}
+            </div>
+          ) : (
+            <input
+              type="text"
+              disabled={disabled}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onFocus={() => setIsOpen(true)}
+              placeholder={placeholder}
+              className="w-full bg-transparent border-none text-[#333333] text-sm focus:outline-none placeholder:text-[#9e9e9e]"
+              autoFocus={isOpen}
+            />
+          )}
+        </div>
 
         <div className="flex items-center gap-1 pl-2">
           {loading && <Loader2 className="w-4 h-4 text-[#006241] animate-spin" />}
@@ -151,7 +161,7 @@ export default function SearchableSelect({
 
       {isOpen && !disabled && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-[#E0E0E0] rounded-xl shadow-xl overflow-hidden max-h-60 flex flex-col">
-          <ul className="overflow-y-auto p-1 custom-scrollbar">
+          <ul className="overflow-y-auto p-1" style={{maxHeight: '220px'}}>
             {filteredOptions.length > 0 ? (
               filteredOptions.map((opt) => (
                 <li 

@@ -29,7 +29,7 @@ import { LogOut, RefreshCcw, Save, Server, Monitor, HardDrive, Cpu, MapPin, Netw
 // Utilidad para combinar clases de CSS condicionalmente (similar a classnames)
 import { clsx } from 'clsx';
 import SearchableSelect from './components/SearchableSelect'; // Select con búsqueda integrada
-import { ModalUbicacion, ModalModeloMarca } from './components/Modals'; // Modales para crear registros en catálogos
+import { ModalUbicacion, ModalModeloMarca, ModalUsuario } from './components/Modals'; // Modales para crear registros en catálogos
 import { IpInput, MacInput } from './components/MaskedInputs'; // Inputs con máscara para IP y MAC
 import pkg from '../package.json'; // Para mostrar la versión del frontend
 
@@ -266,6 +266,7 @@ export default function Dashboard() {
   // Estados para los modales de creación de datos en catálogos
   const [showModalUbicacion, setShowModalUbicacion] = useState(false); // Modal para nueva ubicación
   const [showModalModelo, setShowModalModelo] = useState(false);       // Modal para nuevo modelo
+  const [showModalUsuario, setShowModalUsuario] = useState(false);     // Modal para nuevo usuario de resguardo
 
   // ── Inicialización al montar ──────────────────────────────────────────────
   // Al abrir el Dashboard, primero carga los catálogos y luego escanea el hardware local.
@@ -1565,20 +1566,33 @@ export default function Dashboard() {
                   <div className="col-span-full border-t border-[#E0E0E0] my-2"></div>
 
                   <div className="w-full sm:col-span-2">
-                    <SearchableSelect
-                      label="Usuario a Resguardo"
-                      options={formState.id_usuario_resguardo ? [{ value: formState.id_usuario_resguardo, label: formState.nombre_usuario_resguardo || `Usuario ID: ${formState.id_usuario_resguardo}` }] : []}
-                      asyncSearch={searchUsuarios}
-                      value={formState.id_usuario_resguardo}
-                      onChange={(v, opt) => {
-                        updateForm('id_usuario_resguardo', v);
-                        let nameToSave = opt?.label || '';
-                        if (nameToSave.includes('(')) {
-                          nameToSave = nameToSave.split(' (')[0].trim();
-                        }
-                        updateForm('nombre_usuario_resguardo', nameToSave);
-                      }}
-                    />
+                    <div className="flex items-end gap-3">
+                      <div className="flex-1">
+                        <SearchableSelect
+                          label="Usuario a Resguardo"
+                          options={formState.id_usuario_resguardo ? [{ value: formState.id_usuario_resguardo, label: formState.nombre_usuario_resguardo || `Usuario ID: ${formState.id_usuario_resguardo}` }] : []}
+                          asyncSearch={searchUsuarios}
+                          value={formState.id_usuario_resguardo}
+                          onChange={(v, opt) => {
+                            updateForm('id_usuario_resguardo', v);
+                            let nameToSave = opt?.label || '';
+                            if (nameToSave.includes('(')) {
+                              nameToSave = nameToSave.split(' (')[0].trim();
+                            }
+                            updateForm('nombre_usuario_resguardo', nameToSave);
+                          }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowModalUsuario(true)}
+                        title="Crear nuevo usuario"
+                        className="flex-shrink-0 mb-[2px] h-[42px] px-3 bg-[#006241] hover:bg-[#008F59] text-white rounded-xl flex items-center gap-1 text-sm font-bold transition-all"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Nuevo
+                      </button>
+                    </div>
                   </div>
                 </div>
               </section>
@@ -1621,6 +1635,18 @@ export default function Dashboard() {
             setCatModelos(prev => [...prev, { value: nuevoMod.clave_modelo, label: nuevoMod.descrip_disp }]);
             setFormState(prev => ({ ...prev, clave_modelo: nuevoMod.clave_modelo }));
             setShowModalModelo(false);
+          }}
+        />
+      )}
+
+      {showModalUsuario && (
+        <ModalUsuario
+          unidadesFisicas={catInmuebles}
+          onClose={() => setShowModalUsuario(false)}
+          onSuccess={(nuevoUsuario) => {
+            updateForm('id_usuario_resguardo', String(nuevoUsuario.id_usuario));
+            updateForm('nombre_usuario_resguardo', `${nuevoUsuario.matricula} - ${nuevoUsuario.nombre_completo}`);
+            setShowModalUsuario(false);
           }}
         />
       )}

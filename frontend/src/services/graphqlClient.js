@@ -438,6 +438,25 @@ export const checkIpUsage = async (ip, excludeIdBien) => {
   return { inUse: conflictos.length > 0, conflictos };
 };
 
+export const createUsuario = async (matricula, nombre_completo, correo_electronico, clave_unidad) => {
+  const N = v => v ? `"${v}"` : 'null';
+  const mut = `
+    mutation {
+      createUsuario(
+        matricula: ${N(matricula)}
+        nombre_completo: ${N(nombre_completo)}
+        correo_electronico: ${N(correo_electronico)}
+        clave_unidad: ${N(clave_unidad)}
+        id_rol: 4
+      ) {
+        id_usuario matricula nombre_completo
+      }
+    }
+  `;
+  const data = await queryGraphQL(mut);
+  return data?.createUsuario;
+};
+
 export const liberarIpEquipo = async (idBien, ipToRemove) => {
   const q = `query { bien(id_bien: "${idBien}") { especificacionTI { cpu_info ram_gb almacenamiento_gb mac_address dir_ip puerto_red switch_red modelo_so windows_serial version_office last_scan } } }`;
   const data = await queryGraphQL(q);
