@@ -73,7 +73,7 @@
         "nsis"
       ],
       "icon": "public/IMSS_Logosímbolo_Blanco.png",
-      "cscLink": "C:\\IMSS\\CertificadoSGHI.pfx",
+      "cscLink": "C:\\Users\\Administrador\\Documents\\Sistema Inventario Bienes\\Sistema-Gestion-Activos-Institucionales-Win\\CertificadoSGHI.pfx",
       "cscKeyPassword": "1234"
     },
     "nsis": {
