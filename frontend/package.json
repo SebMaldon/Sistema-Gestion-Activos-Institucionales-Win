@@ -2,7 +2,7 @@
   "name": "frontend",
   "private": true,
   "productName": "SGH",
-  "version": "2.0.10",
+  "version": "2.0.11",
   "description": "Sistema de Gestion de Hardware IMSS",
   "author": "IMSS",
   "type": "module",

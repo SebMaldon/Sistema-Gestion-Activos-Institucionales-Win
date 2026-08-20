@@ -61,11 +61,10 @@ export const getCatalogs = async () => {
 };
 
 export const searchUsuarios = async (term) => {
-  if (!term || term.length < 2) return [];
-  const escaped = term.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  const escaped = term ? term.replace(/\\/g, '\\\\').replace(/"/g, '\\"') : '';
   const query = `
     query {
-      usuarios(pagination: {first: 20}, search: "${escaped}") {
+      usuarios(pagination: {first: 50}, search: "${escaped}") {
         edges { node { id_usuario matricula nombre_completo } }
       }
     }
@@ -442,19 +441,21 @@ export const createUsuario = async (matricula, nombre_completo, correo_electroni
   const N = v => v ? `"${v}"` : 'null';
   const mut = `
     mutation {
-      createUsuario(
+      createUsuarioExe(
         matricula: ${N(matricula)}
         nombre_completo: ${N(nombre_completo)}
         correo_electronico: ${N(correo_electronico)}
         clave_unidad: ${N(clave_unidad)}
         id_rol: 4
       ) {
-        id_usuario matricula nombre_completo
+        id_usuario
+        matricula
+        nombre_completo
       }
     }
   `;
   const data = await queryGraphQL(mut);
-  return data?.createUsuario;
+  return data?.createUsuarioExe;
 };
 
 export const liberarIpEquipo = async (idBien, ipToRemove) => {

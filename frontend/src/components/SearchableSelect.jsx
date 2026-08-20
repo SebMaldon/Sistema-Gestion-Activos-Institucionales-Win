@@ -65,18 +65,14 @@ export default function SearchableSelect({
     if (!asyncSearch || !isOpen) return;
     
     const delayDebounceFn = setTimeout(async () => {
-      if (searchTerm.trim().length >= 2) {
-        setLoading(true);
-        try {
-          const results = await asyncSearch(searchTerm.trim());
-          setAsyncOptions(results);
-        } catch (e) {
-          console.error(e);
-        } finally {
-          setLoading(false);
-        }
-      } else {
-        setAsyncOptions([]);
+      setLoading(true);
+      try {
+        const results = await asyncSearch(searchTerm.trim());
+        setAsyncOptions(results);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
       }
     }, 500);
 
@@ -177,7 +173,7 @@ export default function SearchableSelect({
               ))
             ) : (
               <li className="px-3 py-4 text-center text-sm text-[#757575]">
-                {asyncSearch && searchTerm.length < 2 ? 'Escribe al menos 2 letras...' : (loading ? 'Buscando...' : 'No se encontraron resultados')}
+                {loading ? 'Buscando...' : 'No se encontraron resultados'}
               </li>
             )}
           </ul>
